@@ -1,0 +1,30 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "inbounds": [
+    {
+      "type": "vless",
+      "tag": "ws-in",
+      "listen": "127.0.0.1",
+      "listen_port": 20004,
+      "users": [
+        {
+          "uuid": "${UUID}",
+          "flow": ""
+        }
+      ],
+      "transport": {
+        "type": "ws",
+        "path": "/ws"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}
