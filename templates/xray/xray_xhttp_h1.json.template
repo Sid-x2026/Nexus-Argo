@@ -1,0 +1,36 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "tag": "xhttp-h1-in",
+      "listen": "127.0.0.1",
+      "port": 10001,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "${UUID}",
+            "flow": ""
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "none",
+        "xhttpSettings": {
+          "path": "/xhttp-h1",
+          "mode": "stream-up"
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    }
+  ]
+}
