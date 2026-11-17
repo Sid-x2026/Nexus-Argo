@@ -218,7 +218,7 @@ time.is</textarea>
                             </div>
                         </div>
 
-                        <!-- 4. 一键生成常用维护指令 (已补回) -->
+                        <!-- 4. 一键生成常用维护指令 (完整保留) -->
                         <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md space-y-3">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center space-x-2">
@@ -267,7 +267,7 @@ time.is</textarea>
                                     <button onclick="copyCommand('ufw status numbered')" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-slate-800 rounded-lg text-[11px] font-mono transition cursor-pointer flex items-center gap-1">
                                         <i class="fa-solid fa-network-wired"></i> 查看端口状态: ports
                                     </button>
-                                    <button onclick="copyCommand('wget -N --no-check-certificate "https://raw.githubusercontent.com/chiakge/Linux-NetSpeed/master/tcp.sh" && chmod +x tcp.sh && ./tcp.sh')" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-800 rounded-lg text-[11px] font-mono transition cursor-pointer flex items-center gap-1">
+                                    <button onclick="copyCommand('wget -N --no-check-certificate https://raw.githubusercontent.com/chiakge/Linux-NetSpeed/master/tcp.sh && chmod +x tcp.sh && ./tcp.sh')" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-800 rounded-lg text-[11px] font-mono transition cursor-pointer flex items-center gap-1">
                                         <i class="fa-solid fa-gauge-high"></i> 开启 BBR 加速: bbr
                                     </button>
                                 </div>
