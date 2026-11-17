@@ -152,7 +152,8 @@
                             </h3>
                             <div>
                                 <label class="block text-[11px] text-slate-400 mb-1">Argo Tunnel Token</label>
-                                <input type="password" id="argoToken" value="eyJhIjoiY2Y4N2..." oninput="updateOutputs()"
+                                <!-- 修改此处：将 type="password" 改为 type="text"，并提供更清晰的默认占位符，方便用户直接核对 -->
+                                <input type="text" id="argoToken" value="" placeholder="请在此处粘贴您的 Argo Tunnel Token (如 eyJhIjoi...)" oninput="updateOutputs()"
                                     class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono shadow-inner">
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -193,7 +194,7 @@
                                 </div>
                             </div>
 
-                            <!-- 客户端优选地址大文本框 (高度设为 rows="3"，精准控制完美防遮挡) -->
+                            <!-- 客户端优选地址大文本框 -->
                             <div class="pt-1.5 border-t border-slate-800/60">
                                 <div class="flex justify-between items-center mb-1">
                                     <label class="text-[11px] text-emerald-400 font-bold uppercase tracking-wider flex items-center">
@@ -228,7 +229,7 @@ time.is</textarea>
 
                     </div>
 
-                    <!-- 右侧：生成结果输出面板 (占 5 栅格，与左侧 100% 底部等高对齐) -->
+                    <!-- 右侧：生成结果输出面板 (占 5 栅格) -->
                     <div class="lg:col-span-5 flex flex-col justify-between space-y-3.5 w-full">
                         
                         <!-- SSH 一键部署命令 -->
@@ -312,22 +313,6 @@ time.is</textarea>
 
                     </div>
 
-                </div>
-            </section>
-
-            <hr class="border-slate-800/80">
-
-            <!-- ================= 一键生成常用维护指令 ================= -->
-            <section class="space-y-3.5">
-                <div class="flex items-center justify-between border-l-4 border-amber-500 pl-3">
-                    <h2 class="text-sm md:text-base font-bold text-slate-200 tracking-wide">
-                        <i class="fa-solid fa-screwdriver-wrench mr-2 text-amber-400"></i>一键生成常用维护指令
-                    </h2>
-                    <span class="text-[11px] text-slate-500">点击下方分类标签可追加指令到输入框，支持多条组合运行</span>
-                </div>
-
-                <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl space-y-4">
-                    <!-- 运维指令内容可按需保留 -->
                 </div>
             </section>
 
@@ -417,11 +402,11 @@ time.is</textarea>
             document.getElementById('sshCommand').innerText = sshCmd;
             document.getElementById('plainNodes').innerText = "vless://... (根据配置实时生成)";
             document.getElementById('xraySubLink').innerText = "https://" + xrayDomain + "/sub/xray";
-            document.getElementById('sbSubLink').innerText = "https://" + sbDomain + "/sub/singbox";
-            document.getElementById('nodeCountBadge').innerText = "共 2 个节点";
+            document.getElementById('sbSubLink').innerText = "https://" + sbDomain + "/sub/sb";
+            document.getElementById('nodeCountBadge').innerText = "共 0 个节点";
         }
 
-        // 初始化加载
+        // 初始化运行一次
         window.onload = function() {
             updateOutputs();
         };
