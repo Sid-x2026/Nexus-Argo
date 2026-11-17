@@ -9,9 +9,44 @@ GREEN="\033[32m"
 YELLOW="\033[33m"
 NC="\033[0m"
 
+# 工作目录
+WORK_DIR="/opt/nexus-ago"
+
+# ==========================================
+# 🛡️ 卸载清理函数
+# ==========================================
+uninstall_nexus() {
+    echo -e "\n${YELLOW}⏳ [1/3] 正在停止并清理 Nexus-Argo 相关 Docker 容器...${NC}"
+    docker rm -f nexus-xray nexus-singbox nexus-argo 2>/dev/null
+    echo -e "${GREEN}✅ 容器已全部清除${NC}"
+
+    echo -e "\n${YELLOW}⏳ [2/3] 正在删除工作目录与配置文件 (${WORK_DIR})...${NC}"
+    rm -rf "$WORK_DIR"
+    echo -e "${GREEN}✅ 相关文件已清理${NC}"
+
+    echo -e "\n${YELLOW}⏳ [3/3] 清理完成！${NC}"
+    echo -e "${GREEN}==========================================${NC}"
+    echo -e "${GREEN}🎉 Nexus-Ago 已从您的服务器上彻底卸载！${NC}"
+    echo -e "${GREEN}==========================================${NC}\n"
+    exit 0
+}
+
+# 判断用户是否输入了 uninstall 参数
+if [[ "$1" == "uninstall" ]]; then
+    echo -e "\n${RED}==========================================${NC}"
+    echo -e "${RED}       ⚠️ 警告：即将卸载 Nexus-Ago        ${NC}"
+    echo -e "${RED}==========================================${NC}"
+    read -p "确定要停止并删除所有容器及配置文件吗？[y/N]: " confirm
+    [[ "$confirm" =~ ^[Yy]$ ]] && uninstall_nexus || { echo -e "${YELLOW}已取消卸载。${NC}"; exit 0; }
+fi
+
+# ==========================================
+# 🚀 正常安装与部署逻辑
+# ==========================================
 echo -e "${GREEN}==========================================${NC}"
 echo -e "${GREEN}    Nexus-Ago 自动化部署与运维系统 v1.0    ${NC}"
 echo -e "${GREEN}==========================================${NC}"
+echo -e "💡 提示：如需卸载清理，可随时运行：${YELLOW}bash install.sh uninstall${NC}\n"
 
 # 1. 优先读取环境变量（适配网页一键复制命令），若无则交互式输入
 USER_UUID="${NODE_UUID:-}"
@@ -56,13 +91,12 @@ else
 fi
 
 # 3. 创建工作目录
-WORK_DIR="/opt/nexus-ago"
 mkdir -p "$WORK_DIR/config" "$WORK_DIR/web"
 cd "$WORK_DIR"
 
 # 4. 下载 GitHub 上的 Web 面板源码 (以便后续本地托管或订阅查看)
 echo -e "${YELLOW}⏳ 正在从 GitHub 同步 Web 面板与后端模板...${NC}"
-REPO_RAW_URL="https://raw.githubusercontent.com/Sid-x2026/Nexus-Ago/main"
+REPO_RAW_URL="https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main"
 curl -s -o "$WORK_DIR/web/index.html" "$REPO_RAW_URL/web/index.html"
 
 # 5. 生成/渲染后端内核配置文件
@@ -146,7 +180,7 @@ docker run -d \
     cloudflare/cloudflared:latest tunnel run --token "$ARGO_TOKEN"
 
 echo -e "\n${GREEN}==========================================${NC}"
-echo -e "${GREEN}🎉 Nexus-Ago 自动化部署全部完成！${NC}"
+echo -e "${GREEN}🎉 Nexus-Argo 自动化部署全部完成！${NC}"
 echo -e "${GREEN}📌 节点 UUID: ${USER_UUID}${NC}"
 echo -e "${GREEN}📌 Xray 状态: ${ENABLE_XRAY} (端口 ${XRAY_PORT})${NC}"
 echo -e "${GREEN}📌 Sing-box 状态: ${ENABLE_SINGBOX} (端口 ${SINGBOX_PORT})${NC}"
