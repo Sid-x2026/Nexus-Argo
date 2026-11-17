@@ -1,0 +1,30 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "inbounds": [
+    {
+      "type": "vless",
+      "tag": "grpc-in",
+      "listen": "127.0.0.1",
+      "listen_port": 20001,
+      "users": [
+        {
+          "uuid": "${UUID}",
+          "flow": ""
+        }
+      ],
+      "transport": {
+        "type": "grpc",
+        "service_name": "grpc"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}
