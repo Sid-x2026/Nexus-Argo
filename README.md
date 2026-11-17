@@ -45,8 +45,9 @@ bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/inst
 
 ---
 
-## 📂 仓库目录架构
+### 📁 仓库目录架构
 
+```text
 Nexus-Argo/
 ├── .github/
 │   └── workflows/
