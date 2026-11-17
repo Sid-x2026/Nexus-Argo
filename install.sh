@@ -42,7 +42,7 @@ mkdir -p "$WORK_DIR/templates" "$WORK_DIR/config"
 cd "$WORK_DIR"
 
 echo -e "${YELLOW}⏳ 正在从 GitHub 下载双核配置模板...${NC}"
-REPO_RAW_URL="https://raw.githubusercontent.com/2021ahstshu/Nexus-Argo/main"
+REPO_RAW_URL="https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main"
 
 curl -s -o "$WORK_DIR/templates/xray_config.json.template" "$REPO_RAW_URL/templates/xray_config.json.template"
 curl -s -o "$WORK_DIR/templates/singbox_config.json.template" "$REPO_RAW_URL/templates/singbox_config.json.template"
