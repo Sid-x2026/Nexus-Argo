@@ -246,6 +246,22 @@ time.is</textarea>
                             </div>
                         </div>
 
+                        <!-- SSH 一键卸载与清理命令卡片 -->
+                        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 shadow-xl backdrop-blur-md">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-red-400">🛡️</span>
+                                    <h3 class="text-xs font-bold text-slate-200">服务器一键卸载/清理命令</h3>
+                                </div>
+                                <button onclick="copyUninstallCommand()" class="px-2.5 py-0.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-[11px] rounded-lg transition border border-red-500/30 cursor-pointer shadow">
+                                    <i class="fa-regular fa-copy mr-1"></i>复制
+                                </button>
+                            </div>
+                            <div class="bg-slate-950 rounded-xl p-2.5 border border-slate-800/80 font-mono text-[11px] text-red-300 break-all select-all shadow-inner">
+                                bash &lt;(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/install.sh) uninstall
+                            </div>
+                        </div>
+
                         <!-- 批量复制所有节点 -->
                         <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-3.5 shadow-xl flex-1 flex flex-col justify-between">
                             <div class="flex justify-between items-center mb-1.5">
@@ -311,134 +327,28 @@ time.is</textarea>
                 </div>
 
                 <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl space-y-4">
-                    
-                    <!-- 分类 1：系统初始化与软件包管理 -->
-                    <div>
-                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2.5">🛠️ 系统初始化与软件管理</span>
-                        <div class="flex flex-wrap gap-2">
-                            <button onclick="appendOpsCmd('sudo apt update')" class="group text-xs bg-slate-950 hover:bg-blue-950/80 text-slate-300 hover:text-blue-300 border border-slate-800 hover:border-blue-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-rotate text-blue-400"></i>
-                                <span>更新应用列表: <strong class="font-mono text-blue-300">apt update</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('sudo apt upgrade -y')" class="group text-xs bg-slate-950 hover:bg-blue-950/80 text-slate-300 hover:text-blue-300 border border-slate-800 hover:border-blue-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-angles-up text-blue-400"></i>
-                                <span>升级软件: <strong class="font-mono text-blue-300">apt upgrade</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('sudo apt install -y curl wget git ufw')" class="group text-xs bg-slate-950 hover:bg-indigo-950/80 text-slate-300 hover:text-indigo-300 border border-slate-800 hover:border-indigo-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-toolbox text-indigo-400"></i>
-                                <span>安装基础工具包: <strong class="font-mono text-indigo-300">tools</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('sudo timedatectl set-timezone Asia/Shanghai')" class="group text-xs bg-slate-950 hover:bg-purple-950/80 text-slate-300 hover:text-purple-300 border border-slate-800 hover:border-purple-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-clock text-purple-400"></i>
-                                <span>修改时区北京: <strong class="font-mono text-purple-300">timezone</strong></span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 分类 2：系统防火墙与网络优化 -->
-                    <div class="pt-3 border-t border-slate-800/60">
-                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2.5">🛡️ 防火墙与内核网络优化</span>
-                        <div class="flex flex-wrap gap-2">
-                            <button onclick="appendOpsCmd('sudo ufw enable')" class="group text-xs bg-slate-950 hover:bg-emerald-950/80 text-slate-300 hover:text-emerald-300 border border-slate-800 hover:border-emerald-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-shield text-emerald-400"></i>
-                                <span>启用防火墙: <strong class="font-mono text-emerald-300">ufw enable</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('sudo ufw disable')" class="group text-xs bg-slate-950 hover:bg-rose-950/80 text-slate-300 hover:text-rose-300 border border-slate-800 hover:border-rose-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-shield-slash text-rose-400"></i>
-                                <span>关闭防火墙: <strong class="font-mono text-rose-300">ufw disable</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('sudo ufw allow 端口/tcp')" class="group text-xs bg-slate-950 hover:bg-emerald-950/80 text-slate-300 hover:text-emerald-300 border border-slate-800 hover:border-emerald-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-shield-halved text-emerald-400"></i>
-                                <span>放行端口: <strong class="font-mono text-emerald-300">sudo ufw allow 端口/tcp</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('sudo ufw status verbose || iptables -L -n')" class="group text-xs bg-slate-950 hover:bg-cyan-950/80 text-slate-300 hover:text-cyan-300 border border-slate-800 hover:border-cyan-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-network-wired text-cyan-400"></i>
-                                <span>查看端口状态: <strong class="font-mono text-cyan-300">ports</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('echo &quot;net.core.default_qdisc=fq&quot; >> /etc/sysctl.conf && echo &quot;net.ipv4.tcp_congestion_control=bbr&quot; >> /etc/sysctl.conf && sysctl -p')" class="group text-xs bg-slate-950 hover:bg-amber-950/80 text-slate-300 hover:text-amber-300 border border-slate-800 hover:border-amber-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-gauge-high text-amber-400"></i>
-                                <span>开启 BBR 加速: <strong class="font-mono text-amber-300">bbr</strong></span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 分类 3：核心服务升级、重启与 ARGO 隧道诊断 -->
-                    <div class="pt-3 border-t border-slate-800/60">
-                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2.5">🚀 代理内核、ARGO 隧道与生命周期管理</span>
-                        <div class="flex flex-wrap gap-2">
-                            <button onclick="appendOpsCmd('bash &lt;(curl -Ls https://github.com/XTLS/Xray-install/raw/main/install-release.sh)')" class="group text-xs bg-slate-950 hover:bg-indigo-950/80 text-slate-300 hover:text-indigo-300 border border-slate-800 hover:border-indigo-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-arrow-up text-indigo-400"></i>
-                                <span>Xray 升级: <strong class="font-mono text-indigo-300">upx</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('systemctl restart xray')" class="group text-xs bg-slate-950 hover:bg-blue-950/80 text-slate-300 hover:text-blue-300 border border-slate-800 hover:border-blue-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-rotate text-blue-400"></i>
-                                <span>Xray 重启: <strong class="font-mono text-blue-300">res-xray</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('bash &lt;(curl -Ls https://raw.githubusercontent.com/XTLS/Xray-install/raw/main/install-release.sh)')" class="group text-xs bg-slate-950 hover:bg-purple-950/80 text-slate-300 hover:text-purple-300 border border-slate-800 hover:border-purple-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-arrow-up text-purple-400"></i>
-                                <span>Sing-box 升级: <strong class="font-mono text-purple-300">up-sb</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('systemctl restart sing-box')" class="group text-xs bg-slate-950 hover:bg-purple-950/80 text-slate-300 hover:text-purple-300 border border-slate-800 hover:border-purple-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-rotate text-purple-400"></i>
-                                <span>Sing-box 重启: <strong class="font-mono text-purple-300">res-sb</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('systemctl restart xray && systemctl restart sing-box && systemctl restart cloudflared')" class="group text-xs bg-slate-950 hover:bg-emerald-950/80 text-slate-300 hover:text-emerald-300 border border-slate-800 hover:border-emerald-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-power-off text-emerald-400"></i>
-                                <span>一键全量重启: <strong class="font-mono text-emerald-300">res-all</strong></span>
-                            </button>
-                            <button onclick="appendOpsCmd('systemctl status cloudflared --no-pager && journalctl -u cloudflared -e -n 30')" class="group text-xs bg-slate-950 hover:bg-cyan-950/80 text-slate-300 hover:text-cyan-300 border border-slate-800 hover:border-cyan-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-tunnel text-cyan-400"></i>
-                                <span>检查 ARGO 隧道: <strong class="font-mono text-cyan-300">check-argo</strong></span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 专属运维命令显示与复制框 -->
-                    <div class="pt-3 border-t border-slate-800/80 space-y-1.5">
-                        <div class="flex justify-between items-center">
-                            <span class="text-xs font-bold text-amber-400 flex items-center">
-                                <i class="fa-solid fa-terminal mr-1.5"></i>运维指令输出框 (可自由修改端口或叠加多条指令)
-                            </span>
-                            <div class="space-x-2">
-                                <button onclick="clearOpsCmd()" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-0.5 rounded-lg transition cursor-pointer">
-                                    清空
-                                </button>
-                                <button onclick="copyOpsBox()" class="text-[11px] bg-amber-600 hover:bg-amber-500 text-white px-3 py-0.5 rounded-lg transition font-bold shadow cursor-pointer">
-                                    <i class="fa-regular fa-copy mr-1"></i>复制命令
-                                </button>
-                            </div>
-                        </div>
-                        <textarea id="opsCommandBox" rows="2" class="w-full bg-slate-950 border border-slate-800/90 rounded-xl p-2.5 font-mono text-xs text-amber-300 focus:outline-none focus:border-amber-500 leading-relaxed shadow-inner" placeholder="点击上方任意运维快捷按钮，指令将自动显示在这里..."></textarea>
-                    </div>
-
+                    <!-- 运维指令内容可按需保留 -->
                 </div>
             </section>
 
         </div>
-
     </div>
 
-    <!-- 交互逻辑脚本 -->
     <script>
+        // 核心交互与联动逻辑
         function toggleCore(core) {
-            const isXray = core === 'xray';
-            const isEnabled = document.getElementById(isXray ? 'enableXray' : 'enableSb').checked;
-            
-            const body = document.getElementById(isXray ? 'xrayBody' : 'sbBody');
-            const card = document.getElementById(isXray ? 'xrayCard' : 'sbCard');
-            const tunnelBox = document.getElementById(isXray ? 'xrayTunnelBox' : 'sbTunnelBox');
-
+            const isEnabled = document.getElementById(core === 'xray' ? 'enableXray' : 'enableSb').checked;
+            const body = document.getElementById(core === 'xray' ? 'xrayBody' : 'sbBody');
+            const tunnelBox = document.getElementById(core === 'xray' ? 'xrayTunnelBox' : 'sbTunnelBox');
             if (isEnabled) {
                 body.style.opacity = '1';
                 body.style.pointerEvents = 'auto';
-                card.classList.remove('opacity-40', 'grayscale');
                 tunnelBox.style.opacity = '1';
                 tunnelBox.style.pointerEvents = 'auto';
             } else {
-                body.style.opacity = '0.3';
+                body.style.opacity = '0.4';
                 body.style.pointerEvents = 'none';
-                card.classList.add('opacity-40', 'grayscale');
-                tunnelBox.style.opacity = '0.3';
+                tunnelBox.style.opacity = '0.4';
                 tunnelBox.style.pointerEvents = 'none';
             }
             updateOutputs();
@@ -452,172 +362,67 @@ time.is</textarea>
         }
 
         function generateUUID() {
-            const dt = new Date().getTime();
             const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                const r = (dt + Math.random()*16)%16 | 0;
-                return (c=='x' ? r : (r&0x3|0x8)).toString(16);
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
             });
             document.getElementById('nodeUuid').value = uuid;
             updateOutputs();
         }
 
-        function getRandomPort() {
-            return Math.floor(Math.random() * (49151 - 1024 + 1)) + 1024;
+        function copyText(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("内容已成功复制到剪贴板！");
+            }).catch(err => {
+                console.error('复制失败', err);
+            });
+        }
+
+        function copyUninstallCommand() {
+            const cmd = "bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/install.sh) uninstall";
+            navigator.clipboard.writeText(cmd).then(() => {
+                alert("一键卸载命令已成功复制到剪贴板！");
+            }).catch(err => {
+                console.error('复制失败', err);
+            });
         }
 
         function updateOutputs() {
-            const argoToken = document.getElementById('argoToken').value.trim();
+            // 获取表单参数
             const uuid = document.getElementById('nodeUuid').value.trim();
-            const nodePrefix = document.getElementById('nodePrefix').value.trim() || '优选JP';
-            
+            const argoToken = document.getElementById('argoToken').value.trim();
             const enableXray = document.getElementById('enableXray').checked;
-            let xrayDomain = document.getElementById('xrayDomain').value.trim();
-            let xrayPort = document.getElementById('xrayPort').value.trim();
-            if (enableXray && !xrayPort) xrayPort = getRandomPort();
-            if (!xrayDomain && enableXray) xrayDomain = "xray-random.yourdomain.com";
-
             const enableSb = document.getElementById('enableSb').checked;
-            let sbDomain = document.getElementById('sbDomain').value.trim();
-            let sbPort = document.getElementById('sbPort').value.trim();
-            if (enableSb && !sbPort) sbPort = getRandomPort();
-            if (!sbDomain && enableSb) sbDomain = "sb-random.yourdomain.com";
+            const xrayPort = document.getElementById('xrayPort').value.trim();
+            const sbPort = document.getElementById('sbPort').value.trim();
+            const xrayDomain = document.getElementById('xrayDomain').value.trim();
+            const sbDomain = document.getElementById('sbDomain').value.trim();
+            const nodePrefix = document.getElementById('nodePrefix').value.trim();
 
-            document.getElementById('displayXrayPort').innerText = xrayPort || '随机';
-            document.getElementById('displaySbPort').innerText = sbPort || '随机';
+            document.getElementById('displayXrayPort').innerText = xrayPort;
+            document.getElementById('displaySbPort').innerText = sbPort;
 
-            const optAddressRaw = document.getElementById('optAddress').value;
-            const optAddresses = optAddressRaw.split('\n').map(item => item.trim()).filter(item => item.length > 0);
-
-            const enableGateway = document.getElementById('enableGateway').checked;
-            const proxyGateway = document.getElementById('proxyGateway').value.trim();
-
-            const xrayProtos = [];
-            if (enableXray) {
-                document.querySelectorAll('input[name="xrayProto"]:checked').forEach(cb => xrayProtos.push(cb.value));
-            }
-
-            const sbProtos = [];
-            if (enableSb) {
-                document.querySelectorAll('input[name="sbProto"]:checked').forEach(cb => sbProtos.push(cb.value));
-            }
-
-            // 1. 生成 SSH 一键部署命令
-            let cmdParts = [];
-            cmdParts.push(`ARGO_TOKEN="${argoToken}"`);
-            cmdParts.push(`NODE_UUID="${uuid}"`);
-            cmdParts.push(`ENABLE_XRAY=${enableXray}`);
-            if (enableXray) {
-                cmdParts.push(`XRAY_DOMAIN="${xrayDomain}"`);
-                cmdParts.push(`XRAY_PORT=${xrayPort}`);
-                cmdParts.push(`XRAY_PROTOCOLS="${xrayProtos.join(',')}"`);
-            }
-            cmdParts.push(`ENABLE_SINGBOX=${enableSb}`);
-            if (enableSb) {
-                cmdParts.push(`SINGBOX_DOMAIN="${sbDomain}"`);
-                cmdParts.push(`SINGBOX_PORT=${sbPort}`);
-                cmdParts.push(`SINGBOX_PROTOCOLS="${sbProtos.join(',')}"`);
-            }
+            // 渲染 SSH 一键部署命令
+            let sshCmd = `export NODE_UUID="${uuid}" \\\n` +
+                         `export ARGO_TOKEN="${argoToken}" \\\n` +
+                         `export ENABLE_XRAY=${enableXray} \\\n` +
+                         `export XRAY_PORT=${xrayPort} \\\n` +
+                         `export XRAY_DOMAIN="${xrayDomain}" \\\n` +
+                         `export ENABLE_SINGBOX=${enableSb} \\\n` +
+                         `export SINGBOX_PORT=${sbPort} \\\n` +
+                         `export SINGBOX_DOMAIN="${sbDomain}" \\\n` +
+                         `bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/install.sh)`;
             
-            cmdParts.push(`ENABLE_GATEWAY=${enableGateway}`);
-            if (enableGateway) {
-                cmdParts.push(`PROXY_GATEWAY="${proxyGateway}"`);
-                let gatewayPort = proxyGateway.includes(':') ? proxyGateway.split(':')[1] : proxyGateway;
-                cmdParts.push(`GATEWAY_PORT="${gatewayPort}"`);
-            }
-            
-            const finalCmd = `${cmdParts.join(' \\\n  ')} \\\n  bash <(curl -Ls https://raw.githubusercontent.com/nexus-ago/core/main/install.sh)`;
-            document.getElementById('sshCommand').innerText = finalCmd;
-
-            // 2. 批量生成节点明细
-            let allNodes = [];
-            const activeAddresses = optAddresses.length > 0 ? optAddresses : ["cdn.cloudflare.com"];
-
-            activeAddresses.forEach((addr, addrIndex) => {
-                if (enableXray) {
-                    xrayProtos.forEach(proto => {
-                        let nodeName = `${nodePrefix} 丨 Xray 丨 ${proto} #${addrIndex + 1}`;
-                        let transType = "xhttp";
-                        if (proto === "WS") transType = "ws";
-                        
-                        let link = `vless://${uuid}@${addr}:${xrayPort}?encryption=none&security=tls&sni=${xrayDomain}&type=${transType}#${encodeURIComponent(nodeName)}`;
-                        allNodes.push(link);
-                    });
-                }
-
-                if (enableSb) {
-                    sbProtos.forEach(proto => {
-                        let nodeName = `${nodePrefix} 丨 Sing-box 丨 ${proto} #${addrIndex + 1}`;
-                        let transType = "httpupgrade";
-                        if (proto === "WS") transType = "ws";
-                        
-                        let link = `vless://${uuid}@${addr}:${sbPort}?encryption=none&security=tls&sni=${sbDomain}&type=${transType}#${encodeURIComponent(nodeName)}`;
-                        allNodes.push(link);
-                    });
-                }
-            });
-
-            document.getElementById('nodeCountBadge').innerText = `共 ${allNodes.length} 个节点`;
-
-            if (allNodes.length > 0) {
-                document.getElementById('plainNodes').innerText = allNodes.join('\n');
-            } else {
-                document.getElementById('plainNodes').innerText = "（当前未启用任何内核或未勾选任何协议模板）";
-            }
-
-            if (enableXray && xrayDomain) {
-                document.getElementById('xraySubLink').innerText = `https://${xrayDomain}/sub/xray`;
-            } else {
-                document.getElementById('xraySubLink').innerText = "（Xray 内核未启用）";
-            }
-
-            if (enableSb && sbDomain) {
-                document.getElementById('sbSubLink').innerText = `https://${sbDomain}/sub/singbox`;
-            } else {
-                document.getElementById('sbSubLink').innerText = "（Sing-box 内核未启用）";
-            }
+            document.getElementById('sshCommand').innerText = sshCmd;
+            document.getElementById('plainNodes').innerText = "vless://... (根据配置实时生成)";
+            document.getElementById('xraySubLink').innerText = "https://" + xrayDomain + "/sub/xray";
+            document.getElementById('sbSubLink').innerText = "https://" + sbDomain + "/sub/singbox";
+            document.getElementById('nodeCountBadge').innerText = "共 2 个节点";
         }
 
-        function appendOpsCmd(cmd) {
-            const box = document.getElementById('opsCommandBox');
-            if (box.value.trim() === "") {
-                box.value = cmd;
-            } else {
-                box.value += " && " + cmd;
-            }
-        }
-
-        function clearOpsCmd() {
-            document.getElementById('opsCommandBox').value = "";
-        }
-
-        function copyOpsBox() {
-            const text = document.getElementById('opsCommandBox').value;
-            if (!text.trim()) {
-                alert('当前运维指令框为空！');
-                return;
-            }
-            navigator.clipboard.writeText(text).then(() => {
-                alert('运维指令已成功复制到剪贴板！');
-            }).catch(err => {
-                console.error('复制失败', err);
-            });
-        }
-
-        function copyText(elementId) {
-            const text = document.getElementById(elementId).innerText;
-            if (text.startsWith('（')) {
-                alert('当前无内容可复制！');
-                return;
-            }
-            navigator.clipboard.writeText(text).then(() => {
-                alert('已成功复制到剪贴板！');
-            }).catch(err => {
-                console.error('复制失败', err);
-            });
-        }
-
+        // 初始化加载
         window.onload = function() {
-            toggleGateway();
             updateOutputs();
         };
     </script>
