@@ -263,7 +263,7 @@ time.is</textarea>
                             </div>
                         </div>
 
-                        <!-- 批量复制所有节点 (已实现真实客户端裂变生成) -->
+                        <!-- 批量复制所有节点 -->
                         <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-3.5 shadow-xl flex-1 flex flex-col justify-between">
                             <div class="flex justify-between items-center mb-1.5">
                                 <h3 class="text-xs font-bold text-emerald-400 flex items-center">
@@ -394,8 +394,15 @@ time.is</textarea>
             document.getElementById('displayXrayPort').innerText = xrayPort;
             document.getElementById('displaySbPort').innerText = sbPort;
 
-            // 1. 渲染 SSH 一键部署命令（完美补全网关等所有环境变量）
-            let sshCmd = `export NODE_UUID="${uuid}" \\\n` +
+            // 智能防呆：检测 Token 是否为空，如果为空自动追加警告注释
+            let tokenWarningComment = "";
+            if (!argoToken) {
+                tokenWarningComment = `# ⚠️ 警告：检测到您未填写 Argo Tunnel Token，请先在上方填入 Token 才能正常部署！\n`;
+            }
+
+            // 1. 渲染 SSH 一键部署命令
+            let sshCmd = tokenWarningComment +
+                         `export NODE_UUID="${uuid}" \\\n` +
                          `export ARGO_TOKEN="${argoToken}" \\\n` +
                          `export ENABLE_XRAY=${enableXray} \\\n` +
                          `export XRAY_PORT=${xrayPort} \\\n` +
@@ -411,23 +418,20 @@ time.is</textarea>
             
             document.getElementById('sshCommand').innerText = sshCmd;
 
-            // 2. 实现客户端真实的批量优选节点裂变生成
+            // 2. 客户端批量优选节点裂变生成
             let generatedNodes = [];
             optAddresses.forEach((addr, addrIdx) => {
-                // 如果开启了 Xray 且选了协议
                 if (enableXray) {
                     xrayProtos.forEach(proto => {
                         let nodeName = `${nodePrefix}-Xray-${proto}-${addrIdx + 1}`;
-                        // 构造 vless 链接
                         let vlessLink = `vless://${uuid}@${addr}:443?encryption=none&security=tls&sni=${xrayDomain}&type=xhttp&path=%2F#${encodeURIComponent(nodeName)}`;
                         generatedNodes.push(vlessLink);
                     });
                 }
-                // 如果开启了 Sing-box 且选了协议
                 if (enableSb) {
                     sbProtos.forEach(proto => {
                         let nodeName = `${nodePrefix}-SB-${proto}-${addrIdx + 1}`;
-                        let vlessLink = `vless://${uuid}@${addr}:443?encryption=none&security=tls&sni=${sbDomain}&type=httpupgrade#${encodeURIComponent(nodeName)}`;
+                        let vlessLink = `vless://${uuid}@${addr}:443?encryption=none&security=tls&sni=${sbDomain}&type=httpupgrade&path=%2F#${encodeURIComponent(nodeName)}`;
                         generatedNodes.push(vlessLink);
                     });
                 }
