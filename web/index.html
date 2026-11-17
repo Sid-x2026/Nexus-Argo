@@ -15,7 +15,6 @@
 </head>
 <body class="bg-[#0b0f19] text-slate-100 font-sans min-h-screen antialiased selection:bg-blue-500 selection:text-white">
 
-    <!-- 容器采用自适应居中与多端内边距适配 -->
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         
         <!-- 顶部导航/标题栏 -->
@@ -48,7 +47,6 @@
         <!-- 主体结构 -->
         <div class="space-y-6">
 
-            <!-- ================= 自动化部署与配置 ================= -->
             <section class="space-y-3.5">
                 <div class="flex items-center justify-between border-l-4 border-blue-500 pl-3">
                     <h2 class="text-sm md:text-base font-bold text-slate-200 tracking-wide">
@@ -57,7 +55,6 @@
                     <span class="text-[11px] text-slate-500 hidden sm:inline">参数变更将实时联动右侧部署命令与批量优选节点</span>
                 </div>
 
-                <!-- 自适应网格 -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
                     
                     <!-- 左侧：控制参数表单 -->
@@ -248,7 +245,7 @@ time.is</textarea>
 
                     </div>
 
-                    <!-- 右侧：生成结果输出面板 (已强制加上 break-all 与 whitespace-pre-wrap 自动折行) -->
+                    <!-- 右侧：生成结果输出面板 -->
                     <div class="lg:col-span-5 flex flex-col justify-between space-y-3.5 w-full">
                         
                         <!-- SSH 一键部署命令 -->
@@ -261,13 +258,12 @@ time.is</textarea>
                                     <i class="fa-regular fa-copy mr-1"></i>复制
                                 </button>
                             </div>
-                            <!-- 核心修复点：加上 break-all whitespace-pre-wrap -->
                             <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-2.5 font-mono text-[11px] text-slate-300 overflow-y-auto flex-1 min-h-[160px] max-h-[300px] break-all whitespace-pre-wrap select-all shadow-inner" id="sshCommand">
                                 <!-- 动态生成 -->
                             </div>
                         </div>
 
-                        <!-- 批量复制所有节点 -->
+                        <!-- 批量复制所有节点 (已实现真实客户端裂变生成) -->
                         <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-3.5 shadow-xl flex-1 flex flex-col justify-between">
                             <div class="flex justify-between items-center mb-1.5">
                                 <h3 class="text-xs font-bold text-emerald-400 flex items-center">
@@ -277,7 +273,6 @@ time.is</textarea>
                                     <i class="fa-regular fa-copy mr-1"></i>复制
                                 </button>
                             </div>
-                            <!-- 核心修复点：加上 break-all whitespace-pre-wrap -->
                             <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-2.5 font-mono text-[11px] text-emerald-300 overflow-y-auto flex-1 min-h-[160px] max-h-[300px] break-all whitespace-pre-wrap select-all shadow-inner" id="plainNodes">
                                 <!-- 动态生成 -->
                             </div>
@@ -386,33 +381,68 @@ time.is</textarea>
             const sbPort = document.getElementById('sbPort').value.trim();
             const xrayDomain = document.getElementById('xrayDomain').value.trim();
             const sbDomain = document.getElementById('sbDomain').value.trim();
-            const nodePrefix = document.getElementById('nodePrefix').value.trim();
+            const nodePrefix = document.getElementById('nodePrefix').value.trim() || "Nexus";
+            const enableGateway = document.getElementById('enableGateway').checked;
+            const proxyGateway = document.getElementById('proxyGateway').value.trim();
+
+            const optAddresses = document.getElementById('optAddress').value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
 
             // 收集选中的多选协议
-            const xrayProtos = Array.from(document.querySelectorAll('input[name="xrayProto"]:checked')).map(cb => cb.value).join(',');
-            const sbProtos = Array.from(document.querySelectorAll('input[name="sbProto"]:checked')).map(cb => cb.value).join(',');
+            const xrayProtos = Array.from(document.querySelectorAll('input[name="xrayProto"]:checked')).map(cb => cb.value);
+            const sbProtos = Array.from(document.querySelectorAll('input[name="sbProto"]:checked')).map(cb => cb.value);
 
             document.getElementById('displayXrayPort').innerText = xrayPort;
             document.getElementById('displaySbPort').innerText = sbPort;
 
-            // 渲染 SSH 一键部署命令（包含协议参数联动）
+            // 1. 渲染 SSH 一键部署命令（完美补全网关等所有环境变量）
             let sshCmd = `export NODE_UUID="${uuid}" \\\n` +
                          `export ARGO_TOKEN="${argoToken}" \\\n` +
                          `export ENABLE_XRAY=${enableXray} \\\n` +
                          `export XRAY_PORT=${xrayPort} \\\n` +
                          `export XRAY_DOMAIN="${xrayDomain}" \\\n` +
-                         `export XRAY_PROTOCOLS="${xrayProtos}" \\\n` +
+                         `export XRAY_PROTOCOLS="${xrayProtos.join(',')}" \\\n` +
                          `export ENABLE_SINGBOX=${enableSb} \\\n` +
                          `export SINGBOX_PORT=${sbPort} \\\n` +
                          `export SINGBOX_DOMAIN="${sbDomain}" \\\n` +
-                         `export SINGBOX_PROTOCOLS="${sbProtos}" \\\n` +
+                         `export SINGBOX_PROTOCOLS="${sbProtos.join(',')}" \\\n` +
+                         `export ENABLE_GATEWAY=${enableGateway} \\\n` +
+                         `export PROXY_GATEWAY="${proxyGateway}" \\\n` +
                          `bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/install.sh)`;
             
             document.getElementById('sshCommand').innerText = sshCmd;
-            document.getElementById('plainNodes').innerText = "vless://... (根据配置实时生成，当前勾选协议: Xray[" + (xrayProtos || '无') + "] Sing-box[" + (sbProtos || '无') + "])";
+
+            // 2. 实现客户端真实的批量优选节点裂变生成
+            let generatedNodes = [];
+            optAddresses.forEach((addr, addrIdx) => {
+                // 如果开启了 Xray 且选了协议
+                if (enableXray) {
+                    xrayProtos.forEach(proto => {
+                        let nodeName = `${nodePrefix}-Xray-${proto}-${addrIdx + 1}`;
+                        // 构造 vless 链接
+                        let vlessLink = `vless://${uuid}@${addr}:443?encryption=none&security=tls&sni=${xrayDomain}&type=xhttp&path=%2F#${encodeURIComponent(nodeName)}`;
+                        generatedNodes.push(vlessLink);
+                    });
+                }
+                // 如果开启了 Sing-box 且选了协议
+                if (enableSb) {
+                    sbProtos.forEach(proto => {
+                        let nodeName = `${nodePrefix}-SB-${proto}-${addrIdx + 1}`;
+                        let vlessLink = `vless://${uuid}@${addr}:443?encryption=none&security=tls&sni=${sbDomain}&type=httpupgrade#${encodeURIComponent(nodeName)}`;
+                        generatedNodes.push(vlessLink);
+                    });
+                }
+            });
+
+            if (generatedNodes.length > 0) {
+                document.getElementById('plainNodes').innerText = generatedNodes.join('\n');
+                document.getElementById('nodeCountBadge').innerText = `共 ${generatedNodes.length} 个节点`;
+            } else {
+                document.getElementById('plainNodes').innerText = "提示：请在左侧至少勾选一个核心协议或传输方式，以实时生成批量节点。";
+                document.getElementById('nodeCountBadge').innerText = "共 0 个节点";
+            }
+
             document.getElementById('xraySubLink').innerText = "https://" + xrayDomain + "/sub/xray";
             document.getElementById('sbSubLink').innerText = "https://" + sbDomain + "/sub/sb";
-            document.getElementById('nodeCountBadge').innerText = "共 0 个节点";
         }
 
         window.onload = function() {
