@@ -1,0 +1,29 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "inbounds": [
+    {
+      "type": "vless",
+      "tag": "quic-in",
+      "listen": "127.0.0.1",
+      "listen_port": 20003,
+      "users": [
+        {
+          "uuid": "${UUID}",
+          "flow": ""
+        }
+      ],
+      "transport": {
+        "type": "quic"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}
