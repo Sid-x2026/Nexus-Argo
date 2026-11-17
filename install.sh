@@ -10,7 +10,7 @@ YELLOW="\033[33m"
 CYAN="\033[36m"
 NC="\033[0m"
 
-WORK_DIR="/opt/nexus-ago"
+WORK_DIR="/opt/nexus-argo"
 
 # ==========================================
 # 卸载与深度清理逻辑 (响应 web 面板 uninstall 指令)
@@ -57,14 +57,16 @@ if [ -z "$ARGO_TOKEN" ]; then
     exit 1
 fi
 
-# 接收并适配 Web 面板传递的各项核心开关与参数
+# 接收并适配 Web 面板传递的各项核心开关、端口、域名及多选协议参数
 ENABLE_XRAY="${ENABLE_XRAY:-true}"
 XRAY_PORT="${XRAY_PORT:-8001}"
 XRAY_DOMAIN="${XRAY_DOMAIN:-xray.yourdomain.com}"
+XRAY_PROTOCOLS="${XRAY_PROTOCOLS:-}"
 
 ENABLE_SINGBOX="${ENABLE_SINGBOX:-true}"
 SINGBOX_PORT="${SINGBOX_PORT:-8002}"
 SINGBOX_DOMAIN="${SINGBOX_DOMAIN:-singbox.yourdomain.com}"
+SINGBOX_PROTOCOLS="${SINGBOX_PROTOCOLS:-}"
 
 ENABLE_GATEWAY="${ENABLE_GATEWAY:-false}"
 PROXY_GATEWAY="${PROXY_GATEWAY:-127.0.0.1:7928}"
@@ -91,6 +93,7 @@ curl -s -o "$WORK_DIR/web/index.html" "$REPO_RAW_URL/web/index.html"
 echo -e "${YELLOW}⏳ 正在生成双核代理配置文件...${NC}"
 
 if [ "$ENABLE_XRAY" = "true" ]; then
+    echo -e "${CYAN}ℹ️ Xray 选中的协议: ${XRAY_PROTOCOLS:-未选择/默认模板}${NC}"
     cat << EOF > "$WORK_DIR/config/xray_config.json"
 {
   "log": { "loglevel": "warning" },
@@ -118,6 +121,7 @@ EOF
 fi
 
 if [ "$ENABLE_SINGBOX" = "true" ]; then
+    echo -e "${CYAN}ℹ️ Sing-box 选中的协议: ${SINGBOX_PROTOCOLS:-未选择/默认模板}${NC}"
     cat << EOF > "$WORK_DIR/config/singbox_config.json"
 {
   "log": { "level": "warn" },
