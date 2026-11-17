@@ -19,8 +19,8 @@ if [ "${1:-}" = "uninstall" ]; then
     echo -e "${YELLOW}⏳ 正在执行 Nexus-Argo 卸载与清理程序...${NC}"
     
     # 1. 停止并删除关联的 Docker 容器
-    echo -e "${CYAN}▶ 正在停止并清理 Docker 容器 (xray, sing-box, argo)...${NC}"
-    docker rm -f nexus-xray nexus-singbox nexus-argo 2>/dev/null
+    echo -e "${CYAN}▶ 正在停止并清理 Docker 容器 (xray, sing-box, argo, web-panel)...${NC}"
+    docker rm -f nexus-xray nexus-singbox nexus-argo nexus-web-panel 2>/dev/null
     
     # 2. 删除本地工作目录与配置
     if [ -d "$WORK_DIR" ]; then
@@ -57,7 +57,7 @@ if [ -z "$ARGO_TOKEN" ]; then
     exit 1
 fi
 
-# 接收并适配 Web 面板传递的各项核心开关、端口、域名及多选协议参数
+# 接收并适配 Web 面板传递的各项核心开关、端口、域名、多选协议及网关参数
 ENABLE_XRAY="${ENABLE_XRAY:-true}"
 XRAY_PORT="${XRAY_PORT:-8001}"
 XRAY_DOMAIN="${XRAY_DOMAIN:-xray.yourdomain.com}"
@@ -89,8 +89,32 @@ echo -e "${YELLOW}⏳ 正在从 GitHub 同步 Web 面板源码...${NC}"
 REPO_RAW_URL="https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main"
 curl -s -o "$WORK_DIR/web/index.html" "$REPO_RAW_URL/web/index.html"
 
-# 5. 生成/渲染后端内核配置文件
+# 5. 生成/渲染后端内核配置文件（完美对接网关与多选协议）
 echo -e "${YELLOW}⏳ 正在生成双核代理配置文件...${NC}"
+
+# 处理网关出站逻辑
+XRAY_OUTBOUND='{ "protocol": "freedom" }'
+SINGBOX_OUTBOUND='{ "type": "direct" }'
+
+if [ "$ENABLE_GATEWAY" = "true" ] && [ -n "$PROXY_GATEWAY" ]; then
+    GW_IP=$(echo "$PROXY_GATEWAY" | cut -d':' -f1)
+    GW_PORT=$(echo "$PROXY_GATEWAY" | cut -d':' -f2)
+    echo -e "${CYAN}ℹ️ 已启用出站网关中转: ${PROXY_GATEWAY}${NC}"
+    
+    XRAY_OUTBOUND="{
+      \"protocol\": \"socks\",
+      \"settings\": {
+        \"servers\": [{ \"address\": \"$GW_IP\", \"port\": $GW_PORT }]
+      }
+    }"
+
+    SINGBOX_OUTBOUND="{
+      \"type\": \"socks\",
+      \"tag\": \"gateway-out\",
+      \"server\": \"$GW_IP\",
+      \"server_port\": $GW_PORT
+    }"
+fi
 
 if [ "$ENABLE_XRAY" = "true" ]; then
     echo -e "${CYAN}ℹ️ Xray 选中的协议: ${XRAY_PROTOCOLS:-未选择/默认模板}${NC}"
@@ -114,7 +138,7 @@ if [ "$ENABLE_XRAY" = "true" ]; then
       }
     }
   ],
-  "outbounds": [{ "protocol": "freedom" }]
+  "outbounds": [$XRAY_OUTBOUND]
 }
 EOF
     echo -e "${GREEN}✅ Xray 配置文件已生成 (端口: $XRAY_PORT)${NC}"
@@ -137,15 +161,15 @@ if [ "$ENABLE_SINGBOX" = "true" ]; then
       }
     }
   ],
-  "outbounds": [{ "type": "direct" }]
+  "outbounds": [$SINGBOX_OUTBOUND]
 }
 EOF
     echo -e "${GREEN}✅ Sing-box 配置文件已生成 (端口: $SINGBOX_PORT)${NC}"
 fi
 
-# 6. 清理旧容器并启动新容器集群
+# 6. 清理旧容器并启动新容器集群（包含本地 Web 静态面板托管容器）
 echo -e "${YELLOW}⏳ 正在启动 Docker 容器集群...${NC}"
-docker rm -f nexus-xray nexus-singbox nexus-argo 2>/dev/null
+docker rm -f nexus-xray nexus-singbox nexus-argo nexus-web-panel 2>/dev/null
 
 if [ "$ENABLE_XRAY" = "true" ]; then
     docker run -d \
@@ -171,9 +195,18 @@ docker run -d \
     --restart always \
     cloudflare/cloudflared:latest tunnel run --token "$ARGO_TOKEN"
 
+# 启动本地轻量 Web 面板托管服务 (解决网页下载后无法访问的问题，映射到服务器 8080 端口)
+docker run -d \
+    --name nexus-web-panel \
+    --restart always \
+    -p 8080:80 \
+    -v "$WORK_DIR/web:/usr/share/nginx/html:ro" \
+    nginx:alpine
+
 echo -e "\n${GREEN}==========================================${NC}"
 echo -e "${GREEN}🎉 Nexus-Argo 自动化部署全部完成！${NC}"
 echo -e "${GREEN}📌 节点 UUID: ${USER_UUID}${NC}"
 echo -e "${GREEN}📌 Xray 状态: ${ENABLE_XRAY} (端口 ${XRAY_PORT})${NC}"
 echo -e "${GREEN}📌 Sing-box 状态: ${ENABLE_SINGBOX} (端口 ${SINGBOX_PORT})${NC}"
+echo -e "${GREEN}🌐 本地 Web 管理面板已启动: http://服务器IP:8080${NC}"
 echo -e "${GREEN}==========================================${NC}"
