@@ -50,10 +50,10 @@ bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/inst
 Nexus-Argo/
 ├── .github/
 │   └── workflows/
-│       └── pages.yml       # GitHub Pages 自动化构建与持续部署流水线
+│       └── pages.yml # GitHub Pages 自动化构建与持续部署流水线
 ├── web/
-│   └── index.html          # 响应式高颜值 Web 运维控制面板前端
-└── install.sh              # 核心一键安装、环境检测、容器集群与卸载运维脚本
+│   └── index.html # 响应式高颜值 Web 运维控制面板前端
+└── install.sh # 核心一键安装、环境检测、容器集群与卸载运维脚本
 
 ---
 
