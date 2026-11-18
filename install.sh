@@ -241,8 +241,12 @@ def vless_link(addr, domain, proto, port, core):
         svc = "&path=%2Fhttpupgrade"
     else:
         svc = "&path=%2Fws"
+    # ALPN per protocol (VPS test 2026-11-18): ws/httpupgrade are
+    # HTTP/1.1 Upgrade only, grpc is h2 only. Offering h2 first
+    # breaks ws/httpupgrade (client negotiates h2).
+    alpn = "h2" if proto == "grpc" else "http/1.1"
     return (f"vless://{uuid}@{addr}:{port}/?encryption=none&security=tls"
-            f"&sni={domain}&type={proto}{svc}&alpn=h2,http/1.1"
+            f"&sni={domain}&type={proto}{svc}&alpn={alpn}"
             f"#{prefix}丨Singbox丨{proto}")
 
 native = []
@@ -342,8 +346,12 @@ if [ -n "$ARGO_TOKEN" ]; then
     "$CLOUDFLARED_IMAGE" tunnel --no-autoupdate --protocol "$TUNNEL_PROTOCOL" run --token "$ARGO_TOKEN"
 fi
 if [ -f "$WORKDIR/web/nginx.conf" ] && [ -f "$WORKDIR/web/index.html" ]; then
+  # Panel is bound to 127.0.0.1 only (2026-11-18): it has no login,
+  # so it must never be exposed on the VPS public IP:8080, and no
+  # tunnel route should point at it. Access it via SSH port-forward
+  # (ssh -L 8080:127.0.0.1:8080 root@<VPS-IP>) or via Cloudflare Access.
   docker run -d --name nexus-web-panel --restart unless-stopped \
-    -p 8080:80 \
+    -p 127.0.0.1:8080:80 \
     -v "$WORKDIR/web/index.html:/usr/share/nginx/html/index.html:ro" \
     -v "$WORKDIR/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
     -v "$WORKDIR/sub:/usr/share/nginx/html/sub:ro" \
