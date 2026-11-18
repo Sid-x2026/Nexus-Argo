@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus-Argo v1.0 自动化部署与运维系统</title>
+    <title>Nexus-Argo v3.6 自动化部署与运维系统</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -11,18 +11,19 @@
         ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(96, 165, 250, 0.6); }
+        /* 隐藏数字输入框上下箭头 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </head>
 <body class="bg-[#0b0f19] text-slate-100 font-sans min-h-screen antialiased selection:bg-blue-500 selection:text-white">
 
-    <!-- 容器采用自适应居中与多端内边距适配 -->
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         
         <!-- 顶部导航/标题栏 -->
         <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-800/80 gap-3">
             <div class="flex items-center gap-3.5">
-                <!-- 专属定制流线网络科技 Logo (结合 Sid-x2026 风格) -->
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600/30 via-indigo-600/30 to-purple-600/30 border border-blue-500/30 flex items-center justify-center shadow-lg shadow-blue-500/10 shrink-0 p-1.5">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-600/30 via-indigo-600/30 to-purple-600/30 border border-blue-500/30 flex items-center justify-center shadow-lg shadow-blue-500/10 shrink-0 p-2">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full text-blue-400">
                         <path d="M12 2v4m0 12v4M4.93 10.93l2.83 2.83m8.48 0l2.83-2.83M2 12h4m12 0h4" stroke-opacity="0.4"/>
                         <path d="M8 12c0-2.21 1.79-4 4-4s4 1.79 4 4-1.79 4-4 4-4-1.79-4-4z" class="text-indigo-400" stroke-width="2"/>
@@ -31,16 +32,16 @@
                     </svg>
                 </div>
                 <div>
-                    <h1 class="text-xl md:text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 flex items-center gap-2">
+                    <h1 class="text-xl md:text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 flex items-center gap-2.5">
                         Nexus-Argo 面板 
-                        <span class="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-0.5 rounded-md font-mono align-middle">v1.0</span>
+                        <span class="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-0.5 rounded-lg font-mono align-middle">v3.6</span>
                     </h1>
-                    <p class="text-xs text-slate-400 mt-0.5">双核自动化部署、Argo 隧道回源与多优选裂变订阅系统</p>
+                    <p class="text-xs md:text-sm text-slate-400 mt-0.5">纯 TCP/HTTP2 统一回源模型、内核统一回源端口与多源静态订阅裂变</p>
                 </div>
             </div>
             <div class="flex items-center gap-3">
-                <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300 shadow-inner">
-                    <i class="fa-brands fa-github text-slate-400"></i>
+                <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300 shadow-inner">
+                    <i class="fa-brands fa-github text-slate-400 text-sm"></i>
                     <span class="font-mono text-indigo-400 font-bold">Sid-x2026</span>
                 </div>
             </div>
@@ -49,274 +50,304 @@
         <!-- 主体结构 -->
         <div class="space-y-6">
 
-            <!-- ================= 自动化部署与配置 ================= -->
-            <section class="space-y-3.5">
-                <div class="flex items-center justify-between border-l-4 border-blue-500 pl-3">
+            <section class="space-y-4">
+                <div class="flex items-center justify-between border-l-4 border-blue-500 pl-3.5">
                     <h2 class="text-sm md:text-base font-bold text-slate-200 tracking-wide">
                         <i class="fa-solid fa-sliders mr-2 text-blue-400"></i>自动化部署与配置
                     </h2>
-                    <span class="text-[11px] text-slate-500 hidden sm:inline">参数变更将实时联动右侧部署命令与批量优选节点</span>
+                    <span class="text-xs text-slate-400 hidden sm:inline">各核心独立按需启用，支持纯 TCP 黄金协议多选组合</span>
                 </div>
 
-                <!-- 自适应网格：小屏幕自动堆叠，大屏幕(lg以上)双栏 7:5 黄金比例等高对齐 -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
                     
-                    <!-- 左侧：控制参数表单 (占 7 栅格) -->
-                    <div class="lg:col-span-7 flex flex-col justify-between space-y-3.5 w-full">
+                    <!-- 左侧：控制参数表单 (7 栅格) -->
+                    <div class="lg:col-span-7 flex flex-col justify-between space-y-4 w-full">
                         
                         <!-- 1. 双核协议选择 -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                            <!-- Xray -->
-                            <div id="xrayCard" class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl transition flex flex-col justify-between">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            
+                            <!-- Xray 卡片 -->
+                            <div id="xrayCard" class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4.5 shadow-xl transition flex flex-col justify-between">
                                 <div>
                                     <div class="flex justify-between items-center mb-2">
-                                        <h3 class="text-xs font-bold text-indigo-400 flex items-center">
-                                            <i class="fa-solid fa-cube mr-1.5"></i>Xray-core
+                                        <h3 class="text-xs md:text-sm font-bold text-indigo-400 flex items-center">
+                                            <i class="fa-solid fa-cube mr-2"></i>Xray-core (TCP)
                                         </h3>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" id="enableXray" checked onchange="toggleCore('xray')" class="sr-only peer">
-                                            <div class="w-8 h-4.5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-indigo-600"></div>
-                                        </label>
-                                    </div>
-                                    <div id="xrayBody" class="space-y-2">
-                                        <div class="flex justify-between items-center text-[11px] text-slate-400">
-                                            <span>XHTTP 协议模板</span>
-                                            <span class="text-indigo-400 font-mono">端口: <span id="displayXrayPort">8001</span></span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[11px] text-indigo-300 font-mono font-semibold bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/60">回源端口: <span id="displayXrayPort">8001</span></span>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="enableXray" checked onchange="toggleCore('xray')" class="sr-only peer">
+                                                <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                            </label>
                                         </div>
-                                        <div class="grid grid-cols-2 gap-1.5">
-                                            <label class="flex items-center space-x-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60 hover:border-indigo-500/40 transition">
-                                                <input type="checkbox" name="xrayProto" value="H1-Xhttp-TCP" onchange="updateOutputs()" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
-                                                <span>H1-Xhttp-TCP</span>
-                                            </label>
-                                            <label class="flex items-center space-x-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60 hover:border-indigo-500/40 transition">
-                                                <input type="checkbox" name="xrayProto" value="H3-Xhttp-TCP" onchange="updateOutputs()" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
-                                                <span>H3-Xhttp-TCP</span>
-                                            </label>
-                                            <label class="flex items-center space-x-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60 hover:border-indigo-500/40 transition">
-                                                <input type="checkbox" name="xrayProto" value="H3-Xhttp-UDP" onchange="updateOutputs()" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
-                                                <span>H3-Xhttp-UDP</span>
-                                            </label>
-                                            <label class="flex items-center space-x-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60 hover:border-indigo-500/40 transition">
-                                                <input type="checkbox" name="xrayProto" value="QUIC" onchange="updateOutputs()" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
-                                                <span>QUIC</span>
-                                            </label>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 mb-3 leading-relaxed">说明：子协议默认连接端口为 443 (对应客户端外部访问端口)</p>
+
+                                    <div id="xrayBody" class="space-y-2.5">
+                                        <div class="flex flex-col space-y-2.5">
+                                            <div class="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 hover:border-indigo-500/50 transition gap-2">
+                                                <label class="flex items-center space-x-2.5 text-xs md:text-sm text-slate-200 cursor-pointer flex-1">
+                                                    <input type="checkbox" name="xrayProto" value="xhttp_h1" checked onchange="updateOutputs()" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
+                                                    <span class="font-mono font-medium">xhttp_h1</span>
+                                                </label>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <span class="text-[10px] text-slate-400 font-mono">端口</span>
+                                                    <input type="number" id="port_xhttp_h1" value="443" min="1" max="65535" oninput="validatePort(this); updateOutputs()" class="w-16 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-indigo-300 font-mono text-center focus:outline-none focus:border-indigo-500">
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 hover:border-indigo-500/50 transition gap-2">
+                                                <label class="flex items-center space-x-2.5 text-xs md:text-sm text-slate-200 cursor-pointer flex-1">
+                                                    <input type="checkbox" name="xrayProto" value="xhttp_h2" checked onchange="updateOutputs()" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
+                                                    <span class="font-mono font-medium">xhttp_h2</span>
+                                                </label>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <span class="text-[10px] text-slate-400 font-mono">端口</span>
+                                                    <input type="number" id="port_xhttp_h2" value="443" min="1" max="65535" oninput="validatePort(this); updateOutputs()" class="w-16 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-indigo-300 font-mono text-center focus:outline-none focus:border-indigo-500">
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 hover:border-indigo-500/50 transition gap-2">
+                                                <label class="flex items-center space-x-2.5 text-xs md:text-sm text-slate-200 cursor-pointer flex-1">
+                                                    <input type="checkbox" name="xrayProto" value="xhttp_h3" checked onchange="updateOutputs()" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
+                                                    <span class="font-mono font-medium">xhttp_h3</span>
+                                                </label>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <span class="text-[10px] text-slate-400 font-mono">端口</span>
+                                                    <input type="number" id="port_xhttp_h3" value="443" min="1" max="65535" oninput="validatePort(this); updateOutputs()" class="w-16 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-indigo-300 font-mono text-center focus:outline-none focus:border-indigo-500">
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Sing-box -->
-                            <div id="sbCard" class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl transition flex flex-col justify-between">
+                            <!-- Sing-box 卡片 -->
+                            <div id="sbCard" class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4.5 shadow-xl transition flex flex-col justify-between">
                                 <div>
                                     <div class="flex justify-between items-center mb-2">
-                                        <h3 class="text-xs font-bold text-purple-400 flex items-center">
-                                            <i class="fa-solid fa-box-archive mr-1.5"></i>Sing-box
+                                        <h3 class="text-xs md:text-sm font-bold text-purple-400 flex items-center">
+                                            <i class="fa-solid fa-box-archive mr-2"></i>Sing-box (TCP)
                                         </h3>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" id="enableSb" checked onchange="toggleCore('sb')" class="sr-only peer">
-                                            <div class="w-8 h-4.5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-purple-600"></div>
-                                        </label>
-                                    </div>
-                                    <div id="sbBody" class="space-y-2">
-                                        <div class="flex justify-between items-center text-[11px] text-slate-400">
-                                            <span>现代传输协议</span>
-                                            <span class="text-purple-400 font-mono">端口: <span id="displaySbPort">8002</span></span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[11px] text-purple-300 font-mono font-semibold bg-purple-950/80 px-2 py-0.5 rounded border border-purple-800/60">回源端口: <span id="displaySbPort">8002</span></span>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="enableSb" checked onchange="toggleCore('sb')" class="sr-only peer">
+                                                <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                                            </label>
                                         </div>
-                                        <div class="grid grid-cols-2 gap-1.5">
-                                            <label class="flex items-center space-x-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60 hover:border-purple-500/40 transition">
-                                                <input type="checkbox" name="sbProto" value="H1-Xhttp-TCP" onchange="updateOutputs()" class="rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-0">
-                                                <span>H1-Xhttp-TCP</span>
-                                            </label>
-                                            <label class="flex items-center space-x-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60 hover:border-purple-500/40 transition">
-                                                <input type="checkbox" name="sbProto" value="H3-Xhttp-TCP" onchange="updateOutputs()" class="rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-0">
-                                                <span>H3-Xhttp-TCP</span>
-                                            </label>
-                                            <label class="flex items-center space-x-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60 hover:border-purple-500/40 transition">
-                                                <input type="checkbox" name="sbProto" value="H3-Xhttp-UDP" onchange="updateOutputs()" class="rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-0">
-                                                <span>H3-Xhttp-UDP</span>
-                                            </label>
-                                            <label class="flex items-center space-x-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60 hover:border-purple-500/40 transition">
-                                                <input type="checkbox" name="sbProto" value="WS" onchange="updateOutputs()" class="rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-0">
-                                                <span>WS</span>
-                                            </label>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 mb-3 leading-relaxed">说明：子协议默认连接端口为 443 (对应客户端外部访问端口)</p>
+
+                                    <div id="sbBody" class="space-y-2.5">
+                                        <div class="flex flex-col space-y-2.5">
+                                            <div class="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 hover:border-purple-500/50 transition gap-2">
+                                                <label class="flex items-center space-x-2.5 text-xs md:text-sm text-slate-200 cursor-pointer flex-1">
+                                                    <input type="checkbox" name="sbProto" value="httpupgrade" checked onchange="updateOutputs()" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-0">
+                                                    <span class="font-mono font-medium">httpupgrade</span>
+                                                </label>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <span class="text-[10px] text-slate-400 font-mono">端口</span>
+                                                    <input type="number" id="port_httpupgrade" value="443" min="1" max="65535" oninput="validatePort(this); updateOutputs()" class="w-16 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-purple-300 font-mono text-center focus:outline-none focus:border-purple-500">
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 hover:border-purple-500/50 transition gap-2">
+                                                <label class="flex items-center space-x-2.5 text-xs md:text-sm text-slate-200 cursor-pointer flex-1">
+                                                    <input type="checkbox" name="sbProto" value="ws" checked onchange="updateOutputs()" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-0">
+                                                    <span class="font-mono font-medium">ws</span>
+                                                </label>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <span class="text-[10px] text-slate-400 font-mono">端口</span>
+                                                    <input type="number" id="port_ws" value="443" min="1" max="65535" oninput="validatePort(this); updateOutputs()" class="w-16 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-purple-300 font-mono text-center focus:outline-none focus:border-purple-500">
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 hover:border-purple-500/50 transition gap-2">
+                                                <label class="flex items-center space-x-2.5 text-xs md:text-sm text-slate-200 cursor-pointer flex-1">
+                                                    <input type="checkbox" name="sbProto" value="grpc" checked onchange="updateOutputs()" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-0">
+                                                    <span class="font-mono font-medium">grpc</span>
+                                                </label>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <span class="text-[10px] text-slate-400 font-mono">端口</span>
+                                                    <input type="number" id="port_grpc" value="443" min="1" max="65535" oninput="validatePort(this); updateOutputs()" class="w-16 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-purple-300 font-mono text-center focus:outline-none focus:border-purple-500">
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
+
                         </div>
 
                         <!-- 2. 隧道与域名参数 -->
-                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl space-y-3">
-                            <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center">
-                                <i class="fa-solid fa-tunnel mr-1.5"></i>Argo 隧道与域名映射
+                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4.5 shadow-xl space-y-3">
+                            <h3 class="text-xs md:text-sm font-bold text-blue-400 uppercase tracking-wider flex items-center">
+                                <i class="fa-solid fa-tunnel mr-2"></i>ARGO 隧道与独立子域名映射
                             </h3>
                             <div>
-                                <label class="block text-[11px] text-slate-400 mb-1">Argo Tunnel Token</label>
-                                <input type="text" id="argoToken" value="" placeholder="请在此处粘贴您的 Argo Tunnel Token (如 eyJhIjoi...)" oninput="updateOutputs()"
-                                    class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono shadow-inner">
+                                <label class="block text-xs text-slate-300 mb-1.5 font-medium">Argo Tunnel Token (可留空先生成命令)</label>
+                                <input type="text" id="argoToken" value="" placeholder="请在此处粘贴您的 Argo Tunnel Token" oninput="updateOutputs()"
+                                    class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono shadow-inner">
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div id="xrayTunnelBox" class="space-y-1">
-                                    <label class="block text-[11px] text-indigo-400 font-semibold">Xray 域名与本地端口</label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                <div id="xrayTunnelBox" class="space-y-1.5">
+                                    <div class="flex justify-between items-center">
+                                        <label class="text-xs text-indigo-400 font-semibold">Xray 子域名与本地回源端口 *</label>
+                                        <span class="text-[11px] text-slate-400 font-mono">1-65535</span>
+                                    </div>
                                     <input type="text" id="xrayDomain" value="xray.yourdomain.com" oninput="updateOutputs()"
-                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono" placeholder="域名">
-                                    <input type="number" id="xrayPort" value="8001" oninput="updateOutputs()"
-                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono" placeholder="端口">
+                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3.5 py-2 text-xs md:text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono mb-1.5" placeholder="子域名">
+                                    <input type="number" id="xrayPort" value="8001" min="1" max="65535" oninput="validatePort(this); updateOutputs()"
+                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3.5 py-2 text-xs md:text-sm text-indigo-300 focus:outline-none focus:border-blue-500 font-mono" placeholder="回源端口">
                                 </div>
-                                <div id="sbTunnelBox" class="space-y-1">
-                                    <label class="block text-[11px] text-purple-400 font-semibold">Sing-box 域名与本地端口</label>
+                                <div id="sbTunnelBox" class="space-y-1.5">
+                                    <div class="flex justify-between items-center">
+                                        <label class="text-xs text-purple-400 font-semibold">Sing-box 子域名与本地回源端口 *</label>
+                                        <span class="text-[11px] text-slate-400 font-mono">1-65535</span>
+                                    </div>
                                     <input type="text" id="sbDomain" value="singbox.yourdomain.com" oninput="updateOutputs()"
-                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono" placeholder="域名">
-                                    <input type="number" id="sbPort" value="8002" oninput="updateOutputs()"
-                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono" placeholder="端口">
+                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3.5 py-2 text-xs md:text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono mb-1.5" placeholder="子域名">
+                                    <input type="number" id="sbPort" value="8002" min="1" max="65535" oninput="validatePort(this); updateOutputs()"
+                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3.5 py-2 text-xs md:text-sm text-purple-300 focus:outline-none focus:border-blue-500 font-mono" placeholder="回源端口">
                                 </div>
                             </div>
                         </div>
 
-                        <!-- 3. UUID、自定义前缀、优选地址与网关控制 -->
-                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl space-y-2.5 flex-1 flex flex-col justify-between">
-                            
-                            <!-- 节点 UUID 与前缀并排 -->
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <!-- 3. UUID、前缀与优选地址 -->
+                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4.5 shadow-xl space-y-3.5 flex-1 flex flex-col justify-between">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                                 <div class="md:col-span-2">
-                                    <div class="flex justify-between items-center mb-1">
-                                        <label class="text-[11px] text-slate-400 uppercase tracking-wider">节点 UUID</label>
-                                        <button onclick="generateUUID()" class="text-[10px] text-indigo-400 hover:underline cursor-pointer">随机生成</button>
+                                    <div class="flex justify-between items-center mb-1.5">
+                                        <label class="text-xs text-slate-300 uppercase tracking-wider font-medium">节点 UUID *</label>
+                                        <button onclick="generateUUID()" class="text-xs text-indigo-400 hover:underline cursor-pointer font-medium">安全生成</button>
                                     </div>
-                                    <input type="text" id="nodeUuid" value="d3b41696-6a56-4c4f-9e32-2d1f9b3c4e5a" oninput="updateOutputs()"
-                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-emerald-500 shadow-inner">
+                                    <input type="text" id="nodeUuid" value="98a9eeea-e34d-4a0b-a151-39ec761d83f6" oninput="updateOutputs()"
+                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-slate-200 font-mono focus:outline-none focus:border-emerald-500 shadow-inner">
                                 </div>
                                 <div>
-                                    <label class="block text-[11px] text-slate-400 uppercase tracking-wider mb-1">节点名称前缀</label>
+                                    <label class="block text-xs text-slate-300 uppercase tracking-wider mb-1.5 font-medium">节点名称前缀</label>
                                     <input type="text" id="nodePrefix" value="优选JP" oninput="updateOutputs()"
-                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1.5 text-xs text-emerald-400 font-mono focus:outline-none focus:border-emerald-500 shadow-inner" placeholder="例如: 优选JP">
+                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-emerald-400 font-mono focus:outline-none focus:border-emerald-500 shadow-inner" placeholder="例如: 优选JP">
                                 </div>
                             </div>
 
-                            <!-- 客户端优选地址大文本框 -->
-                            <div class="pt-1.5 border-t border-slate-800/60">
-                                <div class="flex justify-between items-center mb-1">
-                                    <label class="text-[11px] text-emerald-400 font-bold uppercase tracking-wider flex items-center">
-                                        <i class="fa-solid fa-globe mr-1.5"></i>客户端优选地址 (支持批量多行 IP 或优选域名)
+                            <div class="pt-2 border-t border-slate-800/60">
+                                <div class="flex justify-between items-center mb-1.5">
+                                    <label class="text-xs md:text-sm text-emerald-400 font-bold uppercase tracking-wider flex items-center">
+                                        <i class="fa-solid fa-globe mr-2"></i>客户端优选地址 (用于动态裂变)
                                     </label>
-                                    <span class="text-[10px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 font-mono">每行一个</span>
+                                    <span class="text-[11px] text-slate-400 bg-slate-950 px-2.5 py-0.5 rounded border border-slate-800 font-mono">每行一个 IP 或域名</span>
                                 </div>
-                                <textarea id="optAddress" rows="3" oninput="updateOutputs()"
-                                    class="w-full min-h-[75px] bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1.5 text-xs text-emerald-300 font-mono focus:outline-none focus:border-emerald-500 leading-relaxed shadow-inner">cdn.cloudflare.com
-104.16.123.96
-time.is</textarea>
-                            </div>
-
-                            <!-- 网关控制 -->
-                            <div class="space-y-1.5 pt-1.5 border-t border-slate-800/60">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <span class="text-xs font-bold text-slate-300 block">启用统一出站网关</span>
-                                        <span class="text-[10px] text-slate-400 block mt-0.5">统一配置 Xray 与 Sing-box 出站流量中转，常用于家宽端口转发场景</span>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
-                                        <input type="checkbox" id="enableGateway" checked onchange="toggleGateway()" class="sr-only peer">
-                                        <div class="w-8 h-4.5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
-                                    </label>
-                                </div>
-                                <div id="gatewayBox">
-                                    <input type="text" id="proxyGateway" value="127.0.0.1:7928" oninput="updateOutputs()"
-                                        class="w-full bg-slate-950 border border-slate-800/90 rounded-xl px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-emerald-500 shadow-inner">
-                                </div>
+                                <textarea id="optAddress" rows="4" oninput="updateOutputs()" placeholder="留空则自动采用默认 CF 优选域名生成节点..."
+                                    class="w-full min-h-[105px] bg-slate-950 border border-slate-800/90 rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-emerald-300 font-mono focus:outline-none focus:border-emerald-500 leading-relaxed shadow-inner"></textarea>
                             </div>
                         </div>
 
-                        <!-- 4. 服务器一键卸载/清理指令卡片 (附带详细备注) -->
-                        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md space-y-2.5">
+                        <!-- 4. 服务器一键卸载/清理指令卡片 -->
+                        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4.5 shadow-xl backdrop-blur-md space-y-2.5">
                             <div class="flex items-center justify-between">
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center space-x-2.5">
                                     <span class="text-red-400">🛡️</span>
-                                    <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">服务器一键卸载与清理</h3>
+                                    <h3 class="text-xs md:text-sm font-bold text-slate-200 uppercase tracking-wider">服务器一键卸载与清理</h3>
                                 </div>
-                                <button onclick="copyUninstallCommand()" class="px-2.5 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-[11px] rounded-lg transition border border-red-500/30 cursor-pointer shadow flex items-center gap-1">
+                                <button onclick="copyUninstallCommand()" class="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs rounded-xl transition border border-red-500/30 cursor-pointer shadow flex items-center gap-1.5 font-medium">
                                     <i class="fa-regular fa-copy"></i>复制卸载命令
                                 </button>
                             </div>
-                            <div class="bg-slate-950 rounded-xl p-2.5 border border-slate-800/80 font-mono text-[11px] text-red-300 break-all select-all shadow-inner">
+                            <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80 font-mono text-xs text-red-300 break-all select-all shadow-inner">
                                 bash &lt;(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/install.sh) uninstall
-                            </div>
-                            <!-- 卸载指令详细备注说明 -->
-                            <div class="text-[11px] text-slate-400 space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/50">
-                                <div class="font-semibold text-slate-300 mb-1">📌 执行卸载将自动清理以下内容：</div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px]">
-                                    <div>• 🛑 停止并删除所有双核核心容器 (Xray / Sing-box)</div>
-                                    <div>• 🗑️ 清除 Argo 隧道守护进程及本地凭证文件</div>
-                                    <div>• 🧹 释放相关服务端口与清理残留配置文件</div>
-                                    <div>• 📂 清理运行日志与缓存，还原系统初始状态</div>
-                                </div>
                             </div>
                         </div>
 
                     </div>
 
                     <!-- 右侧：生成结果输出面板 -->
-                    <div class="lg:col-span-5 flex flex-col justify-between space-y-3.5 w-full">
+                    <div class="lg:col-span-5 flex flex-col justify-between h-full w-full">
                         
-                        <!-- SSH 一键部署命令 -->
-                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-3.5 shadow-xl flex-1 flex flex-col justify-between">
-                            <div class="flex justify-between items-center mb-1.5">
-                                <h3 class="text-xs font-bold text-blue-400 flex items-center">
-                                    <i class="fa-solid fa-terminal mr-1.5"></i>SSH 一键部署命令
+                        <!-- 1. SSH 一键部署命令 -->
+                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl flex flex-col justify-between mb-3.5">
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-xs md:text-sm font-bold text-blue-400 flex items-center">
+                                    <i class="fa-solid fa-terminal mr-2"></i>SSH 一键部署命令
                                 </h3>
-                                <button onclick="copyText('sshCommand')" class="text-[11px] bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-0.5 rounded-lg transition cursor-pointer shadow">
-                                    <i class="fa-regular fa-copy mr-1"></i>复制
+                                <button onclick="copyText('sshCommand')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-xl transition cursor-pointer shadow font-medium">
+                                    <i class="fa-regular fa-copy mr-1.5"></i>复制
                                 </button>
                             </div>
-                            <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-2.5 font-mono text-[11px] text-slate-300 overflow-y-auto flex-1 min-h-[160px] max-h-[300px] break-all whitespace-pre-wrap select-all shadow-inner" id="sshCommand">
+                            <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-3 font-mono text-xs text-slate-300 overflow-y-auto max-h-[145px] break-all whitespace-pre-wrap select-all shadow-inner leading-relaxed" id="sshCommand">
                                 <!-- 动态生成 -->
                             </div>
                         </div>
 
-                        <!-- 批量复制所有节点 (已更新竖线前缀规则) -->
-                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-3.5 shadow-xl flex-1 flex flex-col justify-between">
-                            <div class="flex justify-between items-center mb-1.5">
-                                <h3 class="text-xs font-bold text-emerald-400 flex items-center">
-                                    <i class="fa-solid fa-list-check mr-1.5"></i>批量复制所有节点
+                        <!-- 2. Xray 本地批量节点池 -->
+                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl flex flex-col justify-between mb-3.5">
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-xs md:text-sm font-bold text-indigo-400 flex items-center">
+                                    <i class="fa-solid fa-list-check mr-2"></i>Xray 本地批量节点池
                                 </h3>
-                                <button onclick="copyText('plainNodes')" class="text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-0.5 rounded-lg transition cursor-pointer shadow">
-                                    <i class="fa-regular fa-copy mr-1"></i>复制
+                                <button onclick="copyText('xrayNodes')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-xl transition cursor-pointer shadow font-medium">
+                                    <i class="fa-regular fa-copy mr-1.5"></i>复制
                                 </button>
                             </div>
-                            <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-2.5 font-mono text-[11px] text-emerald-300 overflow-y-auto flex-1 min-h-[160px] max-h-[300px] break-all whitespace-pre-wrap select-all shadow-inner" id="plainNodes">
+                            <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-3 font-mono text-xs text-indigo-300 overflow-y-auto max-h-[135px] break-all whitespace-pre-wrap select-all shadow-inner leading-relaxed" id="xrayNodes">
                                 <!-- 动态生成 -->
+                            </div>
+                            <div class="mt-2 text-right">
+                                <span id="xrayCountBadge" class="bg-slate-950 px-2.5 py-1 rounded-lg text-slate-300 border border-slate-800 font-mono text-xs">共 0 个节点</span>
                             </div>
                         </div>
 
-                        <!-- Xray 动态订阅 -->
-                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-3.5 shadow-xl flex flex-col justify-between">
-                            <div class="flex justify-between items-center mb-1.5">
-                                <h3 class="text-xs font-bold text-indigo-400 flex items-center">
-                                    <i class="fa-solid fa-link mr-1.5"></i>Xray 动态订阅 URL
+                        <!-- 3. Sing-box 本地批量节点池 -->
+                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl flex flex-col justify-between mb-3.5">
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-xs md:text-sm font-bold text-purple-400 flex items-center">
+                                    <i class="fa-solid fa-list-check mr-2"></i>Sing-box 本地批量节点池
                                 </h3>
-                                <button onclick="copyText('xraySubLink')" class="text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-0.5 rounded-lg transition cursor-pointer shadow">
-                                    <i class="fa-regular fa-copy mr-1"></i>复制
+                                <button onclick="copyText('sbNodes')" class="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded-xl transition cursor-pointer shadow font-medium">
+                                    <i class="fa-regular fa-copy mr-1.5"></i>复制
                                 </button>
                             </div>
-                            <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-2 font-mono text-[11px] text-indigo-300 overflow-x-auto break-all select-all shadow-inner" id="xraySubLink">
+                            <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-3 font-mono text-xs text-purple-300 overflow-y-auto max-h-[135px] break-all whitespace-pre-wrap select-all shadow-inner leading-relaxed" id="sbNodes">
                                 <!-- 动态生成 -->
+                            </div>
+                            <div class="mt-2 text-right">
+                                <span id="sbCountBadge" class="bg-slate-950 px-2.5 py-1 rounded-lg text-slate-300 border border-slate-800 font-mono text-xs">共 0 个节点</span>
                             </div>
                         </div>
 
-                        <!-- Sing-box 动态订阅 -->
-                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-3.5 shadow-xl flex flex-col justify-between">
-                            <div class="flex justify-between items-center mb-1.5">
-                                <h3 class="text-xs font-bold text-purple-400 flex items-center">
-                                    <i class="fa-solid fa-link mr-1.5"></i>Sing-box 动态订阅 URL
+                        <!-- 4. 双核合并动态订阅 URL -->
+                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl flex flex-col justify-between mb-3.5">
+                            <div class="flex justify-between items-center mb-2.5">
+                                <h3 class="text-xs md:text-sm font-bold text-indigo-400 flex items-center">
+                                    <i class="fa-solid fa-link mr-2"></i>双核合并动态订阅 URL (优选裂变)
                                 </h3>
-                                <button onclick="copyText('sbSubLink')" class="text-[11px] bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-0.5 rounded-lg transition cursor-pointer shadow">
-                                    <i class="fa-regular fa-copy mr-1"></i>复制
+                                <button onclick="generateDynamicSub()" class="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs rounded-lg border border-indigo-500/40 transition cursor-pointer flex items-center gap-1.5 font-mono font-medium">
+                                    <i class="fa-solid fa-folder-plus"></i>生成订阅
                                 </button>
                             </div>
-                            <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-2 font-mono text-[11px] text-purple-300 overflow-x-auto break-all select-all shadow-inner" id="sbSubLink">
-                                <!-- 动态生成 -->
+                            <div class="flex items-center gap-2.5">
+                                <div class="bg-slate-950 border border-slate-800/80 rounded-xl px-4 py-3.5 font-mono text-xs text-indigo-300 flex-1 overflow-x-auto whitespace-nowrap select-all shadow-inner flex items-center" id="mergedSubLink" style="min-height: 44px;">
+                                    （点击上方“生成订阅”按钮生成动态裂变订阅）
+                                </div>
+                                <button onclick="copyElementText('mergedSubLink')" class="px-3.5 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-xl transition cursor-pointer shadow shrink-0 font-medium">
+                                    <i class="fa-regular fa-copy mr-1.5"></i>复制
+                                </button>
                             </div>
-                            <div class="mt-1.5 text-[11px] text-slate-500 text-right">
-                                <span id="nodeCountBadge" class="bg-slate-950 px-2.5 py-0.5 rounded-lg text-slate-300 border border-slate-800 font-mono shadow-inner">共 0 个节点</span>
+                        </div>
+
+                        <!-- 5. 静态服务原始节点订阅 URL -->
+                        <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl flex flex-col justify-between">
+                            <div class="flex justify-between items-center mb-2.5">
+                                <h3 class="text-xs md:text-sm font-bold text-purple-400 flex items-center">
+                                    <i class="fa-solid fa-link mr-2"></i>静态服务原始节点订阅 URL (源)
+                                </h3>
+                                <button onclick="generateStaticSub()" class="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 text-xs rounded-lg border border-purple-500/40 transition cursor-pointer flex items-center gap-1.5 font-mono font-medium">
+                                    <i class="fa-solid fa-folder-plus"></i>生成订阅
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2.5">
+                                <input type="text" id="staticSubInput" value="" placeholder="点击上方“生成订阅”或自由粘贴其他VPS的静态订阅链接..."
+                                    class="bg-slate-950 border border-slate-800/90 rounded-xl px-4 py-3.5 font-mono text-xs text-purple-300 flex-1 focus:outline-none focus:border-purple-500 shadow-inner" style="height: 44px;">
+                                <button onclick="copyElementInput('staticSubInput')" class="px-3.5 py-3.5 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded-xl transition cursor-pointer shadow shrink-0 font-medium" style="height: 44px;">
+                                    <i class="fa-regular fa-copy mr-1.5"></i>复制
+                                </button>
                             </div>
                         </div>
 
@@ -328,78 +359,73 @@ time.is</textarea>
             <hr class="border-slate-800/80">
 
             <!-- ================= 一键生成常用维护指令 ================= -->
-            <section class="space-y-3.5">
-                <div class="flex items-center justify-between border-l-4 border-amber-500 pl-3">
+            <section class="space-y-4">
+                <div class="flex items-center justify-between border-l-4 border-amber-500 pl-3.5">
                     <h2 class="text-sm md:text-base font-bold text-slate-200 tracking-wide">
                         <i class="fa-solid fa-screwdriver-wrench mr-2 text-amber-400"></i>一键生成常用维护指令
                     </h2>
-                    <span class="text-[11px] text-slate-500">点击下方分类标签可追加指令到输入框，支持多条组合运行</span>
+                    <span class="text-xs text-slate-400">点击下方分类标签可追加指令到输入框，支持多条组合运行</span>
                 </div>
 
-                <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl space-y-4">
+                <div class="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl space-y-4.5">
                     
-                    <!-- 分类 1：系统初始化与软件包管理 -->
                     <div>
                         <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2.5">🛠️ 系统初始化与软件管理</span>
-                        <div class="flex flex-wrap gap-2">
-                            <button onclick="appendOpsCmd('sudo apt update')" class="group text-xs bg-slate-950 hover:bg-blue-950/80 text-slate-300 hover:text-blue-300 border border-slate-800 hover:border-blue-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-rotate text-blue-400"></i>
+                        <div class="flex flex-wrap gap-2.5">
+                            <button onclick="appendOpsCmd('sudo apt update')" class="group text-xs bg-slate-950 hover:bg-blue-950/80 text-slate-300 hover:text-blue-300 border border-slate-800 hover:border-blue-800 px-3.5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
+                                <i class="fa-solid fa-rotate text-blue-400 text-sm"></i>
                                 <span>更新应用列表: <strong class="font-mono text-blue-300">apt update</strong></span>
                             </button>
-                            <button onclick="appendOpsCmd('sudo apt upgrade -y')" class="group text-xs bg-slate-950 hover:bg-blue-950/80 text-slate-300 hover:text-blue-300 border border-slate-800 hover:border-blue-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-angles-up text-blue-400"></i>
+                            <button onclick="appendOpsCmd('sudo apt upgrade -y')" class="group text-xs bg-slate-950 hover:bg-blue-950/80 text-slate-300 hover:text-blue-300 border border-slate-800 hover:border-blue-800 px-3.5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
+                                <i class="fa-solid fa-angles-up text-blue-400 text-sm"></i>
                                 <span>升级软件: <strong class="font-mono text-blue-300">apt upgrade</strong></span>
                             </button>
-                            <button onclick="appendOpsCmd('sudo apt install -y curl wget git ufw')" class="group text-xs bg-slate-950 hover:bg-indigo-950/80 text-slate-300 hover:text-indigo-300 border border-slate-800 hover:border-indigo-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-toolbox text-indigo-400"></i>
+                            <button onclick="appendOpsCmd('sudo apt install -y curl wget git ufw')" class="group text-xs bg-slate-950 hover:bg-indigo-950/80 text-slate-300 hover:text-indigo-300 border border-slate-800 hover:border-indigo-800 px-3.5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
+                                <i class="fa-solid fa-toolbox text-indigo-400 text-sm"></i>
                                 <span>安装基础工具包: <strong class="font-mono text-indigo-300">tools</strong></span>
                             </button>
-                            <button onclick="appendOpsCmd('sudo timedatectl set-timezone Asia/Shanghai')" class="group text-xs bg-slate-950 hover:bg-purple-950/80 text-slate-300 hover:text-purple-300 border border-slate-800 hover:border-purple-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-clock text-purple-400"></i>
+                            <button onclick="appendOpsCmd('sudo timedatectl set-timezone Asia/Shanghai')" class="group text-xs bg-slate-950 hover:bg-purple-950/80 text-slate-300 hover:text-purple-300 border border-slate-800 hover:border-purple-800 px-3.5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
+                                <i class="fa-solid fa-clock text-purple-400 text-sm"></i>
                                 <span>修改时区北京: <strong class="font-mono text-purple-300">timezone</strong></span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- 分类 2：系统防火墙与网络优化 -->
-                    <div class="pt-3 border-t border-slate-800/60">
+                    <div class="pt-3.5 border-t border-slate-800/60">
                         <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2.5">🛡️ 防火墙与内核网络优化</span>
-                        <div class="flex flex-wrap gap-2">
-                            <button onclick="appendOpsCmd('sudo ufw enable')" class="group text-xs bg-slate-950 hover:bg-emerald-950/80 text-slate-300 hover:text-emerald-300 border border-slate-800 hover:border-emerald-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-shield text-emerald-400"></i>
+                        <div class="flex flex-wrap gap-2.5">
+                            <button onclick="appendOpsCmd('sudo ufw enable')" class="group text-xs bg-slate-950 hover:bg-emerald-950/80 text-slate-300 hover:text-emerald-300 border border-slate-800 hover:border-emerald-800 px-3.5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
+                                <i class="fa-solid fa-shield text-emerald-400 text-sm"></i>
                                 <span>启用防火墙: <strong class="font-mono text-emerald-300">ufw enable</strong></span>
                             </button>
-                            <button onclick="appendOpsCmd('sudo ufw disable')" class="group text-xs bg-slate-950 hover:bg-red-950/80 text-slate-300 hover:text-red-300 border border-slate-800 hover:border-red-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-shield-slash text-red-400"></i>
+                            <button onclick="appendOpsCmd('sudo ufw disable')" class="group text-xs bg-slate-950 hover:bg-red-950/80 text-slate-300 hover:text-red-300 border border-slate-800 hover:border-red-800 px-3.5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
+                                <i class="fa-solid fa-shield-slash text-red-400 text-sm"></i>
                                 <span>关闭防火墙: <strong class="font-mono text-red-300">ufw disable</strong></span>
                             </button>
-                            <button onclick="appendOpsCmd('sudo ufw allow 端口/tcp')" class="group text-xs bg-slate-950 hover:bg-emerald-950/80 text-slate-300 hover:text-emerald-300 border border-slate-800 hover:border-emerald-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-key text-emerald-400"></i>
-                                <span>放行端口: <strong class="font-mono text-emerald-300">sudo ufw allow 端口/tcp</strong></span>
+                            <button onclick="appendOpsCmd('sudo ufw allow 端口/tcp')" class="group text-xs bg-slate-950 hover:bg-blue-950/80 text-slate-300 hover:text-blue-300 border border-slate-800 hover:border-blue-800 px-3.5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
+                                <i class="fa-solid fa-key text-blue-400 text-sm"></i>
+                                <span>放行端口: <strong class="font-mono text-blue-300">sudo ufw allow 端口/tcp</strong></span>
                             </button>
-                            <button onclick="appendOpsCmd('sudo ufw status numbered')" class="group text-xs bg-slate-950 hover:bg-emerald-950/80 text-slate-300 hover:text-emerald-300 border border-slate-800 hover:border-emerald-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-list-ul text-emerald-400"></i>
-                                <span>查看端口状态: <strong class="font-mono text-emerald-300">ports</strong></span>
+                            <button onclick="appendOpsCmd('sudo ufw status')" class="group text-xs bg-slate-950 hover:bg-indigo-950/80 text-slate-300 hover:text-indigo-300 border border-slate-800 hover:border-indigo-800 px-3.5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
+                                <i class="fa-solid fa-list text-indigo-400 text-sm"></i>
+                                <span>查看端口状态: <strong class="font-mono text-indigo-300">ports</strong></span>
                             </button>
-                            <button onclick="appendOpsCmd('wget -N --no-check-certificate https://raw.githubusercontent.com/chiakge/Linux-NetSpeed/master/tcp.sh && chmod +x tcp.sh && ./tcp.sh')" class="group text-xs bg-slate-950 hover:bg-amber-950/80 text-slate-300 hover:text-amber-300 border border-slate-800 hover:border-amber-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                <i class="fa-solid fa-gauge-high text-amber-400"></i>
+                            <button onclick="appendOpsCmd('wget -N --no-check-certificate \"https://raw.githubusercontent.com/chiakge/Linux-NetSpeed/master/tcp.sh\" && chmod +x tcp.sh && ./tcp.sh')" class="group text-xs bg-slate-950 hover:bg-amber-950/80 text-slate-300 hover:text-amber-300 border border-slate-800 hover:border-amber-800 px-3.5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
+                                <i class="fa-solid fa-gauge-high text-amber-400 text-sm"></i>
                                 <span>开启 BBR 加速: <strong class="font-mono text-amber-300">bbr</strong></span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- 指令组合显示框与右侧专属复制按钮 -->
-                    <div class="pt-3 border-t border-slate-800/80 space-y-2">
+                    <div class="pt-3.5 border-t border-slate-800/60 space-y-2.5">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                                <i class="fa-solid fa-terminal text-amber-400"></i> 自定义组合指令输出框 (支持自主增删修改)
-                            </span>
-                            <button onclick="copyOpsBox()" class="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white text-[11px] rounded-lg transition cursor-pointer shadow flex items-center gap-1 font-medium">
-                                <i class="fa-regular fa-copy"></i> 复制指令
+                            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">⚡ 自定义组合指令输出框 (支持自主增删修改)</span>
+                            <button onclick="copyOpsCmd()" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs rounded-xl transition cursor-pointer shadow flex items-center gap-1.5 font-bold">
+                                <i class="fa-regular fa-copy"></i>复制指令
                             </button>
                         </div>
-                        <textarea id="opsCommandInput" rows="3" placeholder="点击上方标签可自动追加指令到此处，也支持在此处直接手动输入、编辑或删除多条指令..."
-                            class="w-full min-h-[85px] bg-slate-950 border border-slate-800/90 rounded-xl px-3.5 py-2.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500 leading-relaxed shadow-inner"></textarea>
+                        <textarea id="opsCommandOutput" rows="3" placeholder="点击上方标签可自动追加指令到此处，也支持在此处直接手动输入、编辑或删除多条指令..."
+                            class="w-full bg-slate-950 border border-slate-800/90 rounded-xl p-3.5 text-xs md:text-sm text-amber-300 font-mono focus:outline-none focus:border-amber-500 leading-relaxed shadow-inner"></textarea>
                     </div>
 
                 </div>
@@ -410,28 +436,21 @@ time.is</textarea>
 
     <script>
         function toggleCore(core) {
-            const isEnabled = document.getElementById(core === 'xray' ? 'enableXray' : 'enableSb').checked;
-            const body = document.getElementById(core === 'xray' ? 'xrayBody' : 'sbBody');
-            const tunnelBox = document.getElementById(core === 'xray' ? 'xrayTunnelBox' : 'sbTunnelBox');
-            if (isEnabled) {
-                body.style.opacity = '1';
-                body.style.pointerEvents = 'auto';
-                tunnelBox.style.opacity = '1';
-                tunnelBox.style.pointerEvents = 'auto';
-            } else {
-                body.style.opacity = '0.4';
-                body.style.pointerEvents = 'none';
-                tunnelBox.style.opacity = '0.4';
-                tunnelBox.style.pointerEvents = 'none';
-            }
+            const isXray = core === 'xray';
+            const enable = document.getElementById(isXray ? 'enableXray' : 'enableSb').checked;
+            const body = document.getElementById(isXray ? 'xrayBody' : 'sbBody');
+            const tunnelBox = document.getElementById(isXray ? 'xrayTunnelBox' : 'sbTunnelBox');
+            
+            body.style.opacity = enable ? '1' : '0.4';
+            body.style.pointerEvents = enable ? 'auto' : 'none';
+            tunnelBox.style.opacity = enable ? '1' : '0.4';
+            tunnelBox.style.pointerEvents = enable ? 'auto' : 'none';
             updateOutputs();
         }
 
-        function toggleGateway() {
-            const isEnabled = document.getElementById('enableGateway').checked;
-            const gatewayBox = document.getElementById('gatewayBox');
-            gatewayBox.style.display = isEnabled ? 'block' : 'none';
-            updateOutputs();
+        function validatePort(input) {
+            if (input.value < 1) input.value = 1;
+            if (input.value > 65535) input.value = 65535;
         }
 
         function generateUUID() {
@@ -443,128 +462,206 @@ time.is</textarea>
             updateOutputs();
         }
 
-        function copyText(elementId) {
-            const argoToken = document.getElementById('argoToken').value.trim();
-            if (!argoToken && elementId === 'sshCommand') {
-                alert("⚠️ 警告：检测到您未填写 Argo Tunnel Token，请先在左侧填入 Token 后再复制部署命令！");
-            }
-            
-            const text = document.getElementById(elementId).innerText;
-            navigator.clipboard.writeText(text).then(() => {
-                if (elementId !== 'sshCommand' || argoToken) {
-                    alert("内容已成功复制到剪贴板！");
-                }
-            }).catch(err => {
-                console.error('复制失败', err);
-            });
-        }
-
-        function copyUninstallCommand() {
-            const cmd = "bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/install.sh) uninstall";
-            navigator.clipboard.writeText(cmd).then(() => {
-                alert("一键卸载/清理命令已成功复制到剪贴板！");
-            }).catch(err => {
-                console.error('复制失败', err);
-            });
-        }
-
         function appendOpsCmd(cmd) {
-            const textarea = document.getElementById('opsCommandInput');
-            if (textarea.value.trim() === '') {
+            const textarea = document.getElementById('opsCommandOutput');
+            if (textarea.value.trim() === "") {
                 textarea.value = cmd;
             } else {
-                textarea.value += '\n' + cmd;
+                textarea.value += "\n" + cmd;
             }
         }
 
-        function copyOpsBox() {
-            const text = document.getElementById('opsCommandInput').value;
+        function copyOpsCmd() {
+            const text = document.getElementById('opsCommandOutput').value;
             if (!text.trim()) {
-                alert("当前维护指令框为空，请先点击上方标签添加或手动输入指令！");
+                alert("当前没有可复制的指令！");
                 return;
             }
             navigator.clipboard.writeText(text).then(() => {
-                alert("自定义维护指令已成功复制到剪贴板！");
-            }).catch(err => {
-                console.error('复制失败', err);
+                alert("维护指令已成功复制到剪贴板！");
             });
         }
 
         function updateOutputs() {
-            const uuid = document.getElementById('nodeUuid').value.trim();
+            const uuid = document.getElementById('nodeUuid').value.trim() || '98a9eeea-e34d-4a0b-a151-39ec761d83f6';
+            const prefix = document.getElementById('nodePrefix').value.trim() || '优选JP';
             const argoToken = document.getElementById('argoToken').value.trim();
+            const optAddrRaw = document.getElementById('optAddress').value.trim();
+            
             const enableXray = document.getElementById('enableXray').checked;
+            const xrayDomain = document.getElementById('xrayDomain').value.trim() || 'xray.yourdomain.com';
+            const xrayPort = document.getElementById('xrayPort').value.trim() || '8001';
+            
             const enableSb = document.getElementById('enableSb').checked;
-            const xrayPort = document.getElementById('xrayPort').value.trim();
-            const sbPort = document.getElementById('sbPort').value.trim();
-            const xrayDomain = document.getElementById('xrayDomain').value.trim();
-            const sbDomain = document.getElementById('sbDomain').value.trim();
-            const nodePrefix = document.getElementById('nodePrefix').value.trim() || "Nexus";
-            const enableGateway = document.getElementById('enableGateway').checked;
-            const proxyGateway = document.getElementById('proxyGateway').value.trim();
+            const sbDomain = document.getElementById('sbDomain').value.trim() || 'singbox.yourdomain.com';
+            const sbPort = document.getElementById('sbPort').value.trim() || '8002';
 
-            const optAddresses = document.getElementById('optAddress').value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-
-            // 获取多选协议
-            const xrayProtos = Array.from(document.querySelectorAll('input[name="xrayProto"]:checked')).map(cb => cb.value);
-            const sbProtos = Array.from(document.querySelectorAll('input[name="sbProto"]:checked')).map(cb => cb.value);
-
+            // 实时联动更新卡片右上角的统一回源端口徽章
             document.getElementById('displayXrayPort').innerText = xrayPort;
             document.getElementById('displaySbPort').innerText = sbPort;
 
-            let tokenWarningComment = "";
-            if (!argoToken) {
-                tokenWarningComment = `# ⚠️ 警告：检测到您未填写 Argo Tunnel Token，请先在上方填入 Token 才能正常部署！\n`;
-            }
-
-            let sshCmd = tokenWarningComment +
-                         `export NODE_UUID="${uuid}" \\\n` +
-                         `export ARGO_TOKEN="${argoToken}" \\\n` +
-                         `export ENABLE_XRAY=${enableXray} \\\n` +
-                         `export XRAY_PORT=${xrayPort} \\\n` +
-                         `export XRAY_DOMAIN="${xrayDomain}" \\\n` +
-                         `export XRAY_PROTOCOLS="${xrayProtos.join(',')}" \\\n` +
-                         `export ENABLE_SINGBOX=${enableSb} \\\n` +
-                         `export SINGBOX_PORT=${sbPort} \\\n` +
-                         `export SINGBOX_DOMAIN="${sbDomain}" \\\n` +
-                         `export SINGBOX_PROTOCOLS="${sbProtos.join(',')}" \\\n` +
-                         `export ENABLE_GATEWAY=${enableGateway} \\\n` +
-                         `export PROXY_GATEWAY="${proxyGateway}" \\\n` +
-                         `bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/install.sh)`;
-            
-            document.getElementById('sshCommand').innerText = sshCmd;
-
-            // 优化节点前缀：采用 优选JP丨Xray丨协议-序号 格式
-            let generatedNodes = [];
-            optAddresses.forEach((addr, addrIdx) => {
-                if (enableXray) {
-                    xrayProtos.forEach(proto => {
-                        let nodeName = `${nodePrefix}丨Xray丨${proto}丨${addrIdx + 1}`;
-                        let vlessLink = `vless://${uuid}@${addr}:443?encryption=none&security=tls&sni=${xrayDomain}&type=xhttp&path=%2F#${encodeURIComponent(nodeName)}`;
-                        generatedNodes.push(vlessLink);
-                    });
-                }
-                if (enableSb) {
-                    sbProtos.forEach(proto => {
-                        let nodeName = `${nodePrefix}丨Singbox丨${proto}丨${addrIdx + 1}`;
-                        let vlessLink = `vless://${uuid}@${addr}:443?encryption=none&security=tls&sni=${sbDomain}&type=httpupgrade&path=%2F#${encodeURIComponent(nodeName)}`;
-                        generatedNodes.push(vlessLink);
-                    });
+            // 收集勾选的 Xray 协议及其专属外部端口
+            const xrayConfigs = [];
+            document.querySelectorAll('input[name="xrayProto"]').forEach(el => {
+                if (el.checked) {
+                    const proto = el.value;
+                    const portInput = document.getElementById(`port_${proto}`);
+                    const port = portInput ? portInput.value.trim() : '443';
+                    xrayConfigs.push({ proto, port });
                 }
             });
 
-            if (generatedNodes.length > 0) {
-                document.getElementById('plainNodes').innerText = generatedNodes.join('\n');
-                document.getElementById('nodeCountBadge').innerText = `共 ${generatedNodes.length} 个节点`;
-            } else {
-                document.getElementById('plainNodes').innerText = "提示：请在左侧至少勾选一个核心协议或输入优选地址，以实时生成批量节点。";
-                document.getElementById('nodeCountBadge').innerText = "共 0 个节点";
+            // 收集勾选的 Sing-box 协议及其专属外部端口
+            const sbConfigs = [];
+            document.querySelectorAll('input[name="sbProto"]').forEach(el => {
+                if (el.checked) {
+                    const proto = el.value;
+                    const portInput = document.getElementById(`port_${proto}`);
+                    const port = portInput ? portInput.value.trim() : '443';
+                    sbConfigs.push({ proto, port });
+                }
+            });
+
+            // 优选地址解析
+            let addrs = ['cloudflare.com'];
+            if (optAddrRaw) {
+                addrs = optAddrRaw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+                if (addrs.length === 0) addrs = ['cloudflare.com'];
             }
 
-            document.getElementById('xraySubLink').innerText = "https://" + xrayDomain + "/sub/xray";
-            document.getElementById('sbSubLink').innerText = "https://" + sbDomain + "/sub/sb";
+            // 1. 生成 SSH 一键部署命令 (已移除网关变量)
+            let sshCmd = `apt update && apt install -y curl && \\\n`;
+            sshCmd += `NODE_UUID="${uuid}" \\\n`;
+            sshCmd += `ARGO_TOKEN="${argoToken}" \\\n`;
+            sshCmd += `ENABLE_XRAY="${enableXray}" \\\n`;
+            sshCmd += `XRAY_PORT="${xrayPort}" \\\n`;
+            sshCmd += `XRAY_DOMAIN="${xrayDomain}" \\\n`;
+            sshCmd += `XRAY_CONFIGS="${xrayConfigs.map(c => `${c.proto}:${c.port}`).join(',')}" \\\n`;
+            sshCmd += `ENABLE_SINGBOX="${enableSb}" \\\n`;
+            sshCmd += `SINGBOX_PORT="${sbPort}" \\\n`;
+            sshCmd += `SINGBOX_DOMAIN="${sbDomain}" \\\n`;
+            sshCmd += `SINGBOX_CONFIGS="${sbConfigs.map(c => `${c.proto}:${c.port}`).join(',')}" \\\n`;
+            sshCmd += `bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/install.sh)`;
+            
+            document.getElementById('sshCommand').innerText = sshCmd;
+
+            // 2. 生成 Xray 节点池
+            let xrayLinksText = "";
+            let xrayCount = 0;
+            if (enableXray && xrayConfigs.length > 0) {
+                xrayConfigs.forEach(config => {
+                    let alpn = "h2";
+                    let mode = "auto";
+                    if (config.proto === "xhttp_h1") { alpn = "http/1.1"; mode = "auto"; }
+                    else if (config.proto === "xhttp_h2") { alpn = "h2"; mode = "auto"; }
+                    else if (config.proto === "xhttp_h3") { alpn = "h3"; mode = "packet-up"; }
+
+                    addrs.forEach(addr => {
+                        let link = `vless://${uuid}@${addr}:${config.port}/?encryption=none&security=tls&sni=${xrayDomain}&type=xhttp&mode=${mode}&path=%2F&alpn=${alpn}#${prefix}丨Xray丨${config.proto}`;
+                        xrayLinksText += link + "\n";
+                        xrayCount++;
+                    });
+                });
+            }
+            document.getElementById('xrayNodes').innerText = xrayLinksText || "（未启用 Xray 或未勾选任何协议）";
+            document.getElementById('xrayCountBadge').innerText = `共 ${xrayCount} 个节点`;
+
+            // 3. 生成 Sing-box 节点池
+            let sbLinksText = "";
+            let sbCount = 0;
+            if (enableSb && sbConfigs.length > 0) {
+                sbConfigs.forEach(config => {
+                    let alpn = "h2,http/1.1";
+                    let serviceParam = "&path=%2F";
+                    if (config.proto === "grpc") { serviceParam = "&serviceName=grpc"; }
+
+                    addrs.forEach(addr => {
+                        let link = `vless://${uuid}@${addr}:${config.port}/?encryption=none&security=tls&sni=${sbDomain}&type=${config.proto}${serviceParam}&alpn=${alpn}#${prefix}丨Singbox丨${config.proto}`;
+                        sbLinksText += link + "\n";
+                        sbCount++;
+                    });
+                });
+            }
+            document.getElementById('sbNodes').innerText = sbLinksText || "（未启用 Sing-box 或未勾选任何协议）";
+            document.getElementById('sbCountBadge').innerText = `共 ${sbCount} 个节点`;
         }
 
+        // 动态订阅生成逻辑
+        function generateDynamicSub() {
+            const uuid = document.getElementById('nodeUuid').value.trim() || '98a9eeea-e34d-4a0b-a151-39ec761d83f6';
+            const enableXray = document.getElementById('enableXray').checked;
+            const enableSb = document.getElementById('enableSb').checked;
+            const xrayDomain = document.getElementById('xrayDomain').value.trim() || 'xray.yourdomain.com';
+            const sbDomain = document.getElementById('sbDomain').value.trim() || 'singbox.yourdomain.com';
+            
+            let activeDomain = xrayDomain;
+            if (!enableXray && enableSb) {
+                activeDomain = sbDomain;
+            } else if (!enableXray && !enableSb) {
+                alert("警告：当前 Xray 与 Sing-box 核心均未启用！");
+                return;
+            }
+            
+            const dynamicUrl = `https://${activeDomain}/sub/merged/${uuid}`;
+            document.getElementById('mergedSubLink').innerText = dynamicUrl;
+            alert("双核合并动态订阅链接已生成！");
+        }
+
+        // 静态订阅生成逻辑
+        function generateStaticSub() {
+            const uuid = document.getElementById('nodeUuid').value.trim() || '98a9eeea-e34d-4a0b-a151-39ec761d83f6';
+            const enableXray = document.getElementById('enableXray').checked;
+            const enableSb = document.getElementById('enableSb').checked;
+            const xrayDomain = document.getElementById('xrayDomain').value.trim() || 'xray.yourdomain.com';
+            const sbDomain = document.getElementById('sbDomain').value.trim() || 'singbox.yourdomain.com';
+            
+            let activeDomain = xrayDomain;
+            if (!enableXray && enableSb) {
+                activeDomain = sbDomain;
+            } else if (!enableXray && !enableSb) {
+                alert("警告：当前 Xray 与 Sing-box 核心均未启用！");
+                return;
+            }
+            
+            const staticUrl = `https://${activeDomain}/sub/raw/${uuid}`;
+            document.getElementById('staticSubInput').value = staticUrl;
+            alert("静态服务原始节点订阅 URL 已生成到输入框！");
+        }
+
+        function copyText(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("已成功复制到剪贴板！");
+            });
+        }
+
+        function copyElementText(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("已成功复制/导出！");
+            });
+        }
+
+        function copyElementInput(elementId) {
+            const input = document.getElementById(elementId);
+            if (!input.value.trim()) {
+                alert("当前输入框为空，无法复制！");
+                return;
+            }
+            input.select();
+            input.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(input.value).then(() => {
+                alert("静态订阅源链接已成功复制！");
+            });
+        }
+
+        function copyUninstallCommand() {
+            navigator.clipboard.writeText("bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/install.sh) uninstall").then(() => {
+                alert("卸载命令已复制！");
+            });
+        }
+
+        // 初始化运行一次
         window.onload = function() {
             updateOutputs();
         };
