@@ -11,7 +11,6 @@
         ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(96, 165, 250, 0.6); }
-        /* 隐藏数字输入框上下箭头 */
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
@@ -496,11 +495,9 @@
             const sbDomain = document.getElementById('sbDomain').value.trim() || 'singbox.yourdomain.com';
             const sbPort = document.getElementById('sbPort').value.trim() || '8002';
 
-            // 实时联动更新卡片右上角的统一回源端口徽章
             document.getElementById('displayXrayPort').innerText = xrayPort;
             document.getElementById('displaySbPort').innerText = sbPort;
 
-            // 收集勾选的 Xray 协议及其专属外部端口
             const xrayConfigs = [];
             document.querySelectorAll('input[name="xrayProto"]').forEach(el => {
                 if (el.checked) {
@@ -511,7 +508,6 @@
                 }
             });
 
-            // 收集勾选的 Sing-box 协议及其专属外部端口
             const sbConfigs = [];
             document.querySelectorAll('input[name="sbProto"]').forEach(el => {
                 if (el.checked) {
@@ -522,14 +518,12 @@
                 }
             });
 
-            // 优选地址解析
             let addrs = ['cloudflare.com'];
             if (optAddrRaw) {
                 addrs = optAddrRaw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
                 if (addrs.length === 0) addrs = ['cloudflare.com'];
             }
 
-            // 1. 生成 SSH 一键部署命令 (已移除网关变量)
             let sshCmd = `apt update && apt install -y curl && \\\n`;
             sshCmd += `NODE_UUID="${uuid}" \\\n`;
             sshCmd += `ARGO_TOKEN="${argoToken}" \\\n`;
@@ -545,7 +539,6 @@
             
             document.getElementById('sshCommand').innerText = sshCmd;
 
-            // 2. 生成 Xray 节点池
             let xrayLinksText = "";
             let xrayCount = 0;
             if (enableXray && xrayConfigs.length > 0) {
@@ -566,7 +559,6 @@
             document.getElementById('xrayNodes').innerText = xrayLinksText || "（未启用 Xray 或未勾选任何协议）";
             document.getElementById('xrayCountBadge').innerText = `共 ${xrayCount} 个节点`;
 
-            // 3. 生成 Sing-box 节点池
             let sbLinksText = "";
             let sbCount = 0;
             if (enableSb && sbConfigs.length > 0) {
@@ -586,7 +578,6 @@
             document.getElementById('sbCountBadge').innerText = `共 ${sbCount} 个节点`;
         }
 
-        // 动态订阅生成逻辑
         function generateDynamicSub() {
             const uuid = document.getElementById('nodeUuid').value.trim() || '98a9eeea-e34d-4a0b-a151-39ec761d83f6';
             const enableXray = document.getElementById('enableXray').checked;
@@ -607,7 +598,6 @@
             alert("双核合并动态订阅链接已生成！");
         }
 
-        // 静态订阅生成逻辑
         function generateStaticSub() {
             const uuid = document.getElementById('nodeUuid').value.trim() || '98a9eeea-e34d-4a0b-a151-39ec761d83f6';
             const enableXray = document.getElementById('enableXray').checked;
@@ -661,7 +651,6 @@
             });
         }
 
-        // 初始化运行一次
         window.onload = function() {
             updateOutputs();
         };
