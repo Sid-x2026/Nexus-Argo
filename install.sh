@@ -93,7 +93,7 @@ else
 fi
 
 # 3. 创建工作目录
-mkdir -p "$WORK_DIR/config" "$WORK_DIR/web"
+mkdir -p "$WORK_DIR/config" "$WORK_DIR/web/sub/xray" "$WORK_DIR/web/sub/sb"
 cd "$WORK_DIR"
 
 # 4. 下载 GitHub 上的 Web 面板源码
@@ -154,6 +154,10 @@ if [ "$ENABLE_XRAY" = "true" ]; then
 }
 EOF
     echo -e "${GREEN}✅ Xray 配置文件已生成 (端口: $XRAY_PORT)${NC}"
+    
+    # 自动生成基础 Xray 静态订阅 fallback 文件
+    DEFAULT_XRAY_NODE="vless://${USER_UUID}@${XRAY_DOMAIN}:443?encryption=none&security=tls&sni=${XRAY_DOMAIN}&type=xhttp&path=%2F#Nexus-Xray-Default"
+    echo -n "$DEFAULT_XRAY_NODE" | base64 -w 0 > "$WORK_DIR/web/sub/xray"
 fi
 
 if [ "$ENABLE_SINGBOX" = "true" ]; then
@@ -177,9 +181,13 @@ if [ "$ENABLE_SINGBOX" = "true" ]; then
 }
 EOF
     echo -e "${GREEN}✅ Sing-box 配置文件已生成 (端口: $SINGBOX_PORT)${NC}"
+
+    # 自动生成基础 Sing-box 静态订阅 fallback 文件
+    DEFAULT_SB_NODE="vless://${USER_UUID}@${SINGBOX_DOMAIN}:443?encryption=none&security=tls&sni=${SINGBOX_DOMAIN}&type=httpupgrade&path=%2F#Nexus-Singbox-Default"
+    echo -n "$DEFAULT_SB_NODE" | base64 -w 0 > "$WORK_DIR/web/sub/sb"
 fi
 
-# 6. 清理旧容器并启动新容器集群（使用稳定版本标签以防未来 breaking changes，同时适配前端网关及多选协议环境变量）
+# 6. 清理旧容器并启动新容器集群（使用稳定版本镜像标签）
 echo -e "${YELLOW}⏳ 正在启动 Docker 容器集群（锁定稳定版本镜像）...${NC}"
 docker rm -f nexus-xray nexus-singbox nexus-argo nexus-web-panel 2>/dev/null
 
@@ -207,7 +215,7 @@ docker run -d \
     --restart always \
     cloudflare/cloudflared:2024.2.1 tunnel run --token "$ARGO_TOKEN"
 
-# 启动本地轻量 Web 面板托管服务 (使用稳定版 nginx:alpine)
+# 启动本地轻量 Web 面板托管服务 (使用稳定版 nginx:alpine，并只读挂载 web 目录)
 docker run -d \
     --name nexus-web-panel \
     --restart always \
