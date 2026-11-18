@@ -569,7 +569,13 @@
             let sbCount = 0;
             if (enableSb && sbConfigs.length > 0) {
                 sbConfigs.forEach(config => {
-                    let alpn = "h2,http/1.1";
+                    // ALPN must match the transport: ws/httpupgrade are
+                    // HTTP/1.1 Upgrade only — offering h2 first makes the
+                    // client negotiate h2 and the Upgrade handshake fails
+                    // (VPS test 2026-11-18: ws only worked with alpn
+                    // http/1.1 alone). grpc is h2 only.
+                    let alpn = "http/1.1";
+                    if (config.proto === "grpc") { alpn = "h2"; }
                     // 分发层按路径区分：ws /ws，httpupgrade /httpupgrade，
                     // grpc 用 serviceName=grpc（即路径 /grpc）。
                     // 三者原来都是 path=/，分发器无法区分 ws 和 httpupgrade。
