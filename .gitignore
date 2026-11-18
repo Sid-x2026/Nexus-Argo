@@ -1,0 +1,4 @@
+# install.sh 在 VPS 上运行时生成的文件，不进仓库
+ROUTES.md
+*.log
+.DS_Store
