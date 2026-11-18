@@ -127,19 +127,28 @@ def parse_configs(s):
     return out
 
 def render_xray(port, configs):
-    # One unified VLESS/XHTTP inbound. ALPN/mode are the union of the
+    # One unified VLESS/XHTTP inbound. ALPN is the union of the
     # selected protocols — this is what the frontend's path=/ links imply.
-    alpns, modes = set(), set()
+    # Mode is always "auto" behind a Cloudflare Tunnel: the edge
+    # terminates TLS (h1/h2 TCP, h3 QUIC) and cloudflared forwards
+    # to this origin as plain HTTP/1.1, so "packet-up" never reaches
+    # the origin — with mode="packet-up" the inbound waits for
+    # packet-style upload and every client times out (VPS test
+    # 2026-11-18: tunnel healthy, Xray listening on 8222, all 15
+    # Xray nodes latency -1). "auto" lets Xray detect the forwarded
+    # stream. Client links keep their per-protocol mode (h3 still
+    # says packet-up to the edge); only the origin side changes.
+    alpns = set()
     for c in configs:
         if c["proto"] == "xhttp_h1":
-            alpns.add("http/1.1"); modes.add("auto")
+            alpns.add("http/1.1")
         elif c["proto"] == "xhttp_h2":
-            alpns.add("h2"); modes.add("auto")
+            alpns.add("h2")
         elif c["proto"] == "xhttp_h3":
-            alpns.add("h3"); modes.add("packet-up")
+            alpns.add("h3")
         else:
-            alpns.add("h2"); modes.add("auto")
-    mode = "packet-up" if "packet-up" in modes else "auto"
+            alpns.add("h2")
+    mode = "auto"
     return {
         "log": {"loglevel": "warning"},
         "inbounds": [{
