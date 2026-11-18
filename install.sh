@@ -42,6 +42,9 @@ SINGBOX_CONFIGS="${SINGBOX_CONFIGS:-httpupgrade:443,ws:443,grpc:443}"
 NODE_PREFIX="${NODE_PREFIX:-Nexus}"
 OPT_ADDRS="${OPT_ADDRS:-cloudflare.com}"
 TUNNEL_PROTOCOL="${TUNNEL_PROTOCOL:-auto}"
+# Worker domain for the public subscription URLs printed at the end of a deploy
+# (e.g. argowork1.deathma.workers.dev). Empty = only the local panel/file links are shown.
+WORKER_DOMAIN="${WORKER_DOMAIN:-}"
 
 log() { echo "[nexus-argo] $*"; }
 die() { echo "[nexus-argo] ERROR: $*" >&2; exit 1; }
@@ -382,4 +385,35 @@ for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel; 
   fi
 done
 [ "$fail" = "0" ] || die "health check failed — see logs above"
-log "Done. Panel: http://<VPS-IP>:8080  Xray: $XRAY_DOMAIN:$XRAY_PORT  Sing-box: $SINGBOX_DOMAIN:$SINGBOX_PORT"
+
+# ---- subscription summary: print the links so the deployer can see/copy them ----
+# Native links are in $WORKDIR/sub/raw.txt (1 protocol = 1 node, address = tunnel domain).
+# Dynamic links are in $WORKDIR/sub/merged.txt (native x preferred addresses).
+# The panel serves them locally at /sub/raw/<uuid> and /sub/merged/<uuid>
+# (panel is bound to 127.0.0.1:8080 only — access via ssh -L 8080:127.0.0.1:8080).
+# If WORKER_DOMAIN is set (e.g. argowork1.deathma.workers.dev), the public
+# Worker subscription URLs are printed too — that is the link to put in the client.
+_native_n=0; _merged_n=0
+[ -f "$WORKDIR/sub/raw.txt" ] && _native_n=$(grep -c . "$WORKDIR/sub/raw.txt" || true)
+[ -f "$WORKDIR/sub/merged.txt" ] && _merged_n=$(grep -c . "$WORKDIR/sub/merged.txt" || true)
+echo ""
+echo "================ 订阅 =================="
+echo "原生订阅文件: $WORKDIR/sub/raw.txt ($_native_n 条节点)"
+echo "动态订阅文件: $WORKDIR/sub/merged.txt ($_merged_n 条节点)"
+echo "面板本地订阅 (需 SSH 端口转发 ssh -L 8080:127.0.0.1:8080):"
+echo "  原生: http://127.0.0.1:8080/sub/raw/$NODE_UUID"
+echo "  动态: http://127.0.0.1:8080/sub/merged/$NODE_UUID"
+if [ -n "${WORKER_DOMAIN:-}" ]; then
+  _addrs=$(echo "${OPT_ADDRS:-cloudflare.com}" | tr ',' ',')
+  echo "Worker 订阅 (公网, 直接加到客户端):"
+  echo "  原生: https://$WORKER_DOMAIN/sub/raw/$NODE_UUID"
+  echo "  动态: https://$WORKER_DOMAIN/sub/merged/$NODE_UUID?addrs=$_addrs"
+else
+  echo "Worker 订阅: 未设置 WORKER_DOMAIN, 如需显示请重新部署时加上 WORKER_DOMAIN=<你的 Worker 域名>"
+  echo "  例如: WORKER_DOMAIN=argowork1.deathma.workers.dev"
+fi
+echo "原生节点 (可直接复制到客户端):"
+[ -f "$WORKDIR/sub/raw.txt" ] && cat "$WORKDIR/sub/raw.txt"
+echo "=========================================="
+echo ""
+log "Done. Panel: http://127.0.0.1:8080 (via ssh -L 8080:127.0.0.1:8080)  Xray: $XRAY_DOMAIN:$XRAY_PORT  Sing-box: $SINGBOX_DOMAIN:$SINGBOX_PORT"
