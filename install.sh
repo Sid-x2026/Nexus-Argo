@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-# Nexus-Argo v3.6 自动化部署与运维脚本 (后端服务端修复版)
+# Nexus-Argo v3.6 自动化部署与运维脚本 (最终修复版)
 # =====================================================================
 
 # 确保以 root 权限运行
@@ -18,6 +18,7 @@ err() { echo -e "${RED}[ERROR] $1${RESET}"; exit 1; }
 # ==================== 1. 一键卸载与清理逻辑 ====================
 if [[ "$1" == "uninstall" ]]; then
     log "正在彻底清理并卸载 Nexus-Argo 相关服务与文件..."
+    cloudflared service uninstall 2>/dev/null
     systemctl stop xray sing-box cloudflared 2>/dev/null
     systemctl disable xray sing-box cloudflared 2>/dev/null
     rm -f /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service /etc/systemd/system/cloudflared*.service
@@ -52,7 +53,8 @@ log " - Sing-box 状态: $ENABLE_SINGBOX | 回源端口: $SINGBOX_PORT"
 # ==================== 4. 安装核心二进制文件 ====================
 if [[ "$ENABLE_XRAY" == "true" ]]; then
     log "正在安装 Xray-core..."
-    bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh) @install
+    # 修复官方脚本下载方式，避免未知参数报错
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 fi
 
 if [[ "$ENABLE_SINGBOX" == "true" ]]; then
@@ -101,7 +103,6 @@ if [[ "$ENABLE_XRAY" == "true" ]]; then
 }
 EOF
 
-    # 显式写入 xray.service
     cat << EOF > /etc/systemd/system/xray.service
 [Unit]
 Description=Xray Service
@@ -153,7 +154,6 @@ if [[ "$ENABLE_SINGBOX" == "true" ]]; then
 }
 EOF
 
-    # 显式写入 sing-box.service
     cat << EOF > /etc/systemd/system/sing-box.service
 [Unit]
 Description=sing-box Service
@@ -179,6 +179,10 @@ fi
 # ==================== 7. 配置并启动 Argo 隧道 ====================
 if [[ -n "$ARGO_TOKEN" ]]; then
     log "正在配置并启动 Argo 隧道..."
+    # 先清理可能残留的旧隧道服务，避免冲突
+    cloudflared service uninstall 2>/dev/null
+    rm -f /etc/systemd/system/cloudflared.service /etc/systemd/system/cloudflared-update.timer
+    
     cloudflared service install "$ARGO_TOKEN"
     systemctl daemon-reload
     systemctl restart cloudflared
