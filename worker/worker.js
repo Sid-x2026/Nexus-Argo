@@ -158,7 +158,6 @@ function textResponse(text, status = 200) {
 
 export default {
   async fetch(request, env) {
-    try {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -215,8 +214,5 @@ export default {
     }
 
     return textResponse("404: 未知路径, 访问 / 看说明", 404);
-    } catch (e) {
-      return textResponse("DEBUG ERROR: " + (e && e.message ? e.message : String(e)) + "\nSTACK: " + (e && e.stack ? e.stack : ""), 500);
-    }
   },
 };
