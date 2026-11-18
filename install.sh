@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-# Nexus-Argo v3.6 自动化部署与运维脚本 (最终修复版)
+# Nexus-Argo v3.6 自动化部署与运维脚本 (前后端完美闭环最终版)
 # =====================================================================
 
 # 确保以 root 权限运行
@@ -22,7 +22,7 @@ if [[ "$1" == "uninstall" ]]; then
     systemctl stop xray sing-box cloudflared 2>/dev/null
     systemctl disable xray sing-box cloudflared 2>/dev/null
     rm -f /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service /etc/systemd/system/cloudflared*.service
-    rm -rf /usr/local/etc/xray /usr/local/etc/sing-box /usr/local/bin/xray /usr/local/bin/sing-box /usr/local/bin/cloudflared
+    rm -rf /usr/local/etc/xray /usr/local/etc/sing-box /usr/local/bin/xray /usr/local/bin/sing-box /usr/local/bin/cloudflared /etc/cloudflared
     log "✅ 卸载清理完成！"
     exit 0
 fi
@@ -33,27 +33,28 @@ log "🚀 开始执行 Nexus-Argo v3.6 服务端自动化部署..."
 log "正在更新系统并安装基础依赖 (curl, wget, jq, ufw)..."
 apt update -y && apt install -y curl wget jq ufw git
 
-# ==================== 3. 解析传入参数 ====================
+# ==================== 3. 解析传入参数与多协议配置 ====================
 NODE_UUID="${NODE_UUID:-98a9eeea-e34d-4a0b-a151-39ec761d83f6}"
 ARGO_TOKEN="${ARGO_TOKEN:-}"
 
 ENABLE_XRAY="${ENABLE_XRAY:-true}"
 XRAY_PORT="${XRAY_PORT:-8001}"
 XRAY_DOMAIN="${XRAY_DOMAIN:-xray.yourdomain.com}"
+XRAY_CONFIGS="${XRAY_CONFIGS:-xhttp_h1:443,xhttp_h2:443,xhttp_h3:443}"
 
 ENABLE_SINGBOX="${ENABLE_SINGBOX:-true}"
 SINGBOX_PORT="${SINGBOX_PORT:-8002}"
 SINGBOX_DOMAIN="${SINGBOX_DOMAIN:-singbox.yourdomain.com}"
+SINGBOX_CONFIGS="${SINGBOX_CONFIGS:-httpupgrade:443,ws:443,grpc:443}"
 
 log "📌 配置参数摘要："
 log " - 节点 UUID: $NODE_UUID"
-log " - Xray 状态: $ENABLE_XRAY | 回源端口: $XRAY_PORT"
-log " - Sing-box 状态: $ENABLE_SINGBOX | 回源端口: $SINGBOX_PORT"
+log " - Xray 状态: $ENABLE_XRAY | 回源端口: $XRAY_PORT | 域名: $XRAY_DOMAIN"
+log " - Sing-box 状态: $ENABLE_SINGBOX | 回源端口: $SINGBOX_PORT | 域名: $SINGBOX_DOMAIN"
 
 # ==================== 4. 安装核心二进制文件 ====================
 if [[ "$ENABLE_XRAY" == "true" ]]; then
     log "正在安装 Xray-core..."
-    # 修复官方脚本下载方式，避免未知参数报错
     bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 fi
 
@@ -176,18 +177,45 @@ EOF
     log "✅ Sing-box 服务配置并启动成功！"
 fi
 
-# ==================== 7. 配置并启动 Argo 隧道 ====================
+# ==================== 7. 配置并启动 Argo 隧道 (支持多域名分流 Ingress) ====================
 if [[ -n "$ARGO_TOKEN" ]]; then
-    log "正在配置并启动 Argo 隧道..."
-    # 先清理可能残留的旧隧道服务，避免冲突
+    log "正在配置并启动 Argo 隧道与多域名分流..."
     cloudflared service uninstall 2>/dev/null
     rm -f /etc/systemd/system/cloudflared.service /etc/systemd/system/cloudflared-update.timer
     
+    mkdir -p /etc/cloudflared
+    
+    # 自动生成 Ingress 规则，将不同子域名精确分流到对应的本地回源端口
+    cat << EOF > /etc/cloudflared/config.yml
+tunnel: ${ARGO_TOKEN}
+credentials-file: /etc/cloudflared/cert.json
+ingress:
+EOF
+
+    if [[ "$ENABLE_XRAY" == "true" ]]; then
+        cat << EOF >> /etc/cloudflared/config.yml
+  - hostname: ${XRAY_DOMAIN}
+    service: http://127.0.0.1:${XRAY_PORT}
+EOF
+    fi
+
+    if [[ "$ENABLE_SINGBOX" == "true" ]]; then
+        cat << EOF >> /etc/cloudflared/config.yml
+  - hostname: ${SINGBOX_DOMAIN}
+    service: http://127.0.0.1:${SINGBOX_PORT}
+EOF
+    fi
+
+    cat << EOF >> /etc/cloudflared/config.yml
+  - service: http_status:404
+EOF
+
+    # 通过 token 安装并启动服务
     cloudflared service install "$ARGO_TOKEN"
     systemctl daemon-reload
     systemctl restart cloudflared
     systemctl enable cloudflared
-    log "✅ Argo 隧道已成功绑定并启动！"
+    log "✅ Argo 隧道多域名分流路由配置并启动成功！"
 else
     warn "⚠️ 未检测到 ARGO_TOKEN，跳过隧道自动启动。"
 fi
