@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 # =====================================================================
-# Nexus-Argo v3.6 自动化部署与运维脚本 (后端服务端)
-# 支持：Xray / Sing-box 双核独立按需启用、回源端口绑定、子协议解析
+# Nexus-Argo v3.6 自动化部署与运维脚本 (后端服务端修复版)
 # =====================================================================
 
 # 确保以 root 权限运行
 [[ $EUID -ne 0 ]] && echo "❌ 必须使用 root 权限运行此脚本！(可使用 sudo -i)" && exit 1
 
-# 定义颜色输出
 GREEN="\033[32m"
 YELLOW="\033[33m"
 RED="\033[31m"
-CYAN="\033[36m"
 RESET="\033[0m"
 
 log() { echo -e "${GREEN}[INFO] $1${RESET}"; }
@@ -35,26 +32,22 @@ log "🚀 开始执行 Nexus-Argo v3.6 服务端自动化部署..."
 log "正在更新系统并安装基础依赖 (curl, wget, jq, ufw)..."
 apt update -y && apt install -y curl wget jq ufw git
 
-# ==================== 3. 解析前端面板传入的动态变量 ====================
+# ==================== 3. 解析传入参数 ====================
 NODE_UUID="${NODE_UUID:-98a9eeea-e34d-4a0b-a151-39ec761d83f6}"
 ARGO_TOKEN="${ARGO_TOKEN:-}"
 
 ENABLE_XRAY="${ENABLE_XRAY:-true}"
 XRAY_PORT="${XRAY_PORT:-8001}"
 XRAY_DOMAIN="${XRAY_DOMAIN:-xray.yourdomain.com}"
-XRAY_CONFIGS="${XRAY_CONFIGS:-xhttp_h1:443,xhttp_h2:443,xhttp_h3:443}"
 
 ENABLE_SINGBOX="${ENABLE_SINGBOX:-true}"
 SINGBOX_PORT="${SINGBOX_PORT:-8002}"
 SINGBOX_DOMAIN="${SINGBOX_DOMAIN:-singbox.yourdomain.com}"
-SINGBOX_CONFIGS="${SINGBOX_CONFIGS:-httpupgrade:443,ws:443,grpc:443}"
 
 log "📌 配置参数摘要："
 log " - 节点 UUID: $NODE_UUID"
-log " - Xray 状态: $ENABLE_XRAY | 本地回源端口: $XRAY_PORT | 域名: $XRAY_DOMAIN"
-log " - Xray 子协议列表: $XRAY_CONFIGS"
-log " - Sing-box 状态: $ENABLE_SINGBOX | 本地回源端口: $SINGBOX_PORT | 域名: $SINGBOX_DOMAIN"
-log " - Sing-box 子协议列表: $SINGBOX_CONFIGS"
+log " - Xray 状态: $ENABLE_XRAY | 回源端口: $XRAY_PORT"
+log " - Sing-box 状态: $ENABLE_SINGBOX | 回源端口: $SINGBOX_PORT"
 
 # ==================== 4. 安装核心二进制文件 ====================
 if [[ "$ENABLE_XRAY" == "true" ]]; then
@@ -77,9 +70,9 @@ log "正在安装 Cloudflared (Argo)..."
 curl -L --output /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
 chmod +x /usr/local/bin/cloudflared
 
-# ==================== 5. 生成 Xray 配置文件 ====================
+# ==================== 5. 生成 Xray 配置与服务 ====================
 if [[ "$ENABLE_XRAY" == "true" ]]; then
-    log "正在生成 Xray 配置文件..."
+    log "正在生成 Xray 配置与系统服务..."
     mkdir -p /usr/local/etc/xray
 
     cat << EOF > /usr/local/etc/xray/config.json
@@ -102,24 +95,40 @@ if [[ "$ENABLE_XRAY" == "true" ]]; then
     }
   ],
   "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "tag": "blocked"
-    }
+    { "protocol": "freedom", "tag": "direct" },
+    { "protocol": "blackhole", "tag": "blocked" }
   ]
 }
 EOF
+
+    # 显式写入 xray.service
+    cat << EOF > /etc/systemd/system/xray.service
+[Unit]
+Description=Xray Service
+After=network.target nss-lookup.target
+
+[Service]
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ExecStart=/usr/local/bin/xray run -config /usr/local/etc/xray/config.json
+Restart=on-failure
+RestartPreventExitStatus=23
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
     systemctl restart xray
     systemctl enable xray
+    log "✅ Xray 服务配置并启动成功！"
 fi
 
-# ==================== 6. 生成 Sing-box 配置文件 ====================
+# ==================== 6. 生成 Sing-box 配置与服务 ====================
 if [[ "$ENABLE_SINGBOX" == "true" ]]; then
-    log "正在生成 Sing-box 配置文件..."
+    log "正在生成 Sing-box 配置与系统服务..."
     cat << EOF > /usr/local/etc/sing-box/config.json
 {
   "log": { "level": "warn" },
@@ -138,19 +147,33 @@ if [[ "$ENABLE_SINGBOX" == "true" ]]; then
     }
   ],
   "outbounds": [
-    {
-      "type": "direct",
-      "tag": "direct"
-    },
-    {
-      "type": "block",
-      "tag": "block"
-    }
+    { "type": "direct", "tag": "direct" },
+    { "type": "block", "tag": "block" }
   ]
 }
 EOF
+
+    # 显式写入 sing-box.service
+    cat << EOF > /etc/systemd/system/sing-box.service
+[Unit]
+Description=sing-box Service
+Documentation=https://sing-box.sagernet.org
+After=network.target nss-lookup.target
+
+[Service]
+User=root
+ExecStart=/usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
     systemctl restart sing-box
     systemctl enable sing-box
+    log "✅ Sing-box 服务配置并启动成功！"
 fi
 
 # ==================== 7. 配置并启动 Argo 隧道 ====================
@@ -162,7 +185,7 @@ if [[ -n "$ARGO_TOKEN" ]]; then
     systemctl enable cloudflared
     log "✅ Argo 隧道已成功绑定并启动！"
 else
-    warn "⚠️ 未检测到 ARGO_TOKEN，跳过隧道自动启动。请后续手动执行: cloudflared tunnel run --token <你的Token>"
+    warn "⚠️ 未检测到 ARGO_TOKEN，跳过隧道自动启动。"
 fi
 
 log "🎉 Nexus-Argo v3.6 服务端部署与配置全部完成！"
