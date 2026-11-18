@@ -105,8 +105,20 @@ fi
 case "$TUNNEL_PROTOCOL" in auto|http2|quic) ;; *) die "TUNNEL_PROTOCOL must be auto|http2|quic, got $TUNNEL_PROTOCOL";; esac
 
 mkdir -p "$WORKDIR"/{xray,singbox,web,sub}
-cp "$REPO_DIR/web/index.html" "$WORKDIR/web/index.html" 2>/dev/null || true
-cp "$REPO_DIR/web/nginx.conf" "$WORKDIR/web/nginx.conf" 2>/dev/null || true
+# Web panel files: when install.sh is run via bash <(curl ...),
+# REPO_DIR is /dev/fd, so cp from the repo never works and Docker
+# then auto-creates $WORKDIR/web/nginx.conf as a DIRECTORY, which
+# breaks every later web-panel start with "not a directory: Are
+# you trying to mount a directory onto a file". Fix 2026-11-18:
+# remove a stray directory at either path first, then copy from
+# the repo if present, else download from GitHub raw.
+RAW_BASE="${RAW_BASE:-https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main}"
+for _f in index.html nginx.conf; do
+  [ -d "$WORKDIR/web/$_f" ] && rm -rf "$WORKDIR/web/$_f"
+  if ! cp "$REPO_DIR/web/$_f" "$WORKDIR/web/$_f" 2>/dev/null; then
+    curl -fsSL "$RAW_BASE/web/$_f" -o "$WORKDIR/web/$_f" 2>/dev/null || log "WARNING: could not fetch web/$_f — panel may not start"
+  fi
+done
 
 # ---- render configs with Python (never sed on JSON) ----
 export NODE_UUID XRAY_PORT XRAY_DOMAIN XRAY_CONFIGS SINGBOX_PORT SINGBOX_DOMAIN SINGBOX_CONFIGS
@@ -329,12 +341,16 @@ if [ -n "$ARGO_TOKEN" ]; then
   docker run -d --name nexus-argo --restart unless-stopped --network host \
     "$CLOUDFLARED_IMAGE" tunnel --no-autoupdate --protocol "$TUNNEL_PROTOCOL" run --token "$ARGO_TOKEN"
 fi
-docker run -d --name nexus-web-panel --restart unless-stopped \
-  -p 8080:80 \
-  -v "$WORKDIR/web/index.html:/usr/share/nginx/html/index.html:ro" \
-  -v "$WORKDIR/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
-  -v "$WORKDIR/sub:/usr/share/nginx/html/sub:ro" \
-  "$NGINX_IMAGE"
+if [ -f "$WORKDIR/web/nginx.conf" ] && [ -f "$WORKDIR/web/index.html" ]; then
+  docker run -d --name nexus-web-panel --restart unless-stopped \
+    -p 8080:80 \
+    -v "$WORKDIR/web/index.html:/usr/share/nginx/html/index.html:ro" \
+    -v "$WORKDIR/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+    -v "$WORKDIR/sub:/usr/share/nginx/html/sub:ro" \
+    "$NGINX_IMAGE"
+else
+  log "WARNING: web panel files missing — skipping nexus-web-panel, nodes are unaffected"
+fi
 
 # ---- health check: docker inspect .State.Running, last 20 log lines on failure ----
 fail=0
@@ -345,6 +361,7 @@ for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel; 
     nexus-singbox) is_true "$ENABLE_SINGBOX" || continue;;
     nexus-sb-dispatch) is_true "$ENABLE_SINGBOX" || continue;;
     nexus-argo) [ -n "$ARGO_TOKEN" ] || continue;;
+    nexus-web-panel) docker inspect "$c" >/dev/null 2>&1 || continue;;
   esac
   sleep 2
   running="$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null || echo false)"
