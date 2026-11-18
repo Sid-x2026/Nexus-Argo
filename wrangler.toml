@@ -1,0 +1,27 @@
+# Nexus-Argo Worker 动态订阅 — Wrangler 配置 (可选, Dashboard 部署可不用)
+# 用法: wrangler deploy
+# 部署后在 Dashboard > Workers > 该 Worker > Settings > Variables 里设置
+# 下面这些变量, 值换成你自己的:
+#
+#   NODE_UUID        = "bf4b0e89-5d86-4918-921f-556cd0d5ae88"
+#   NODE_PREFIX      = "Nexus"
+#   XRAY_DOMAIN      = "xr.ahstshu.eu.cc"
+#   XRAY_CONFIGS     = "xhttp_h1:443,xhttp_h2:443,xhttp_h3:443"
+#   SINGBOX_DOMAIN   = "sb.ahstshu.eu.cc"
+#   SINGBOX_CONFIGS  = "ws:8443,httpupgrade:8443,grpc:8443"
+#
+# 注意: 不走 VPS 8080, 不要给面板建隧道路由。
+# 面板 8080 只绑 127.0.0.1, 用 SSH 端口转发访问:
+#   ssh -L 8080:127.0.0.1:8080 root@<VPS-IP>
+
+name = "nexus-argo-sub"
+main = "worker.js"
+compatibility_date = "2026-11-18"
+
+[vars]
+NODE_PREFIX = "Nexus"
+XRAY_DOMAIN = "xr.ahstshu.eu.cc"
+XRAY_CONFIGS = "xhttp_h1:443,xhttp_h2:443,xhttp_h3:443"
+SINGBOX_DOMAIN = "sb.ahstshu.eu.cc"
+SINGBOX_CONFIGS = "ws:8443,httpupgrade:8443,grpc:8443"
+# NODE_UUID 建议在 Dashboard 里设为 Secret, 不要写进这个文件
