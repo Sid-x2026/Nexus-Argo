@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus-Argo 订阅生成器</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: #f4f5fb; color: #1e293b; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 16px 64px; }
+  .hero { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #06b6d4 100%); border-radius: 22px; padding: 28px 26px; color: #fff; box-shadow: 0 12px 32px rgba(79,70,229,.28); margin-bottom: 18px; }
+  .hero .tag { display: inline-block; font-size: 11px; letter-spacing: 3px; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3); padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; }
+  .hero h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: 1px; }
+  .hero p { margin: 0; color: rgba(255,255,255,.88); font-size: 13.5px; line-height: 1.8; }
+  section { background: #fff; border: 1px solid #e9ebf3; border-radius: 18px; padding: 22px; margin-bottom: 16px; box-shadow: 0 4px 18px rgba(30,41,59,.05); }
+  h2 { font-size: 17px; margin: 0 0 6px; }
+  .hint { color: #64748b; font-size: 12.5px; margin: 0 0 12px; line-height: 1.8; }
+  label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin: 14px 0 6px; }
+  input[type=text], textarea { width: 100%; background: #f8fafc; border: 1.5px solid #e2e8f0; color: #1e293b; border-radius: 12px; padding: 10px 12px; font-size: 13.5px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  input[type=text]:focus, textarea:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.15); background: #fff; }
+  textarea { min-height: 64px; resize: vertical; font-family: inherit; line-height: 1.7; }
+  input[type=file] { font-size: 13px; color: #475569; }
+  .split { display: flex; gap: 12px; align-items: stretch; }
+  .split .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .split textarea { height: 200px; }
+  .split .col label { min-height: 38px; }
+  #resultText { height: 220px; }
+  #customInput, #cmListUrl { min-height: 160px; }
+  textarea { overflow-y: auto; }
+  textarea::-webkit-scrollbar { width: 10px; }
+  textarea::-webkit-scrollbar-track { background: #eef0fb; border-radius: 6px; }
+  textarea::-webkit-scrollbar-thumb { background: #c7cbe8; border-radius: 6px; }
+  #listWrap { max-height: 320px; overflow-y: auto; }
+  @media (max-width: 640px) { .split { flex-direction: column; } }
+  .addr-row { display: flex; gap: 10px; align-items: center; }
+  .addr-row .addr { flex: 1; min-width: 0; height: 44px; line-height: 44px; padding: 0 14px; background: #f7f8fd; border: 1.5px solid #e2e8f0; border-radius: 12px; color: #1e293b; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; cursor: default; }
+  .addr-row .addr.empty { color: #94a3b8; }
+  .addr-row button { flex-shrink: 0; height: 44px; padding: 0 18px; font-size: 14px; }
+  .toolbar-label { font-size: 13.5px; font-weight: 700; color: #334155; margin-right: 2px; white-space: nowrap; }
+  .toolbar .spacer { flex: 1; }
+  .toolbar button { padding: 8px 14px; font-size: 13px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+  button { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: none; border-radius: 12px; padding: 10px 18px; font-size: 13.5px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(79,70,229,.25); transition: transform .12s, box-shadow .12s; }
+  button:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(79,70,229,.32); }
+  button:disabled { opacity: .55; cursor: wait; transform: none; }
+  button.ghost { background: #fff; color: #4f46e5; border: 1.5px solid #e0e7ff; box-shadow: none; }
+  button.green { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 4px 12px rgba(5,150,105,.25); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .chip { background: #eef2ff; color: #4f46e5; border: 1px solid #e0e7ff; border-radius: 999px; padding: 5px 12px; font-size: 12.5px; cursor: pointer; transition: background .12s; }
+  .chip:hover { background: #e0e7ff; }
+  .opt { display: inline-flex; align-items: center; font-size: 13.5px; color: #475569; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 999px; padding: 7px 14px; cursor: pointer; transition: all .15s; }
+  .opt input { display: none; }
+  .opt:has(input:checked) { background: #4f46e5; border-color: #4f46e5; color: #fff; font-weight: 600; box-shadow: 0 3px 10px rgba(79,70,229,.3); }
+  .optlabel { font-size: 13px; font-weight: 600; color: #334155; margin-right: 2px; white-space: nowrap; }
+  input.port.mini { width: 64px; padding: 6px 8px; }
+  textarea.big { height: 150px; }
+  button.sm { padding: 8px 14px; font-size: 13px; }
+  input.port { width: 84px; display: inline-block; padding: 8px 10px; text-align: center; }
+  .out { margin-top: 12px; font-size: 13px; word-break: break-all; line-height: 1.8; }
+  .out .ok { color: #059669; font-weight: 600; }
+  .out .err { color: #dc2626; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  th { font-size: 11.5px; letter-spacing: 1px; color: #94a3b8; text-transform: uppercase; padding: 8px 6px; border-bottom: 2px solid #f1f5f9; text-align: left; }
+  td { padding: 9px 6px; border-bottom: 1px solid #f1f5f9; }
+  tr:hover td { background: #f8fafc; }
+  td.lat { font-weight: 600; color: #059669; white-space: nowrap; }
+  td.lat.slow { color: #d97706; }
+  td.lat.bad { color: #dc2626; }
+  .progress { margin-top: 14px; background: #eef2ff; border-radius: 999px; height: 24px; position: relative; overflow: hidden; }
+  .progress .bar { height: 100%; width: 0; background: linear-gradient(90deg, #4f46e5, #06b6d4); border-radius: 999px; transition: width .2s; }
+  .progress span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #334155; }
+  .muted { color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <span class="tag">NEXUS-ARGO</span>
+    <h1>订阅生成器</h1>
+    <p>上面找优选地址，下面裂变出节点和订阅。</p>
+  </header>
+
+  <!-- 2. 优选地址 -->
+  <section>
+    <h2>优选地址</h2>
+
+    <div class="row" style="align-items:center">
+      <span class="opt"><input type="radio" name="psrc" value="official">CF官方</span>
+      <span class="opt"><input type="radio" name="psrc" value="cm" checked>CM IP</span>
+      <span class="opt"><input type="radio" name="psrc" value="custom">第三方自定义</span>
+    </div>
+    <p class="hint" id="srcNote">CM IP：默认采用 bestcf 域名列表，可另行填写 CM 列表地址。</p>
+    <div id="cmBox" style="display:none">
+      <label>CM 列表地址（每行一个，可填多个；留空使用默认 bestcf 域名列表）</label>
+      <textarea id="cmListUrl" placeholder="https://bestcf.pages.dev/domain/all.txt"></textarea>
+    </div>
+    <div id="customBox" style="display:none">
+      <label>上传 TXT 文本（每行一个 IP 或域名）</label>
+      <input type="file" id="txtFile" accept=".txt,text/plain">
+      <p class="hint" id="fileInfo">尚未选择文件</p>
+      <label>列表地址 / IP / 域名（每行一个）</label>
+      <textarea id="customInput" placeholder="https://example.com/list.txt&#10;my.example.com&#10;104.16.0.1&#10;2606:4700:4700::1111"></textarea>
+    </div>
+
+    <div class="row" style="align-items:center; gap:6px">
+      <span class="opt"><input type="checkbox" name="ptype" value="domain" checked>域名</span>
+      <span class="opt"><input type="checkbox" name="ptype" value="ipv4" checked>IPv4</span>
+      <span class="opt"><input type="checkbox" name="ptype" value="ipv6" checked>IPv6</span>
+      <span class="optlabel">端口</span>
+      <input type="text" class="port mini" id="testPort" value="443">
+      <span class="optlabel">线程</span>
+      <input type="text" class="port mini" id="testThreads" value="6">
+      <span class="optlabel">延迟(ms)</span>
+      <input type="text" class="port mini" id="maxLatency" value="500">
+    </div>
+
+    <div class="toolbar">
+      <span class="toolbar-label">扫描结果</span>
+      <button class="ghost" id="btnSelectAll">全选</button>
+      <button class="ghost" id="btnSelectTop">选择前</button>
+      <input type="text" class="port mini" id="topN" value="10">
+      <span class="optlabel">个</span>
+      <span class="spacer"></span>
+      <button class="ghost" id="btnCopyResult">复制结果</button>
+      <button class="ghost" id="btnExportResult">导出结果</button>
+    </div>
+    <div id="listWrap" style="display:none; margin-top:12px">
+      <table><thead><tr><th><input type="checkbox" id="checkAll" checked title="全选"></th><th>优选地址</th><th>类型</th><th>延迟</th></tr></thead><tbody id="listBody"></tbody></table>
+    </div>
+    <textarea id="resultText" class="big" readonly placeholder="扫描完成后，勾选的地址将显示于此。"></textarea>
+    <div class="row">
+      <button id="btnScan">开始扫描</button>
+      <button class="green" id="btnImportResult">导入裂变池</button>
+    </div>
+
+    <div class="progress" id="scanProgress" style="display:none">
+      <div class="bar" id="scanBar"></div>
+      <span id="scanText"></span>
+    </div>
+    <div class="out" id="listOut"><span class="muted">尚未扫描，请点击「开始扫描」。</span></div>
+  </section>
+
+
+  <!-- 3. 优选IP裂变 -->
+  <section>
+    <h2>优选IP裂变</h2>
+    <p class="hint">原生节点 × 优选地址 = 动态节点；裂变池上限为 20 个。</p>
+    <div class="split">
+      <div class="col">
+        <label>优选地址（逗号或换行隔开，最多 20 个）</label>
+        <textarea id="addrs" placeholder="请输入 IP 或域名，每行一个或以逗号分隔"></textarea>
+      </div>
+      <div class="col">
+        <label>节点裂变输出（复制后直接粘贴到 V2Ray 客户端）</label>
+        <textarea id="genNodes" class="big" readonly placeholder="点击「生成裂变优选」后，裂变生成的节点链接将显示于此。"></textarea>
+        <div class="row" style="justify-content:flex-end">
+          <button class="ghost sm" id="btnCopyNodes">复制节点</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <button id="btnGen">生成裂变优选</button>
+    </div>
+    <div class="out" id="genOut"></div>
+    <label>原生订阅地址</label>
+    <div class="addr-row">
+      <div class="addr empty" id="rawUrl" data-hint="原生订阅，适合 V2Ray / Sing-box">原生订阅，适合 V2Ray / Sing-box</div>
+      <button class="ghost" id="btnCopyRaw">复制</button>
+    </div>
+    <div class="out" id="rawOut"></div>
+    <label>通用裂变订阅（自适应）</label>
+    <div class="addr-row">
+      <div class="addr empty" id="subAuto" data-hint="裂变订阅，自动适配客户端">裂变订阅，自动适配客户端</div>
+      <button class="ghost" id="btnCopyAuto">复制</button>
+    </div>
+    <label>V2Ray 裂变订阅</label>
+    <div class="addr-row">
+      <div class="addr empty" id="subV2ray" data-hint="裂变订阅，适合 V2Ray / Xray">裂变订阅，适合 V2Ray / Xray</div>
+      <button class="ghost" id="btnCopyV2ray">复制</button>
+    </div>
+    <label>Sing-box 裂变订阅</label>
+    <div class="addr-row">
+      <div class="addr empty" id="subSingbox" data-hint="裂变订阅，适合 Sing-box">裂变订阅，适合 Sing-box</div>
+      <button class="ghost" id="btnCopySingbox">复制</button>
+    </div>
+    <label>Clash 裂变订阅</label>
+    <div class="addr-row">
+      <div class="addr empty" id="subClash" data-hint="裂变订阅，适合 Clash（Mihomo）">裂变订阅，适合 Clash（Mihomo）</div>
+      <button class="ghost" id="btnCopyClash">复制</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const PRESETS = ["cf.xreak.top", "cf.3666888.xyz", "vps.cheng2001.top", "cf.nyanya.moe", "baota.us.kg"];
+let cfg = { uuid: "", opt_addrs: PRESETS.slice() };
+let nativeLinks = [];
+let candidates = []; // {domain, type, lat}
+
+function getPTypes() {
+  const ts = [...document.querySelectorAll('input[name="ptype"]:checked')].map(r => r.value);
+  return ts.length ? ts : ["domain"];
+}
+function getPort() {
+  const p = parseInt(($("testPort").value || "443").trim(), 10);
+  return (p >= 1 && p <= 65535) ? p : 443;
+}
+function getSource() {
+  const r = document.querySelector('input[name="psrc"]:checked');
+  return r ? r.value : "official";
+}
+const TYPE_LABEL = { domain: "域名", ipv4: "IPv4", ipv6: "IPv6" };
+// CF官方：Cloudflare 自己的地址段（只有 IP）；CM IP：cmliu 的 bestcf
+// 域名列表（只有域名）；第三方自定义：自己填列表地址 / 上传 TXT / 粘贴。
+const CF_LIST = { ipv4: "https://www.cloudflare.com/ips-v4", ipv6: "https://www.cloudflare.com/ips-v6" };
+const CM_LIST = { domain: "https://bestcf.pages.dev/domain/all.txt" };
+
+function b64decode(s) {
+  s = s.replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  return decodeURIComponent(escape(atob(s)));
+}
+function parseSub(text) {
+  text = (text || "").trim();
+  if (!text) return [];
+  if (text.includes("://")) return text.split("\n").map(l => l.trim()).filter(Boolean);
+  try { return b64decode(text).split("\n").map(l => l.trim()).filter(Boolean); }
+  catch (e) { return text.split("\n").map(l => l.trim()).filter(Boolean); }
+}
+function nodeLabel(link) {
+  const m = link.match(/^vless:\/\/[^@]+@([^:/?#]+):(\d+).*#(.+)$/);
+  if (m) return decodeURIComponent(m[3]) + " @ " + m[1] + ":" + m[2];
+  return link.slice(0, 80);
+}
+function showNodes(el, links) {
+  el.style.display = "block";
+  if (el.tagName === "TEXTAREA") { el.value = links.join("\n"); return; }
+  el.innerHTML = links.map(l => "<div>" + nodeLabel(l).replace(/</g, "&lt;") + "</div>").join("");
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e2) {}
+    ta.remove(); return ok;
+  }
+}
+function parseAddrs() {
+  return $("addrs").value.split(/[\n,，]+/).map(s => s.trim()).filter(Boolean).slice(0, 20);
+}
+function addToPool(items) {
+  const cur = parseAddrs();
+  let added = 0;
+  items.forEach(d => { if (d && !cur.includes(d)) { cur.push(d); added++; } });
+  $("addrs").value = cur.slice(0, 20).join("\n");
+  return added;
+}
+function selectTop(n) {
+  const ranked = candidates.filter(c => c.lat !== Infinity && c.lat != null).sort((a, b) => a.lat - b.lat);
+  if (!ranked.length) { $("listOut").innerHTML = '<span class="err">请先完成测速，再进行选择</span>'; return; }
+  const top = new Set(ranked.slice(0, n).map(c => c.domain));
+  candidates.forEach(c => { c.pick = top.has(c.domain); });
+  renderList();
+  fillResultBox();
+}
+$("btnSelectAll").onclick = () => {
+  if (!candidates.length) { $("listOut").innerHTML = '<span class="err">先扫描，扫出结果再选</span>'; return; }
+  candidates.forEach(c => { c.pick = true; });
+  renderList();
+  fillResultBox();
+};
+function getTopN() {
+  const n = parseInt(($("topN").value || "10").trim(), 10);
+  return (n >= 1 && n <= 100) ? n : 10;
+}
+$("btnSelectTop").onclick = () => selectTop(getTopN());
+
+// --- 订阅地址只做展示 ---
+// 订阅地址用 div 显示，不能输入、不能改；真实地址存在 dataset.url 里，复制读这里
+function setAddr(id, url) {
+  const el = $(id);
+  if (url) {
+    el.textContent = url;
+    el.title = url;
+    el.dataset.url = url;
+    el.classList.remove("empty");
+  } else {
+    el.textContent = el.dataset.hint || "";
+    el.title = "";
+    el.dataset.url = "";
+    el.classList.add("empty");
+  }
+}
+function getAddr(id) { return ($(id).dataset.url || "").trim(); }
+
+// --- 初始化：从 /config.json 拿部署时的 UUID 和默认优选地址 ---
+fetch("/config.json").then(r => r.json()).then(c => {
+  cfg = c;
+  if (c.uuid) setAddr("rawUrl", location.origin + "/sub/raw/" + c.uuid);
+  if (c.opt_addrs && c.opt_addrs.length) $("addrs").value = c.opt_addrs.join("\n");
+  if (c.uuid) loadNative();
+}).catch(() => {
+  $("addrs").value = PRESETS.join("\n");
+});
+// --- 原生订阅 ---
+// 原生订阅地址部署时就定好了，只读；打开页面就静默拉一次原生节点（只记个数，不展示列表）
+async function loadNative() {
+  const url = getAddr("rawUrl");
+  if (!url) return;
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    nativeLinks = parseSub(await r.text());
+  } catch (e) { /* 拉取失败也不展示，原生节点数按未知处理 */ }
+}
+$("btnCopyRaw").onclick = async () => {
+  const ok = await copyText(getAddr("rawUrl"));
+  $("rawOut").innerHTML = ok ? '<span class="ok">已复制</span>' : '<span class="err">复制失败，请手动复制</span>';
+};
+
+// --- 优选地址 ---
+// 端口、优选类型、线程、延迟要求是通用的扫描设置：不管选哪个 IP 源都共用这一套。
+// IP 源三选一：CF官方（Cloudflare 官方地址段）、CM IP（bestcf 域名列表）、
+// 第三方自定义（列表地址 / 上传 TXT / 直接粘贴，共用一个输入框）。
+let customFileLines = [];
+function getThreads() {
+  const n = parseInt(($("testThreads").value || "6").trim(), 10);
+  return (n >= 1 && n <= 32) ? n : 6;
+}
+function getMaxLatency() {
+  const n = parseInt(($("maxLatency").value || "0").trim(), 10);
+  return (n > 0) ? n : 0;
+}
+// 符合延迟要求的候选，按延迟从低到高排
+function qualified() {
+  const m = getMaxLatency();
+  return candidates
+    .filter(c => c.lat !== Infinity && c.lat != null && (m === 0 || c.lat <= m))
+    .sort((a, b) => a.lat - b.lat);
+}
+function updateProgress(done, total) {
+  $("scanProgress").style.display = "block";
+  const pct = total ? Math.round(done / total * 100) : 0;
+  $("scanBar").style.width = pct + "%";
+  $("scanText").textContent = done >= total ? "测速完成" : "测速中 " + done + "/" + total + " · " + pct + "%";
+}
+function picked() {
+  return candidates
+    .filter(c => c.pick && c.lat != null && c.lat !== Infinity)
+    .sort((a, b) => a.lat - b.lat);
+}
+function fillResultBox() {
+  const q = picked();
+  $("resultText").value = q.map(c => c.domain + " " + Math.round(c.lat) + "ms").join("\n");
+  return q;
+}
+const SRC_NOTE = {
+  official: "CF官方：IP 采用 Cloudflare 官方地址段，无需填写。",
+  cm: "CM IP：默认采用 bestcf 域名列表，可另行填写 CM 列表地址。",
+  custom: "第三方自定义：请填写列表地址、上传 TXT 或直接粘贴。",
+};
+const SOURCE_TYPES = {
+  official: ["ipv4", "ipv6"],
+  cm: ["domain"],
+  custom: ["domain", "ipv4", "ipv6"],
+};
+// CM IP 填了列表地址后，填的地址里可能是什么类型都有，就不按
+// 内置列表的类型来判断跳过；留空时只用内置域名列表。
+function sourceTypes(src) {
+  if (src === "cm" && $("cmListUrl") && $("cmListUrl").value.trim()) return ["domain", "ipv4", "ipv6"];
+  return SOURCE_TYPES[src];
+}
+// 提示跟着勾选走：勾了什么就提示什么，没勾就提示至少选一项；
+// 勾的类型在当前源没有列表时提示已跳过。
+function updateSrcNote() {
+  const src = getSource();
+  const types = getPTypes();
+  if (!types.length) {
+    $("srcNote").innerHTML = '<span class="err">至少选择一项：域名 / IPv4 / IPv6</span>';
+    return;
+  }
+  const missing = types.filter(t => !sourceTypes(src).includes(t));
+  let text = SRC_NOTE[src] + " 已选：" + types.map(t => TYPE_LABEL[t]).join("、") + "。";
+  if (missing.length) text += "（" + missing.map(t => TYPE_LABEL[t]).join("、") + "在这里没有列表，已跳过）";
+  $("srcNote").textContent = text;
+}
+function toggleSrcBox() {
+  const src = getSource();
+  updateSrcNote();
+  $("cmBox").style.display = src === "cm" ? "block" : "none";
+  $("customBox").style.display = src === "custom" ? "block" : "none";
+}
+document.querySelectorAll('input[name="psrc"]').forEach(r => r.addEventListener("change", toggleSrcBox));
+document.querySelectorAll('input[name="ptype"]').forEach(r => r.addEventListener("change", updateSrcNote));
+$("cmListUrl").addEventListener("input", updateSrcNote);
+toggleSrcBox();
+$("txtFile").addEventListener("change", () => {
+  const f = $("txtFile").files && $("txtFile").files[0];
+  if (!f) { customFileLines = []; $("fileInfo").textContent = "尚未选择文件"; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    customFileLines = String(reader.result || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    $("fileInfo").textContent = "已读取 " + f.name + "，共 " + customFileLines.length + " 行";
+  };
+  reader.onerror = () => { customFileLines = []; $("fileInfo").textContent = "读取失败，请更换文件后重试"; };
+  reader.readAsText(f);
+});
+function renderList() {
+  $("listWrap").style.display = candidates.length ? "block" : "none";
+  $("listBody").innerHTML = candidates.map(c =>
+    '<tr><td><input type="checkbox" class="pick" data-domain="' + c.domain + '"' + (c.pick ? ' checked' : '') + '></td><td>' + c.domain +
+    '</td><td class="muted">' + (TYPE_LABEL[c.type] || c.type) +
+    '</td><td class="lat' + (c.lat == null ? '' : c.lat > 500 ? ' bad' : c.lat > 250 ? ' slow' : '') + '">' +
+    (c.lat == null ? '—' : c.lat === Infinity ? '超时' : Math.round(c.lat) + ' ms') + '</td></tr>').join("");
+  $("checkAll").checked = candidates.length > 0 && candidates.every(c => c.pick);
+}
+// 勾选变化：单行勾选只改那一行，全选改全部；输出结果框跟着变
+$("listBody").addEventListener("change", e => {
+  const box = e.target.closest(".pick");
+  if (!box) return;
+  const c = candidates.find(x => x.domain === box.dataset.domain);
+  if (c) c.pick = box.checked;
+  fillResultBox();
+  $("checkAll").checked = candidates.length > 0 && candidates.every(x => x.pick);
+});
+$("checkAll").addEventListener("change", () => {
+  candidates.forEach(c => { c.pick = $("checkAll").checked; });
+  renderList();
+  fillResultBox();
+});
+async function fetchList() {
+  const ptypes = getPTypes();
+  const src = getSource();
+  if (!ptypes.length) {
+    $("listOut").innerHTML = '<span class="err">至少选择一项：域名 / IPv4 / IPv6</span>';
+    return false;
+  }
+  const srcLabel = src === "official" ? "CF官方" : src === "cm" ? "CM IP" : "第三方自定义";
+  // CF官方：Cloudflare 官方地址段（IPv4/IPv6，CIDR 每段取一个测）；
+  // CM IP：bestcf 域名列表；第三方自定义：填列表地址 / 上传 TXT / 粘贴。
+  // 一行是什么类型就按什么类型算（IP 形就是 IPv4，带冒号就是 IPv6，其余是域名），
+  // 只有选中的类型才进待测，类型可多选、能全选上。
+  // 输入行以 http(s) 开头的是列表地址，其余是直填的 IP / 域名
+  const splitInput = lines => {
+    const u = [], c = [];
+    lines.forEach(l => { const s = (l || "").trim(); if (!s) return; if (/^https?:\/\//i.test(s)) u.push(s); else c.push(s); });
+    return [u, c];
+  };
+  const urls = [];
+  let custom = [];
+  if (src === "official") {
+    ptypes.forEach(t => { if (CF_LIST[t]) urls.push(CF_LIST[t]); });
+  } else if (src === "cm") {
+    // 填了 CM 列表地址就用填的（链接拉取，直填的当候选）；留空用内置 bestcf 域名列表
+    const [u, c] = splitInput($("cmListUrl").value.split(/[\n,]+/).map(s => s.trim()).filter(Boolean));
+    urls.push(...u);
+    custom.push(...c);
+    if (!urls.length && !custom.length) ptypes.forEach(t => { if (CM_LIST[t]) urls.push(CM_LIST[t]); });
+  } else if (src === "custom") {
+    const [u1, c1] = splitInput(customFileLines);
+    const [u2, c2] = splitInput($("customInput").value.split(/[\n,]+/).map(s => s.trim()).filter(Boolean));
+    urls.push(...u1, ...u2);
+    custom = [...c1, ...c2];
+  }
+  if (!urls.length && !custom.length) {
+    $("listOut").innerHTML = '<span class="err">' + (src === "official"
+      ? 'CF官方仅提供 IPv4 / IPv6 地址段，域名请切换至 CM IP'
+      : src === "cm"
+      ? 'CM IP 仅提供域名列表，IPv4 / IPv6 请切换至 CF官方'
+      : '请先填写列表地址，或上传 TXT / 直接粘贴 IP 或域名') + '</span>';
+    return false;
+  }
+  $("listOut").textContent = "正在拉取列表（" + srcLabel + "）…";
+  const seen = new Set();
+  const domains = [];
+  const classify = d => /^\d+\.\d+\.\d+\.\d+$/.test(d) ? "ipv4" : d.includes(":") ? "ipv6" : "domain";
+  // 官方 IP 段是 CIDR（如 173.245.48.0/20）：取段内第一个可用 IP 来测
+  const expandCidr = d => {
+    const m = d.match(/^(.+)\/(\d{1,3})$/);
+    if (!m) return d;
+    const base = m[1], bits = parseInt(m[2], 10);
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(base)) {
+      if (bits >= 32) return base;
+      const n = base.split(".").reduce((a, o) => (a << 8) + parseInt(o, 10), 0) >>> 0;
+      const first = (n + 1) >>> 0;
+      return [first >>> 24, (first >>> 16) & 255, (first >>> 8) & 255, first & 255].join(".");
+    }
+    if (base.includes(":")) return (bits >= 128) ? base : (base.endsWith("::") ? base + "1" : base);
+    return d;
+  };
+  const addDomain = raw => {
+    let d = (raw || "").split("#")[0].trim();
+    if (!d) return;
+    d = expandCidr(d);
+    if (d.startsWith("[")) { const end = d.indexOf("]"); d = end === -1 ? d.slice(1) : d.slice(1, end); }
+    else if ((d.match(/:/g) || []).length > 1) { /* 不带括号的裸 IPv6，整行就是地址 */ }
+    else { d = d.split(":")[0].trim(); }
+    const t = classify(d);
+    if (d && ptypes.includes(t) && !seen.has(d)) { seen.add(d); domains.push({ domain: d, type: t }); }
+  };
+  custom.forEach(addDomain);
+  let ok = 0, fail = 0;
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      (await r.text()).split("\n").forEach(addDomain);
+      ok++;
+    } catch (e) { fail++; }
+  }
+  candidates = domains.slice(0, 100).map(d => ({ domain: d.domain, type: d.type, lat: null, pick: false }));
+  const skipped = ptypes.filter(t => !sourceTypes(src).includes(t));
+  $("listOut").innerHTML = '<span class="ok">待测 ' + candidates.length + ' 个（' + ok + ' 个列表拉取成功' +
+    (fail ? '，' + fail + ' 个列表拉取失败' : '') +
+    (skipped.length ? '，' + skipped.map(t => TYPE_LABEL[t]).join('、') + '在这里没有列表，已跳过' : '') +
+    '，已去重，仅保留前 100 个）</span>';
+  renderList();
+  return candidates.length > 0;
+}
+async function probe(domain) {
+  const port = getPort();
+  const host = domain.includes(":") && !domain.startsWith("[") ? "[" + domain + "]" : domain;
+  const url = "https://" + host + (port === 443 ? "" : ":" + port) + "/cdn-cgi/trace";
+  let best = Infinity;
+  for (let i = 0; i < 2; i++) {
+    const t0 = performance.now();
+    try {
+      await fetch(url, { mode: "no-cors", cache: "no-store", signal: AbortSignal.timeout(5000) });
+      best = Math.min(best, performance.now() - t0);
+    } catch (e) { /* 超时/失败记为 Infinity */ }
+  }
+  return best;
+}
+async function speedTest() {
+  if (!candidates.length) { $("listOut").innerHTML = '<span class="err">先获取列表</span>'; return; }
+  const total = Math.min(candidates.length, 30);
+  const threads = getThreads();
+  updateProgress(0, total);
+  $("listOut").textContent = "正在测速（最多前 30 个，线程 " + threads + "）…";
+  const batch = candidates.slice(0, 30);
+  let done = 0;
+  for (let i = 0; i < batch.length; i += threads) {
+    await Promise.all(batch.slice(i, i + threads).map(async c => {
+      c.lat = await probe(c.domain);
+      done++;
+      updateProgress(done, total);
+    }));
+    renderList();
+  }
+  candidates.sort((a, b) => (a.lat ?? Infinity) - (b.lat ?? Infinity));
+  const m = getMaxLatency();
+  // 测完默认不勾选，等用户点全选 / 选择前 N 个，或者自己勾
+  renderList();
+  const q = qualified();
+  $("listOut").innerHTML = '<span class="ok">测速完成，' + q.length + ' 个符合延迟要求' +
+    (m ? '（≤ ' + m + 'ms）' : '') + '，默认不勾选，点全选 / 选择前 N 个，或者自己勾，最快 ' + (q.length ? q[0].domain + ' ' + Math.round(q[0].lat) + ' ms' : '无') + '</span>';
+}
+// 一个按钮走完拉列表 + 测速
+$("btnScan").onclick = async () => {
+  $("btnScan").disabled = true;
+  const ok = await fetchList();
+  if (ok) await speedTest();
+  $("btnScan").disabled = false;
+};
+$("btnExportResult").onclick = () => {
+  const t = $("resultText").value.trim();
+  if (!t) { $("listOut").innerHTML = '<span class="err">还没有勾选的结果可导出，先扫描并勾选</span>'; return; }
+  const blob = new Blob([t + "\n"], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "优选结果.txt";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  $("listOut").innerHTML = '<span class="ok">已导出 ' + t.split("\n").length + ' 条结果到 优选结果.txt</span>';
+};
+$("btnCopyResult").onclick = async () => {
+  const t = $("resultText").value.trim();
+  if (!t) { $("listOut").innerHTML = '<span class="err">暂无扫描结果可复制</span>'; return; }
+  const ok = await copyText(t);
+  $("listOut").innerHTML = ok ? '<span class="ok">已复制输出结果</span>' : '<span class="err">复制失败，请手动复制</span>';
+};
+$("btnImportResult").onclick = () => {
+  const q = picked();
+  if (!q.length) { $("listOut").innerHTML = '<span class="err">未勾选任何地址，请先扫描并勾选</span>'; return; }
+  const added = addToPool(q.map(c => c.domain));
+  $("listOut").innerHTML = '<span class="ok">已导入 ' + q.length + ' 个地址至裂变池（新增 ' + added + ' 个），当前共 ' + parseAddrs().length + ' 个</span>';
+};
+
+// --- 裂变 ---
+// 裂变：按裂变池生成节点和订阅地址
+async function doFission() {
+  const addrs = parseAddrs();
+  if (!addrs.length) { $("genOut").innerHTML = '<span class="err">请先填写优选地址</span>'; return null; }
+  let url;
+  if (cfg.uuid) {
+    url = location.origin + "/sub/merged/" + cfg.uuid + "?addrs=" + encodeURIComponent(addrs.join(","));
+  } else {
+    $("genOut").innerHTML = '<span class="err">未获取到 UUID，请确认原生订阅地址是否正确</span>'; return null;
+  }
+  $("btnGen").disabled = true;
+  $("genOut").textContent = "正在生成…";
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const links = parseSub(await r.text());
+    setAddr("subV2ray", url);
+    setAddr("subSingbox", url + "&format=singbox");
+    setAddr("subClash", url + "&format=clash");
+    setAddr("subAuto", url + "&format=auto");
+    $("genOut").innerHTML = '<span class="ok">裂变完成，动态节点 ' + links.length + ' 个（' +
+      (nativeLinks.length || "?") + ' 原生 × ' + addrs.length + ' 优选）</span>';
+    showNodes($("genNodes"), links);
+    $("btnGen").dataset.url = url;
+    return url;
+  } catch (e) {
+    setAddr("subV2ray", url);
+    setAddr("subSingbox", url + "&format=singbox");
+    setAddr("subClash", url + "&format=clash");
+    setAddr("subAuto", url + "&format=auto");
+    $("genOut").innerHTML = '<span class="err">生成失败：' + e.message + '（订阅地址已填入上方，可手动在客户端中尝试）</span>';
+    $("btnGen").dataset.url = url;
+    return null;
+  } finally {
+    $("btnGen").disabled = false;
+  }
+}
+// 只有一个生成按钮：生成裂变节点和订阅，并把通用裂变订阅地址复制到剪贴板
+$("btnGen").onclick = async () => {
+  const url = await doFission();
+  if (!url) return; // doFission 里已经提示了原因
+  const auto = getAddr("subAuto");
+  if (!auto) return;
+  const ok = await copyText(auto);
+  $("genOut").innerHTML += ok ? '，<span class="ok">通用裂变订阅地址已复制</span>' : '，<span class="err">订阅地址复制失败，请点通用裂变订阅后的「复制」</span>';
+};
+$("btnCopyNodes").onclick = async () => {
+  const t = $("genNodes").value.trim();
+  if (!t) { $("genOut").innerHTML = '<span class="err">暂无裂变节点，请先点击「生成裂变优选」</span>'; return; }
+  const ok = await copyText(t);
+  $("genOut").innerHTML = ok ? '<span class="ok">已复制 ' + t.split("\n").length + ' 个节点链接，可直接粘贴至客户端</span>' : '<span class="err">复制失败，请手动复制</span>';
+};
+async function copySub(id) {
+  const u = getAddr(id);
+  if (!u) { $("genOut").innerHTML = '<span class="err">请先点击「生成裂变优选」</span>'; return; }
+  const ok = await copyText(u);
+  $("genOut").innerHTML = ok ? '<span class="ok">已复制订阅地址</span>' : '<span class="err">复制失败，请手动复制</span>';
+}
+$("btnCopyV2ray").onclick = () => copySub("subV2ray");
+$("btnCopySingbox").onclick = () => copySub("subSingbox");
+$("btnCopyClash").onclick = () => copySub("subClash");
+$("btnCopyAuto").onclick = () => copySub("subAuto");
+</script>
+</body>
+</html>
