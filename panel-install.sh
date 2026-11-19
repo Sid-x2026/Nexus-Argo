@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Nexus-Argo 管理面板 — 一键 SSH 安装
-# 用法 (VPS 上 root 执行):
-#   bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/panel-install.sh)
+# 用法 (VPS 上 root 执行), 两种装法:
+#   ① SSH 面板安装 (交互, 默认): 一步步确认, 装完用 IP:端口进面板。
+#       bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/panel-install.sh)
+#   ② Argo 绑定安装 (变量一键): Token / 域名 / 端口写进命令里, 直接按
+#       变量装, 不做二次确认, 装完走隧道域名进面板。参数用双引号框起来,
+#       只在引号里填占位值 (示例用占位, 不要填真实域名):
+#       ARGO_TOKEN="你的Token" PANEL_DOMAIN="你的隧道域名" PANEL_PORT="2053" \
+#         bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/panel-install.sh)
+#       不写 Token / 域名就是直连 / IP 进面板 (走①)。
 #   bash panel-install.sh uninstall     # 只拆面板, 不动节点部署
 #
 # 默认只装面板 (不需要 Token): 装完用 http://VPS-IP:2053 + 账号密码进面板,
@@ -220,8 +227,52 @@ ask_tty() {
   [ "$_ok" = "0" ] && ASK_EOF=1
   printf -v "$_var" '%s' "$_line"
 }
+# do_bind_tunnel: 真正绑隧道 (面板改端口 + 起 cloudflared + 设 TUNNEL_URL)。
+# 交互安装与变量一键安装共用: 变量安装直接调它, 不做二次确认。
+do_bind_tunnel() {
+  # 填了新端口就真把面板重启到那个端口, 路由和面板地址一起改
+  # (2026-11-19 实测 bug: 原来只改路由那行字, 面板还监听旧端口)。
+  if [ "$PANEL_PORT_BIND" != "$PANEL_PORT" ]; then
+    log "面板端口改为 $PANEL_PORT_BIND, 正在重启面板 ..."
+    docker rm -f nexus-panel >/dev/null 2>&1 || true
+    docker run -d --name nexus-panel --restart unless-stopped --network host \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v "$WORKDIR:/opt/nexus-argo" \
+      -e PANEL_DIR="$PANEL_DIR" -e PANEL_PORT="$PANEL_PORT_BIND" \
+      nexus-panel || die "面板容器重启失败"
+    for _ in $(seq 1 20); do
+      if curl -fsS --max-time 2 -o /dev/null "http://127.0.0.1:$PANEL_PORT_BIND/" 2>/dev/null; then break; fi
+      sleep 1
+    done
+    curl -fsS --max-time 5 -o /dev/null "http://127.0.0.1:$PANEL_PORT_BIND/" 2>/dev/null \
+      || die "面板在新端口 $PANEL_PORT_BIND 上没起来, 看日志: docker logs nexus-panel"
+    PANEL_PORT="$PANEL_PORT_BIND"
+    PANEL_URL="http://$PUB_IP:$PANEL_PORT"
+    ok "面板已改到端口 $PANEL_PORT, 地址: $PANEL_URL"
+  fi
+  docker rm -f nexus-panel-argo >/dev/null 2>&1 || true
+  docker run -d --name nexus-panel-argo --restart unless-stopped --network host \
+    cloudflare/cloudflared:latest tunnel --no-autoupdate run --token "$ARGO_TOKEN" \
+    || die "cloudflared 启动失败"
+  TUNNEL_URL="https://$PANEL_DOMAIN/"
+  echo ""
+  sep
+  echo "${C_YELLOW}${C_BOLD}  ⚠ 还差一步: 去 Cloudflare Zero Trust 里加一条路由${C_RESET}"
+  echo "  ${C_BOLD}$PANEL_DOMAIN -> http://127.0.0.1:$PANEL_PORT_BIND${C_RESET}"
+  echo "  加完立刻生效, 之后用 $TUNNEL_URL 进面板。"
+  sep
+}
+
 step "步骤 5/5  绑定隧道 (可选)"
-if [ -t 0 ]; then
+# 变量一键安装 (Argo 绑定安装): 命令里同时给了 ARGO_TOKEN 与
+# PANEL_DOMAIN, 直接按变量装, 不做二次确认; 没给就走下面的交互安装。
+if [ -n "${ARGO_TOKEN:-}" ] && [ -n "${PANEL_DOMAIN:-}" ]; then
+  PANEL_PORT_BIND="${PANEL_PORT:-2053}"
+  case "$PANEL_PORT_BIND" in ''|*[!0-9]*) die "PANEL_PORT 必须是 1-65535 的数字, got '$PANEL_PORT_BIND'";; esac
+  (( PANEL_PORT_BIND >= 1 && PANEL_PORT_BIND <= 65535 )) || die "PANEL_PORT 必须是 1-65535 的数字, got '$PANEL_PORT_BIND'"
+  log "变量一键安装 (Argo 绑定安装): Token + 域名已由命令传入, 直接安装, 不再逐项确认。"
+  do_bind_tunnel
+elif [ -t 0 ]; then
   _bind=""
   echo ""
   sep
@@ -319,38 +370,7 @@ if [ -t 0 ]; then
         *) continue;;
       esac
     done
-    # 2026-11-19 实测 bug: 原来这里填了新端口 (例如 8555) 只改了下面
-    # 路由那行字, 面板本身还监听在旧端口 (2053) 上, 隧道过去自然不通。
-    # 现在: 填了新端口就真把面板重启到那个端口, 路由和面板地址一起改。
-    if [ "$PANEL_PORT_BIND" != "$PANEL_PORT" ]; then
-      log "面板端口改为 $PANEL_PORT_BIND, 正在重启面板 ..."
-      docker rm -f nexus-panel >/dev/null 2>&1 || true
-      docker run -d --name nexus-panel --restart unless-stopped --network host \
-        -v /var/run/docker.sock:/var/run/docker.sock \
-        -v "$WORKDIR:/opt/nexus-argo" \
-        -e PANEL_DIR="$PANEL_DIR" -e PANEL_PORT="$PANEL_PORT_BIND" \
-        nexus-panel || die "面板容器重启失败"
-      for _ in $(seq 1 20); do
-        if curl -fsS --max-time 2 -o /dev/null "http://127.0.0.1:$PANEL_PORT_BIND/" 2>/dev/null; then break; fi
-        sleep 1
-      done
-      curl -fsS --max-time 5 -o /dev/null "http://127.0.0.1:$PANEL_PORT_BIND/" 2>/dev/null \
-        || die "面板在新端口 $PANEL_PORT_BIND 上没起来, 看日志: docker logs nexus-panel"
-      PANEL_PORT="$PANEL_PORT_BIND"
-      PANEL_URL="http://$PUB_IP:$PANEL_PORT"
-      ok "面板已改到端口 $PANEL_PORT, 地址: $PANEL_URL"
-    fi
-    docker rm -f nexus-panel-argo >/dev/null 2>&1 || true
-    docker run -d --name nexus-panel-argo --restart unless-stopped --network host \
-      cloudflare/cloudflared:latest tunnel --no-autoupdate run --token "$ARGO_TOKEN" \
-      || die "cloudflared 启动失败"
-    TUNNEL_URL="https://$PANEL_DOMAIN/"
-    echo ""
-    sep
-    echo "${C_YELLOW}${C_BOLD}  ⚠ 还差一步: 去 Cloudflare Zero Trust 里加一条路由${C_RESET}"
-    echo "  ${C_BOLD}$PANEL_DOMAIN -> http://127.0.0.1:$PANEL_PORT_BIND${C_RESET}"
-    echo "  加完立刻生效, 之后用 $TUNNEL_URL 进面板。"
-    sep
+    do_bind_tunnel
   fi
 else
   echo "非交互执行, 已跳过隧道绑定 (以后随时可以再绑)。"

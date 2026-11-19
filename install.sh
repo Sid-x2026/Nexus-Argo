@@ -34,7 +34,6 @@
 #              dest = big-domain SNI, see REALITY_* below)
 #            DIRECT_VLESS_WS (+_PORT, default 8083, plain ws, path /ws)
 #            DIRECT_VLESS_GRPC (+_PORT, default 8084, gRPC+TLS, serviceName grpc)
-#            DIRECT_VLESS_QUIC = DIRECT_XRAY_QUIC (+_PORT, default 443, UDP)
 #            DIRECT_TROJAN (+_PORT, default 9443, TCP+TLS, password = NODE_UUID)
 #            DIRECT_VMESS_WS (+_PORT, default 9444, ws+TLS, path /ws, alterId 0)
 #     Sing-box: DIRECT_SB_TLS (+_PORT, default 8443, VLESS+TLS)
@@ -45,9 +44,10 @@
 #   All DIRECT_VLESS_* / DIRECT_TROJAN / DIRECT_VMESS_WS / DIRECT_SB_* /
 #   DIRECT_SS / DIRECT_HY2 default false, except DIRECT_VLESS_TLS and
 #   DIRECT_SB_TLS which default true (kept from the earlier direct set).
-#   Aliases: DIRECT_VLESS_TLS / DIRECT_VLESS_QUIC are honoured if set,
-#   otherwise DIRECT_XRAY_TLS / DIRECT_XRAY_QUIC apply (same for their
-#   _PORT variables).
+#   Aliases: DIRECT_VLESS_TLS is honoured if set, otherwise
+#   DIRECT_XRAY_TLS applies (same for the _PORT variable).
+#   直连 VLESS+QUIC 已删除 (2026-11-19): Xray 26.11.9 移除了独立 QUIC
+#   传输, 配置测不过; 替代用 HTTP/2 的 gRPC / TLS。
 #   CERT_MODE=selfsigned|upload|acme (default selfsigned): how the
 #   direct TLS cert at $WORKDIR/direct/cert.pem/key.pem is obtained.
 #   selfsigned — generate a 10-year cert only if missing, never overwrite.
@@ -59,9 +59,15 @@
 #     on success add a daily `acme.sh --cron` crontab entry (idempotent,
 #     only if crontab exists).
 #   REALITY_DEST (required when DIRECT_VLESS_REALITY=true): the big
-#   domain used as Reality dest/SNI (e.g. www.microsoft.com) — a
-#   domain, not an IP, no port. REALITY_SNI overrides the SNI /
-#   serverNames when set, otherwise REALITY_DEST is used.
+#   domain used as Reality dest/SNI, may carry a port (3X-UI style,
+#   e.g. www.microsoft.com:443) — the port is stripped before use;
+#   a domain, not an IP. REALITY_SNI overrides the SNI / serverNames
+#   when set, otherwise REALITY_DEST is used. REALITY_SHORT_IDS is a
+#   comma list of Short IDs (first one goes into the node link);
+#   REALITY_MAX_TIME_DIFF (default 0), REALITY_MIN_CLIENT_VER
+#   (default 1.0.0), REALITY_MAX_CLIENT_VER (default x.y.z, means
+#   no upper limit — omitted from the inbound) are 3X-UI Reality
+#   fields, persisted in reality.json.
 #   REALITY_PRIVATE_KEY (empty = generate an X25519 keypair and persist
 #   it); REALITY_SHORT_ID (empty = `openssl rand -hex 4`, 8 hex chars).
 #   Keys persist in $WORKDIR/direct/reality.json and are reused across
@@ -169,20 +175,14 @@ ENABLE_DIRECT="${ENABLE_DIRECT:-false}"
 DIRECT_DOMAIN="${DIRECT_DOMAIN:-}"
 DIRECT_XRAY_TLS="${DIRECT_XRAY_TLS:-true}"
 DIRECT_XRAY_TLS_PORT="${DIRECT_XRAY_TLS_PORT:-443}"
-DIRECT_XRAY_QUIC="${DIRECT_XRAY_QUIC:-false}"
-DIRECT_XRAY_QUIC_PORT="${DIRECT_XRAY_QUIC_PORT:-443}"
 DIRECT_SB_TLS="${DIRECT_SB_TLS:-true}"
 DIRECT_SB_TLS_PORT="${DIRECT_SB_TLS_PORT:-8443}"
-# Aliases: DIRECT_VLESS_TLS / DIRECT_VLESS_QUIC (and their _PORT vars)
-# win over the DIRECT_XRAY_* names when set; otherwise the XRAY names apply.
+# Aliases: DIRECT_VLESS_TLS (and its _PORT var) wins over the
+# DIRECT_XRAY_* name when set; otherwise the XRAY name applies.
 DIRECT_VLESS_TLS="${DIRECT_VLESS_TLS:-$DIRECT_XRAY_TLS}"
 DIRECT_XRAY_TLS="$DIRECT_VLESS_TLS"
 DIRECT_VLESS_TLS_PORT="${DIRECT_VLESS_TLS_PORT:-$DIRECT_XRAY_TLS_PORT}"
 DIRECT_XRAY_TLS_PORT="$DIRECT_VLESS_TLS_PORT"
-DIRECT_VLESS_QUIC="${DIRECT_VLESS_QUIC:-$DIRECT_XRAY_QUIC}"
-DIRECT_XRAY_QUIC="$DIRECT_VLESS_QUIC"
-DIRECT_VLESS_QUIC_PORT="${DIRECT_VLESS_QUIC_PORT:-$DIRECT_XRAY_QUIC_PORT}"
-DIRECT_XRAY_QUIC_PORT="$DIRECT_VLESS_QUIC_PORT"
 # New direct protocols (all default false; only enabled ones render).
 DIRECT_VLESS_TCP="${DIRECT_VLESS_TCP:-false}"
 DIRECT_VLESS_TCP_PORT="${DIRECT_VLESS_TCP_PORT:-8082}"
@@ -192,6 +192,10 @@ REALITY_DEST="${REALITY_DEST:-}"
 REALITY_SNI="${REALITY_SNI:-}"
 REALITY_PRIVATE_KEY="${REALITY_PRIVATE_KEY:-}"
 REALITY_SHORT_ID="${REALITY_SHORT_ID:-}"
+REALITY_SHORT_IDS="${REALITY_SHORT_IDS:-}"
+REALITY_MAX_TIME_DIFF="${REALITY_MAX_TIME_DIFF:-}"
+REALITY_MIN_CLIENT_VER="${REALITY_MIN_CLIENT_VER:-}"
+REALITY_MAX_CLIENT_VER="${REALITY_MAX_CLIENT_VER:-}"
 # Reality link params (Part A/B contract; empty = default, applied
 # in the Reality setup below after reality.json reuse, so a redeploy
 # never loses a previously saved value).
@@ -302,8 +306,8 @@ check_port "SUB_PORT" "$SUB_PORT"
 # Sing-box 分发器回源+1/+2/+3、直连 TCP 协议端口 (彼此之间及
 # 与上述端口之间)。可以共用: 同核心的隧道协议共用一个端口
 # (Xray h1/h2/h3 同 443、Sing-box ws/httpupgrade/grpc 同 8443);
-# TCP 与 UDP 同号 (如 TCP 443 与 QUIC UDP 443)。QUIC /
-# Hysteria2 走 UDP, 不参与 TCP 冲突检查 (与面板一致)。
+# TCP 与 UDP 同号 (如 TCP 443 与 Hy2 UDP 443)。Hysteria2
+# 走 UDP, 不参与 TCP 冲突检查 (与面板一致)。
 # 只校验已启用的端口: 没启用的核心 / 没勾选的协议, 端口再冲突
 # 也不拦部署 (部署时根本不会监听那个端口)。
 declare -A _taken=()
@@ -345,9 +349,9 @@ else
 fi
 # Direct mode: nodes served straight from the VPS (self-signed cert,
 # clients need allowInsecure=1). TCP direct ports must not collide
-# with each other, 8080, or any origin/subscription port; QUIC and
-# Hysteria2 are UDP, so their port numbers are only range-checked
-# (they may share a number with a TCP port, e.g. TLS 443 TCP + QUIC 443 UDP).
+# with each other, 8080, or any origin/subscription port; Hysteria2
+# is UDP, so its port number is only range-checked (it may share a
+# number with a TCP port, e.g. TLS 443 TCP + Hy2 443 UDP).
 _is_domain() {
   # A domain: letters/digits/hyphens/dots, at least one dot, not an IPv4 address, no port.
   case "$1" in *:*|*/*) return 1;; esac
@@ -363,7 +367,6 @@ if is_true "$ENABLE_DIRECT"; then
   check_port "DIRECT_VLESS_REALITY_PORT" "$DIRECT_VLESS_REALITY_PORT"
   check_port "DIRECT_VLESS_WS_PORT" "$DIRECT_VLESS_WS_PORT"
   check_port "DIRECT_VLESS_GRPC_PORT" "$DIRECT_VLESS_GRPC_PORT"
-  check_port "DIRECT_XRAY_QUIC_PORT" "$DIRECT_XRAY_QUIC_PORT"
   check_port "DIRECT_TROJAN_PORT" "$DIRECT_TROJAN_PORT"
   check_port "DIRECT_VMESS_WS_PORT" "$DIRECT_VMESS_WS_PORT"
   check_port "DIRECT_SB_TLS_PORT" "$DIRECT_SB_TLS_PORT"
@@ -371,7 +374,7 @@ if is_true "$ENABLE_DIRECT"; then
   check_port "DIRECT_SS_PORT" "$DIRECT_SS_PORT"
   check_port "DIRECT_HY2_PORT" "$DIRECT_HY2_PORT"
   for _flag in DIRECT_VLESS_TCP DIRECT_XRAY_TLS DIRECT_VLESS_REALITY DIRECT_VLESS_WS \
-      DIRECT_VLESS_GRPC DIRECT_XRAY_QUIC DIRECT_TROJAN DIRECT_VMESS_WS \
+      DIRECT_VLESS_GRPC DIRECT_TROJAN DIRECT_VMESS_WS \
       DIRECT_SB_TLS DIRECT_SB_TROJAN DIRECT_SS DIRECT_HY2; do
     is_true "${!_flag}" && _direct_any=true
   done
@@ -379,7 +382,7 @@ if is_true "$ENABLE_DIRECT"; then
   # TCP direct ports: no duplicates among themselves, no collision
   # with the panel / system / subscription / origin / dispatcher
   # ports claimed above (only enabled protocols are checked;
-  # QUIC / Hysteria2 are UDP and never join this check).
+  # Hysteria2 is UDP and never joins this check).
   for _spec in "DIRECT_VLESS_TCP|直连 VLESS TCP|$DIRECT_VLESS_TCP_PORT" \
       "DIRECT_XRAY_TLS|直连 VLESS TLS|$DIRECT_XRAY_TLS_PORT" \
       "DIRECT_VLESS_REALITY|直连 VLESS Reality|$DIRECT_VLESS_REALITY_PORT" \
@@ -400,8 +403,9 @@ if is_true "$ENABLE_DIRECT"; then
   # applied in the Reality setup below, so only a non-empty bad value
   # is rejected here).
   if is_true "$DIRECT_VLESS_REALITY"; then
-    [ -n "$REALITY_DEST" ] || die "DIRECT_VLESS_REALITY is on but REALITY_DEST is empty — set a big domain (e.g. www.microsoft.com)"
-    _is_domain "$REALITY_DEST" || die "REALITY_DEST must be a domain (not an IP, no port), got '$REALITY_DEST'"
+    [ -n "$REALITY_DEST" ] || die "DIRECT_VLESS_REALITY is on but REALITY_DEST is empty — set a big domain (e.g. www.microsoft.com:443)"
+    _reality_host="${REALITY_DEST%%:*}"
+    _is_domain "$_reality_host" || die "REALITY_DEST must be a domain (not an IP), got '$REALITY_DEST'"
     if [ -n "$REALITY_SNI" ]; then
       _is_domain "$REALITY_SNI" || die "REALITY_SNI must be a domain (not an IP, no port), got '$REALITY_SNI'"
     fi
@@ -492,6 +496,9 @@ if is_true "$ENABLE_DIRECT"; then
   # Private key = last 32 bytes of the PKCS#8 DER, public key = last
   # 32 bytes of the SubjectPublicKeyInfo DER, both base64url, no padding.
   if is_true "$DIRECT_VLESS_REALITY"; then
+    # 目标可带端口 (3X-UI 式, 如 www.microsoft.com:443): 端口剥掉再用。
+    REALITY_DEST="${REALITY_DEST%%:*}"
+    REALITY_SNI="${REALITY_SNI%%:*}"
     REALITY_EFF_SNI="${REALITY_SNI:-$REALITY_DEST}"
     _reality_json="$WORKDIR/direct/reality.json"
     # 之前部署的 reality.json: 环境变量没给的值从这里复用 (密钥、
@@ -501,6 +508,12 @@ if is_true "$ENABLE_DIRECT"; then
       [ -z "$REALITY_PRIVATE_KEY" ] && REALITY_PRIVATE_KEY="$(_rj_get private_key)"
       [ -z "$REALITY_PUBLIC_KEY" ] && REALITY_PUBLIC_KEY="$(_rj_get public_key)"
       [ -z "$REALITY_SHORT_ID" ] && REALITY_SHORT_ID="$(_rj_get short_id)"
+      if [ -z "$REALITY_SHORT_IDS" ]; then
+        REALITY_SHORT_IDS="$(python3 -c "import json,sys; print(','.join(json.load(open(sys.argv[1])).get('short_ids',[]) or []))" "$_reality_json" 2>/dev/null || true)"
+      fi
+      [ -z "$REALITY_MAX_TIME_DIFF" ] && REALITY_MAX_TIME_DIFF="$(_rj_get max_time_diff)"
+      [ -z "$REALITY_MIN_CLIENT_VER" ] && REALITY_MIN_CLIENT_VER="$(_rj_get min_client_ver)"
+      [ -z "$REALITY_MAX_CLIENT_VER" ] && REALITY_MAX_CLIENT_VER="$(_rj_get max_client_ver)"
       [ -z "$REALITY_FINGERPRINT" ] && REALITY_FINGERPRINT="$(_rj_get fingerprint)"
       [ -z "$REALITY_FLOW" ] && REALITY_FLOW="$(_rj_get flow)"
       [ -z "$REALITY_ENCRYPTION" ] && REALITY_ENCRYPTION="$(_rj_get encryption)"
@@ -514,6 +527,10 @@ if is_true "$ENABLE_DIRECT"; then
     REALITY_FLOW="${REALITY_FLOW:-xtls-rprx-vision}"
     REALITY_ENCRYPTION="${REALITY_ENCRYPTION:-mlkem768x25519plus.native}"
     REALITY_SPIDERX="${REALITY_SPIDERX:-/}"
+    REALITY_MAX_TIME_DIFF="${REALITY_MAX_TIME_DIFF:-0}"
+    REALITY_MIN_CLIENT_VER="${REALITY_MIN_CLIENT_VER:-1.0.0}"
+    REALITY_MAX_CLIENT_VER="${REALITY_MAX_CLIENT_VER:-x.y.z}"
+    case "$REALITY_MAX_TIME_DIFF" in ''|*[!0-9]*) die "REALITY_MAX_TIME_DIFF 必须是 >= 0 的整数, got '$REALITY_MAX_TIME_DIFF'";; esac
     case "$REALITY_FINGERPRINT" in chrome|firefox|safari) ;; *)
       die "REALITY_FINGERPRINT 只能是 chrome / firefox / safari, got '$REALITY_FINGERPRINT'" ;;
     esac
@@ -547,6 +564,7 @@ PYEOF
       [ -n "$REALITY_PUBLIC_KEY" ] || die "Reality 公钥派生失败"
     fi
     [ -n "$REALITY_SHORT_ID" ] || REALITY_SHORT_ID="$(openssl rand -hex 4)"
+    [ -n "$REALITY_SHORT_IDS" ] || REALITY_SHORT_IDS="$REALITY_SHORT_ID"
     # VLESS 加密层 (mlkem768x25519plus, 见文件头 REALITY_ENCRYPTION
     # 说明): 与 Reality 密钥分开的另一对 X25519 密钥, openssl 生成、
     # reality.json 持久化、重部署复用。"none" = 不开加密层。
@@ -597,7 +615,8 @@ PYEOF
     fi
     python3 - "$_reality_json" "$REALITY_PRIVATE_KEY" "$REALITY_PUBLIC_KEY" "$REALITY_SHORT_ID" "$REALITY_DEST" \
       "$REALITY_FINGERPRINT" "$REALITY_FLOW" "$REALITY_ENCRYPTION" "$REALITY_SPIDERX" \
-      "$REALITY_VLESS_ENC_PRIVATE_KEY" "$REALITY_VLESS_ENC_PUBLIC_KEY" <<'PYEOF'
+      "$REALITY_VLESS_ENC_PRIVATE_KEY" "$REALITY_VLESS_ENC_PUBLIC_KEY" \
+      "$REALITY_SHORT_IDS" "$REALITY_MAX_TIME_DIFF" "$REALITY_MIN_CLIENT_VER" "$REALITY_MAX_CLIENT_VER" <<'PYEOF'
 import json, sys
 with open(sys.argv[1], "w") as f:
     json.dump({"private_key": sys.argv[2], "public_key": sys.argv[3],
@@ -605,7 +624,11 @@ with open(sys.argv[1], "w") as f:
                "fingerprint": sys.argv[6], "flow": sys.argv[7],
                "encryption": sys.argv[8], "spiderx": sys.argv[9],
                "vless_enc_private_key": sys.argv[10],
-               "vless_enc_public_key": sys.argv[11]}, f, indent=2)
+               "vless_enc_public_key": sys.argv[11],
+               "short_ids": [s for s in sys.argv[12].split(",") if s],
+               "max_time_diff": int(sys.argv[13]),
+               "min_client_ver": sys.argv[14],
+               "max_client_ver": sys.argv[15]}, f, indent=2)
 PYEOF
     log "Reality 密钥已保存 ($WORKDIR/direct/reality.json, dest=$REALITY_DEST)"
   fi
@@ -634,13 +657,14 @@ step "步骤 2/5  渲染配置"
 export NODE_UUID XRAY_PORT XRAY_DOMAIN XRAY_CONFIGS SINGBOX_PORT SINGBOX_DOMAIN SINGBOX_CONFIGS
 export ENABLE_XRAY ENABLE_SINGBOX WORKDIR NODE_PREFIX NODE_PREFIX_ARGO NODE_PREFIX_DIRECT OPT_ADDRS
 export ENABLE_DIRECT DIRECT_DOMAIN DIRECT_XRAY_TLS DIRECT_XRAY_TLS_PORT
-export DIRECT_XRAY_QUIC DIRECT_XRAY_QUIC_PORT DIRECT_SB_TLS DIRECT_SB_TLS_PORT
+export DIRECT_SB_TLS DIRECT_SB_TLS_PORT
 export DIRECT_VLESS_TCP DIRECT_VLESS_TCP_PORT DIRECT_VLESS_REALITY DIRECT_VLESS_REALITY_PORT
 export DIRECT_VLESS_WS DIRECT_VLESS_WS_PORT DIRECT_VLESS_GRPC DIRECT_VLESS_GRPC_PORT
 export DIRECT_TROJAN DIRECT_TROJAN_PORT DIRECT_VMESS_WS DIRECT_VMESS_WS_PORT
 export DIRECT_SB_TROJAN DIRECT_SB_TROJAN_PORT DIRECT_SS DIRECT_SS_PORT
 export DIRECT_HY2 DIRECT_HY2_PORT CERT_MODE
 export REALITY_DEST REALITY_SNI REALITY_EFF_SNI REALITY_PRIVATE_KEY REALITY_PUBLIC_KEY REALITY_SHORT_ID
+export REALITY_SHORT_IDS REALITY_MAX_TIME_DIFF REALITY_MIN_CLIENT_VER REALITY_MAX_CLIENT_VER
 export REALITY_FINGERPRINT REALITY_FLOW REALITY_ENCRYPTION REALITY_SPIDERX REALITY_ENC_SERVER REALITY_ENC_CLIENT
 python3 - <<'PYEOF'
 import json, os, sys
@@ -717,8 +741,8 @@ def render_xray(port, configs):
                                    "tlsSettings": _direct_tls()}
             })
         if _is_true(os.environ.get("DIRECT_VLESS_REALITY")):
-            _dest = os.environ.get("REALITY_DEST", "").strip()
-            _sni = os.environ.get("REALITY_EFF_SNI", "").strip() or _dest
+            _dest = os.environ.get("REALITY_DEST", "").strip().split(":")[0]
+            _sni = os.environ.get("REALITY_EFF_SNI", "").strip().split(":")[0] or _dest
             # flow 写进 client (与链接里的 flow 参数一致); VLESS
             # 加密层写进 decryption ("none" = 不开加密层, 见文件头
             # REALITY_ENCRYPTION 说明)。
@@ -727,15 +751,29 @@ def render_xray(port, configs):
             if _flow and _flow.lower() != "none":
                 _client["flow"] = _flow
             _dec = os.environ.get("REALITY_ENC_SERVER", "").strip() or "none"
+            # Short IDs: 列表 (环境变量逗号分隔, 第一项即旧 REALITY_SHORT_ID);
+            # maxTimeDiff / 客户端版本是 3X-UI 式 Reality 字段, x.y.z
+            # 表示不限上限, 不写入配置。
+            _sids = [s.strip() for s in os.environ.get("REALITY_SHORT_IDS", "").split(",") if s.strip()]
+            if not _sids:
+                _sids = [os.environ.get("REALITY_SHORT_ID", "")]
+            _rs = {"show": False, "dest": f"{_dest}:443", "xver": 0,
+                   "serverNames": [_sni],
+                   "privateKey": os.environ.get("REALITY_PRIVATE_KEY", ""),
+                   "shortIds": _sids,
+                   "maxTimeDiff": int(os.environ.get("REALITY_MAX_TIME_DIFF", "0") or 0)}
+            _min_ver = os.environ.get("REALITY_MIN_CLIENT_VER", "").strip()
+            _max_ver = os.environ.get("REALITY_MAX_CLIENT_VER", "").strip()
+            import re as _re
+            if _re.fullmatch(r"\d+\.\d+\.\d+", _min_ver or ""):
+                _rs["minClientVer"] = _min_ver
+            if _re.fullmatch(r"\d+\.\d+\.\d+", _max_ver or ""):
+                _rs["maxClientVer"] = _max_ver
             inbounds.append({
                 "port": int(os.environ.get("DIRECT_VLESS_REALITY_PORT", "9447")), "protocol": "vless",
                 "settings": {"clients": [_client], "decryption": _dec},
                 "streamSettings": {"network": "tcp", "security": "reality",
-                                   "realitySettings": {
-                                       "show": False, "dest": f"{_dest}:443", "xver": 0,
-                                       "serverNames": [_sni],
-                                       "privateKey": os.environ.get("REALITY_PRIVATE_KEY", ""),
-                                       "shortIds": [os.environ.get("REALITY_SHORT_ID", "")]}}
+                                   "realitySettings": _rs}
             })
         if _is_true(os.environ.get("DIRECT_VLESS_WS")):
             inbounds.append({
@@ -751,14 +789,6 @@ def render_xray(port, configs):
                 "streamSettings": {"network": "grpc", "security": "tls",
                                    "tlsSettings": _direct_tls(),
                                    "grpcSettings": {"serviceName": "grpc"}}
-            })
-        if _is_true(os.environ.get("DIRECT_XRAY_QUIC")):
-            inbounds.append({
-                "port": int(os.environ.get("DIRECT_XRAY_QUIC_PORT", "443")), "protocol": "vless",
-                "settings": {"clients": [{"id": uuid}], "decryption": "none"},
-                "streamSettings": {"network": "quic", "security": "tls",
-                                   "tlsSettings": _direct_tls(),
-                                   "quicSettings": {"security": "none", "key": "", "header": {"type": "none"}}}
             })
         if _is_true(os.environ.get("DIRECT_TROJAN")):
             inbounds.append({
@@ -951,8 +981,8 @@ if _is_true(os.environ.get("ENABLE_DIRECT")):
         if _is_true(os.environ.get("DIRECT_VLESS_TCP")):
             direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_TCP_PORT', '8082')}/?encryption=none&type=tcp#{prefix_direct}丨Xray-TCP")
         if _is_true(os.environ.get("DIRECT_VLESS_REALITY")):
-            _rdest = os.environ.get("REALITY_DEST", "").strip()
-            _rsni = os.environ.get("REALITY_EFF_SNI", "").strip() or _rdest
+            _rdest = os.environ.get("REALITY_DEST", "").strip().split(":")[0]
+            _rsni = os.environ.get("REALITY_EFF_SNI", "").strip().split(":")[0] or _rdest
             # Reality 链接: 地址 = 直连域名 (或 VPS IP), SNI = 大厂域名
             # (reality_dest, 或 reality_sni); 带指纹 / flow / 加密层 /
             # spiderX (spiderX 只在不是默认值 "/" 时才带)。
@@ -975,8 +1005,6 @@ if _is_true(os.environ.get("ENABLE_DIRECT")):
             direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_WS_PORT', '8083')}/?encryption=none&type=ws&path=%2Fws#{prefix_direct}丨Xray-WS")
         if _is_true(os.environ.get("DIRECT_VLESS_GRPC")):
             direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_GRPC_PORT', '8084')}/?encryption=none&security=tls&sni={_dd}&type=grpc&serviceName=grpc{_ai()}#{prefix_direct}丨Xray-gRPC")
-        if _is_true(os.environ.get("DIRECT_XRAY_QUIC")):
-            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_QUIC_PORT', '443')}/?encryption=none&security=tls&sni={_dd}&type=quic&quicSecurity=none&headerType=none{_ai()}#{prefix_direct}丨Xray-QUIC")
         if _is_true(os.environ.get("DIRECT_TROJAN")):
             direct.append(f"trojan://{uuid}@{_dd}:{os.environ.get('DIRECT_TROJAN_PORT', '9443')}?security=tls&sni={_dd}{_ai()}#{prefix_direct}丨Xray-Trojan")
         if _is_true(os.environ.get("DIRECT_VMESS_WS")):
@@ -1064,9 +1092,6 @@ EOF
     fi
     if is_true "$DIRECT_VLESS_GRPC"; then
       printf -- '- Xray VLESS+gRPC+TLS (serviceName grpc): %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_VLESS_GRPC_PORT" >> "$WORKDIR/ROUTES.md"
-    fi
-    if is_true "$DIRECT_XRAY_QUIC"; then
-      printf -- '- Xray VLESS+QUIC (UDP): %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_XRAY_QUIC_PORT" >> "$WORKDIR/ROUTES.md"
     fi
     if is_true "$DIRECT_TROJAN"; then
       printf -- '- Xray Trojan+TLS: %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_TROJAN_PORT" >> "$WORKDIR/ROUTES.md"
@@ -1198,7 +1223,6 @@ if [ -n "$SUB_DOMAIN" ]; then
       -e OPT_ADDRS="$OPT_ADDRS" -e SUB_PORT="$SUB_PORT" -e SUB_PATH="$SUB_PATH" \
       -e ENABLE_DIRECT="$ENABLE_DIRECT" -e DIRECT_DOMAIN="$DIRECT_DOMAIN" \
       -e DIRECT_XRAY_TLS="$DIRECT_XRAY_TLS" -e DIRECT_XRAY_TLS_PORT="$DIRECT_XRAY_TLS_PORT" \
-      -e DIRECT_XRAY_QUIC="$DIRECT_XRAY_QUIC" -e DIRECT_XRAY_QUIC_PORT="$DIRECT_XRAY_QUIC_PORT" \
       -e DIRECT_SB_TLS="$DIRECT_SB_TLS" -e DIRECT_SB_TLS_PORT="$DIRECT_SB_TLS_PORT" \
       -e DIRECT_VLESS_TCP="$DIRECT_VLESS_TCP" -e DIRECT_VLESS_TCP_PORT="$DIRECT_VLESS_TCP_PORT" \
       -e DIRECT_VLESS_REALITY="$DIRECT_VLESS_REALITY" -e DIRECT_VLESS_REALITY_PORT="$DIRECT_VLESS_REALITY_PORT" \
@@ -1212,7 +1236,9 @@ if [ -n "$SUB_DOMAIN" ]; then
       -e CERT_MODE="$CERT_MODE" \
       -e REALITY_DEST="$REALITY_DEST" -e REALITY_SNI="$REALITY_SNI" \
       -e REALITY_EFF_SNI="$REALITY_EFF_SNI" -e REALITY_PUBLIC_KEY="$REALITY_PUBLIC_KEY" \
-      -e REALITY_SHORT_ID="$REALITY_SHORT_ID" \
+      -e REALITY_SHORT_ID="$REALITY_SHORT_ID" -e REALITY_SHORT_IDS="$REALITY_SHORT_IDS" \
+      -e REALITY_MAX_TIME_DIFF="$REALITY_MAX_TIME_DIFF" -e REALITY_MIN_CLIENT_VER="$REALITY_MIN_CLIENT_VER" \
+      -e REALITY_MAX_CLIENT_VER="$REALITY_MAX_CLIENT_VER" \
       -e REALITY_FINGERPRINT="$REALITY_FINGERPRINT" -e REALITY_FLOW="$REALITY_FLOW" \
       -e REALITY_ENCRYPTION="$REALITY_ENCRYPTION" -e REALITY_SPIDERX="$REALITY_SPIDERX" \
       -e REALITY_ENC_CLIENT="$REALITY_ENC_CLIENT" \

@@ -58,6 +58,37 @@ VPS 多协议代理节点自动化部署与统一回源管理：Web 面板 + `in
 前端还修了两处：UUID 生成改用 `crypto.randomUUID()`（有回退），
 回源端口冲突时两个端口输入框标红（`install.sh` 仍会直接拦截退出）。
 
+## 面板安装：两种装法
+
+面板用 `panel-install.sh` 一键装到 VPS 上（root 执行），装完在面板里填设置、点部署。两种装法，功能完全一样，区别只在怎么进面板：
+
+### ① SSH 面板安装（交互，默认）
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/panel-install.sh)
+```
+
+一步步确认：装完问要不要绑定隧道，要绑就提供 Token + 面板域名 + 端口（端口须与 Zero Trust 路由端口一致），装完用隧道域名进面板；不绑就直接用 `http://<VPS-IP>:<端口>` 进面板。默认账号 `admin`，默认密码 `admin`（临时默认，登录后尽快改密码）。
+
+### ② Argo 绑定安装（变量一键）
+
+Token、域名、端口直接写进命令里，改变量就直接装完出结果，不做二次确认，省事傻瓜一点。参数用双引号框起来，只在引号里填（下面是占位值，不要填真实域名）：
+
+```bash
+ARGO_TOKEN="你的Token" PANEL_DOMAIN="你的隧道域名" PANEL_PORT="2053" \
+  bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/panel-install.sh)
+```
+
+| 变量 | 说明 | 默认 |
+|---|---|---|
+| `ARGO_TOKEN` | Cloudflare Argo Tunnel Token | 无，不写就是直连 / IP 进面板 |
+| `PANEL_DOMAIN` | 面板隧道域名（Zero Trust 里路由到面板端口） | 无，不写就是直连 / IP 进面板 |
+| `PANEL_PORT` | 面板端口，须与 Zero Trust 路由端口一致 | `2053` |
+
+只给其中一个变量（只有 Token 没有域名，或反过来）时，按交互安装走，会再问一遍。变量安装不做二次确认：命令里写什么就按什么装，写错了改命令重跑。装完记得去 Cloudflare Zero Trust 里加路由：`PANEL_DOMAIN -> http://127.0.0.1:<PANEL_PORT>`。
+
+卸载：只拆面板 `bash panel-install.sh uninstall`；全部清掉见 `cleanup.sh`（`bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/cleanup.sh)`）。
+
 ## 快速开始
 
 1. 在面板填 UUID、域名、Argo Token、优选地址，复制 SSH 命令；
@@ -116,4 +147,4 @@ bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/inst
   SHU 2026-11-18 确认 Xray 三协议应该都可以通，待 VPS 实测逐条确认。
 - 订阅 URL 里的 `<uuid>` 段 nginx 不做校验；动态订阅的 `?addrs=` 参数
   目前由 nginx 忽略，裂变列表以部署时 `OPT_ADDRS` 为准（Worker 版再按 URL 参数实时裂变）。
-- 前端没有 `quic`，介绍里有；要加需前后端一起改。
+- 直连 VLESS+QUIC 已于 2026-11-19 删除：最新 Xray 26.11.9 移除了独立 QUIC 传输；HTTP/2 系传输（gRPC / TLS）为替代。
