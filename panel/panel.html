@@ -6,11 +6,11 @@
 <title>Nexus-Argo 面板</title>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; background: #f4f5fb; color: #1e293b; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 14px; }
-  .wrap { max-width: 1440px; margin: 0 auto; padding: 18px 20px 40px; }
-  .shell { display: flex; gap: 16px; align-items: flex-start; }
-  .sidebar { position: sticky; top: 16px; width: 72px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; align-items: center; background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(15,23,42,.06); padding: 12px 6px; }
-  .sidebar button { width: 56px; height: 56px; border-radius: 12px; background: #fff; color: #475569; border: 1px solid transparent; padding: 4px 2px; font-size: 11px; font-weight: 600; line-height: 1.3; }
+  html, body { min-height: 100%; } body { margin: 0; background: #f4f5fb; min-height: 100vh; color: #1e293b; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 14px; }
+  .wrap { max-width: 1680px; margin: 0 auto; padding: 18px 20px 40px; }
+  .shell { display: flex; gap: 16px; align-items: stretch; min-height: calc(100vh - 40px); } .main { min-height: 100%; } .main > div { min-height: 100%; }
+  .sidebar { position: sticky; top: 16px; width: 60px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; align-items: center; background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(15,23,42,.06); padding: 12px 6px; }
+  .sidebar button { width: 48px; height: 52px; border-radius: 12px; background: #fff; color: #475569; border: 1px solid transparent; padding: 4px 2px; font-size: 11px; font-weight: 600; line-height: 1.3; }
   .sidebar button.on { background: linear-gradient(135deg,#4f46e5,#7c3aed); color: #fff; }
   .sidebar button .ic { display:block; font-size: 20px; margin-bottom: 2px; }
   .main { flex: 1; min-width: 0; }
@@ -70,7 +70,7 @@
   .proto.off { opacity: .45; }
   .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; font-weight: 600; }
   .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
-  .proto-wrap { display: flex; gap: 12px; align-items: flex-start; margin-top: 8px; }
+  .proto-wrap { display: flex; gap: 12px; align-items: stretch; margin-top: 8px; } .proto-wrap > details.proto-group { display: flex; flex-direction: column; }
   .proto-wrap > details.proto-group { flex: 1; min-width: 0; margin-top: 0; }
   .proto-wrap .row2 { grid-template-columns: 1fr; }
   @media (max-width: 900px) { .proto-wrap { flex-direction: column; } }
@@ -81,7 +81,7 @@
   .sec-card.direct h4 { color: #15803d; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .sec-card.wide { flex: none; width: 100%; margin-top: 12px; }
+  .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 8px 0 4px; } #realityCard input, #realityCard select { padding: 7px 10px; } #realityCard .hint { margin: 0 0 8px; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
   .scan-table th { color: #64748b; font-weight: 600; }
@@ -165,6 +165,7 @@
       <button data-tab="overview" class="on"><span class="ic">◈</span>总览</button>
       <button data-tab="deploy"><span class="ic">⬆</span>部署安装</button>
       <button data-tab="outbound"><span class="ic">⇄</span>出站</button>
+      <button data-tab="routes"><span class="ic">↗</span>路由</button>
       <button data-tab="sub"><span class="ic">🔗</span>订阅地址</button>
     </nav>
     <div class="main">
@@ -306,8 +307,7 @@
               </div>
               <p id="certNotNeeded" class="hint">当前选中的协议不需要证书，无需配置。</p>
             </div>
-          </div>
-          <div id="realityCard" class="sec-card wide hidden">
+            <div id="realityCard" class="sec-card direct hidden">
             <h4>Reality 配置</h4>
             <p class="hint">只有勾选 VLESS + Reality 时才显示。Reality 不需要大厂域名的证书。</p>
             <label class="f">目标 <span class="req">* 必填</span></label>
@@ -369,6 +369,7 @@
             <input type="text" id="reality_pubkey" class="mono" readonly placeholder="未生成，部署时自动生成">
             <p class="hint">私钥保存在服务器 reality.json，不会返回前端。</p>
             <div class="btnrow" style="margin-top:10px;"><button type="button" class="sm ghost" id="btnRealityNewKeys">获取新证书</button><button type="button" class="sm ghost" id="btnRealityClearKeys" style="color:#dc2626; border-color:#fecaca;">清除</button></div>
+            </div>
           </div>
         </div>
         <div id="tunnelFields" class="mode-box tunnel">
@@ -437,6 +438,27 @@
           </div>
           <div class="log" id="deployLog"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- 路由 -->
+    <div id="tab-routes" class="hidden">
+      <div class="card">
+        <h2>路由规则</h2>
+        <p class="hint">出站 + 路由成一对：<b>第一步</b>先在「出站」页加一条出站（比如 HTTP 代理 127.0.0.1:7928）；<b>第二步</b>在这里加一条路由，告诉面板什么流量走它。匹配到的走选中的出站，不匹配的走默认 direct。</p>
+        <p class="hint">举例：条件选「域名」，匹配值填 <span class="mono">*.google.com</span>，出站标签填 <span class="mono">home</span>，就是「访问 google 域名走 home 出站」。</p>
+        <div class="btnrow"><button class="sm" id="btnAddRoute">+ 新增路由</button><button class="sm green" id="btnSaveRoutes">保存路由</button></div>
+        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>#</th><th>条件</th><th>匹配值</th><th>出站</th><th>操作</th></tr></thead><tbody id="routeBody"></tbody></table></div>
+        <div id="routeForm" class="hidden" style="margin-top:12px;">
+          <div class="row3">
+            <div><label class="f">条件</label><select id="rtType"><option value="domain">域名</option><option value="ip">IP</option><option value="port">端口</option></select></div>
+            <div><label class="f">匹配值</label><input type="text" id="rtValue" class="mono" placeholder="例如 *.google.com 或 1.2.3.4 或 443"></div>
+            <div><label class="f">出站标签</label><input type="text" id="rtOutbound" class="mono" placeholder="例如 home"></div>
+          </div>
+          <div class="btnrow"><button class="sm" id="btnRtConfirm">确定</button><button class="sm ghost" id="btnRtCancel">取消</button></div>
+        </div>
+        <div id="routeOut" class="status info"></div>
+
       </div>
     </div>
 
@@ -514,19 +536,6 @@
           <div class="btnrow"><button class="sm" id="btnObConfirm">确定</button><button class="sm ghost" id="btnObCancel">取消</button></div>
         </div>
         <div id="outboundOut" class="status info"></div>
-        <h3 style="margin-top:20px;">路由规则 <span class="opt">出站 + 路由成一对</span></h3>
-        <p class="hint">出站定义走哪条路，路由定义什么流量走它：按域名、IP 或端口匹配，匹配到的走选中的出站，不匹配的走默认 direct。</p>
-        <div class="btnrow"><button class="sm" id="btnAddRoute">+ 新增路由</button><button class="sm green" id="btnSaveRoutes">保存路由</button></div>
-        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>#</th><th>条件</th><th>匹配值</th><th>出站</th><th>操作</th></tr></thead><tbody id="routeBody"></tbody></table></div>
-        <div id="routeForm" class="hidden" style="margin-top:12px;">
-          <div class="row3">
-            <div><label class="f">条件</label><select id="rtType"><option value="domain">域名</option><option value="ip">IP</option><option value="port">端口</option></select></div>
-            <div><label class="f">匹配值</label><input type="text" id="rtValue" class="mono" placeholder="例如 *.google.com 或 1.2.3.4 或 443"></div>
-            <div><label class="f">出站标签</label><input type="text" id="rtOutbound" class="mono" placeholder="例如 home"></div>
-          </div>
-          <div class="btnrow"><button class="sm" id="btnRtConfirm">确定</button><button class="sm ghost" id="btnRtCancel">取消</button></div>
-        </div>
-        <div id="routeOut" class="status info"></div>
       </div>
     </div>
     </div>
@@ -574,10 +583,11 @@ function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) 
 
 function switchTab(name) {
   document.querySelectorAll(".sidebar button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
-  ["overview", "deploy", "sub", "outbound"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
+  ["overview", "deploy", "sub", "outbound", "routes"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
   if (name === "sub") loadSubscription();
   if (name === "overview") loadStatus();
-  if (name === "outbound") { loadOutbounds(); loadRoutes(); }
+  if (name === "outbound") loadOutbounds();
+  if (name === "routes") loadRoutes();
 }
 document.querySelectorAll(".sidebar button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 $("btnGoDeploy").onclick = () => switchTab("deploy");
@@ -679,12 +689,8 @@ function updateGroupCounts() {
   if (directN) $("directGroup").classList.remove("field-err");
 }
 function updateRealityFields() {
-  const on = $("direct_vless_reality").checked;
-  $("realityCard").classList.toggle("hidden", !on);
-  // 勾了 Reality，Reality 配置放前面、直连参数放后面
-  const parent = $("directFields");
-  if (on && parent && $("realityCard").parentElement !== parent) parent.insertBefore($("realityCard"), parent.firstChild);
-  if (on) parent.insertBefore($("realityCard"), parent.querySelector(".proto-wrap"));
+  // Reality 配置和直连配置做成一排：左边直连默认，点了 Reality 右侧才出现 Reality 版块
+  $("realityCard").classList.toggle("hidden", !$("direct_vless_reality").checked);
 }
 function updateSubTpl() {
   const dom = $("subDomain").value.trim() || "订阅域名";
