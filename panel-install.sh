@@ -147,17 +147,68 @@ PUB_IP="$(curl -fsS --max-time 5 https://ifconfig.me/ip 2>/dev/null || curl -fsS
 PANEL_URL="http://$PUB_IP:$PANEL_PORT"
 TUNNEL_URL=""
 
-# ---- 选装隧道版: 交互式问一句 (非交互执行时跳过, 以后在面板里绑) ----
+# ---- 选装隧道版: 必须明确选 y 或 n 才继续 ----
+# 2026-11-19 实测问题: 原来只问一次, 直接回车 / 没输入就当 N 跳过,
+# 看起来像脚本突然跳出了安装过程。所以现在: 没选到有效答案就一直问,
+# 不会因为一次空输入就结束; 提问从 /dev/tty 读, bash <(curl ...) 时
+# stdin 被占用 / 读到 EOF 也不会直接跳过。
+# ask_tty <变量> <提示> [hide]: 先从 /dev/tty 读, 打不开就退回 stdin。
+# 两边都读到 EOF 时设 ASK_EOF=1, 调用方停在原地等 1 秒再问, 不自动跳过。
+ASK_EOF=0
+ask_tty() {
+  local _var="$1" _prompt="$2" _hide="${3:-}" _line="" _ok=0
+  ASK_EOF=0
+  if [ -e /dev/tty ]; then
+    # 2>/dev/null 要写在 </dev/tty 前面, 否则打不开 /dev/tty 的报错压不住。
+    if [ -n "$_hide" ]; then read -r -s -p "$_prompt" _line 2>/dev/null </dev/tty && _ok=1; echo "" >&2
+    else read -r -p "$_prompt" _line 2>/dev/null </dev/tty && _ok=1; fi
+  fi
+  if [ "$_ok" = "0" ]; then
+    if [ -n "$_hide" ]; then read -r -s -p "$_prompt" _line 2>/dev/null && _ok=1; echo ""
+    else read -r -p "$_prompt" _line 2>/dev/null && _ok=1; fi
+  fi
+  [ "$_ok" = "0" ] && ASK_EOF=1
+  printf -v "$_var" '%s' "$_line"
+}
 step "步骤 5/5  绑定隧道 (可选)"
 if [ -t 0 ]; then
+  _bind=""
   echo ""
-  read -r -p "是否绑定隧道 (把面板绑到 Argo 隧道, 之后可关闭 SSH)? [y/N] " _bind
+  sep
+  echo "${C_CYAN}${C_BOLD}  ★ 请确认: 是否安装 Argo 隧道版面板? ★${C_RESET}"
+  sep
+  echo "  y = 安装隧道版: 需要 Token + 面板域名 + 端口"
+  echo "      装完走隧道域名进面板, 验证后可关闭 SSH 端口 22。"
+  echo "  n = 不安装隧道版: 直接用 IP:端口进面板部署节点。"
+  echo ""
+  echo "  ${C_YELLOW}备注: 不安装隧道版也可以正常部署, 面板功能完全一样,${C_RESET}"
+  echo "  ${C_YELLOW}区别只在怎么进面板 (隧道域名 vs IP:端口), 以后随时可以再绑。${C_RESET}"
+  sep
+  while true; do
+    ask_tty _bind "请输入 y 或 n: "
+    # 没做选择就停在这里等, 不自动跳过、不往下跑 (SHU 2026-11-19 20:10 CST)。
+    # 读到 EOF 也一样: 等 1 秒再问, 不当成 n。
+    if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入 y 或 n。"; sleep 1; continue; fi
+    case "$_bind" in
+      y|Y) break;;
+      n|N) echo "已选择跳过隧道绑定, 继续安装。"; break;;
+      *) echo "未收到有效选择, 请重新输入 y 或 n (直接回车不会跳过)。";;
+    esac
+  done
   if [ "$_bind" = "y" ] || [ "$_bind" = "Y" ]; then
-    read -r -s -p "Argo Tunnel Token: " ARGO_TOKEN; echo ""
-    read -r -p "面板域名 (例如 panel.ahstshu.eu.cc): " PANEL_DOMAIN
-    read -r -p "面板端口 [默认 $PANEL_PORT]: " _pp
+    ARGO_TOKEN=""; PANEL_DOMAIN=""
+    while [ -z "$ARGO_TOKEN" ]; do
+      ask_tty ARGO_TOKEN "Argo Tunnel Token: " hide
+      if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入 Token。"; sleep 1; continue; fi
+      [ -n "$ARGO_TOKEN" ] || echo "Token 不能为空, 请重新输入。"
+    done
+    while [ -z "$PANEL_DOMAIN" ]; do
+      ask_tty PANEL_DOMAIN "面板域名 (例如 panel.ahstshu.eu.cc): "
+      if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入面板域名。"; sleep 1; continue; fi
+      [ -n "$PANEL_DOMAIN" ] || echo "面板域名不能为空, 请重新输入。"
+    done
+    ask_tty _pp "面板端口 [默认 $PANEL_PORT]: "
     PANEL_PORT_BIND="${_pp:-$PANEL_PORT}"
-    [ -n "$ARGO_TOKEN" ] && [ -n "$PANEL_DOMAIN" ] || die "Token 和面板域名都要填"
     docker rm -f nexus-panel-argo >/dev/null 2>&1 || true
     docker run -d --name nexus-panel-argo --restart unless-stopped --network host \
       cloudflare/cloudflared:latest tunnel --no-autoupdate run --token "$ARGO_TOKEN" \
@@ -170,8 +221,26 @@ if [ -t 0 ]; then
     echo "  加完立刻生效, 之后用 $TUNNEL_URL 进面板。"
     sep
   fi
+else
+  echo "非交互执行, 已跳过隧道绑定 (以后随时可以再绑)。"
 fi
 
+# ---- 显示账号密码之前, 先提示 (2026-11-19 SHU: 提示不能晚于密码本身) ----
+# 先把警告打出来, 再等用户按一下回车才显示密码, 给用户留出准备时间。
+echo ""
+sep
+echo "${C_YELLOW}${C_BOLD}  ⚠ 注意: 下面将显示面板账号和密码${C_RESET}"
+echo "  密码只显示这一次, 请立即保存; 不要把带密码的截图发到公开场合。"
+echo "  也可以在 VPS 上查看: $PANEL_DIR/password.txt (权限 600)"
+sep
+if [ -t 0 ]; then
+  # 没按回车就停在这里等, 不直接把密码打出来。
+  while true; do
+    _dummy=""; ask_tty _dummy "准备好了? 按回车显示账号密码: "
+    if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请按回车继续。"; sleep 1; continue; fi
+    break
+  done
+fi
 echo ""
 sep
 echo "${C_GREEN}${C_BOLD}  ★ 面板已安装完成, 请保存下面这几行 ★${C_RESET}"
