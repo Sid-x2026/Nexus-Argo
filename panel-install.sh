@@ -218,26 +218,92 @@ if [ -t 0 ]; then
       echo "已输入 Token: $ARGO_TOKEN"
       _tok_ok=""
       while true; do
-        ask_tty _tok_ok "这个 Token 对吗? (y 确认继续 / n 重新输入): "
+        ask_tty _tok_ok "这个 Token 对吗? (回车默认 y 确认 / n 重新输入): "
         if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入 y 或 n。"; sleep 1; continue; fi
         case "$_tok_ok" in
-          y|Y) break;;
+          ""|y|Y) break;;
           n|N) echo "重新输入 Token:"; break;;
-          *) echo "请重新输入 y 或 n (直接回车不会跳过)。";;
+          *) echo "请输入 y 或 n (回车默认 y)。";;
         esac
       done
       case "$_tok_ok" in
-        y|Y) break;;
+        ""|y|Y) break;;
         *) continue;;
       esac
     done
-    while [ -z "$PANEL_DOMAIN" ]; do
-      ask_tty PANEL_DOMAIN "面板域名 (例如 panel.ahstshu.eu.cc): "
-      if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入面板域名。"; sleep 1; continue; fi
-      [ -n "$PANEL_DOMAIN" ] || echo "面板域名不能为空, 请重新输入。"
+    # 面板域名: 同样二次确认, 回车默认 y。
+    while true; do
+      PANEL_DOMAIN=""
+      while [ -z "$PANEL_DOMAIN" ]; do
+        ask_tty PANEL_DOMAIN "面板域名 (例如 panel.ahstshu.eu.cc): "
+        if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入面板域名。"; sleep 1; continue; fi
+        [ -n "$PANEL_DOMAIN" ] || echo "面板域名不能为空, 请重新输入。"
+      done
+      echo "已输入面板域名: $PANEL_DOMAIN"
+      _dom_ok=""
+      while true; do
+        ask_tty _dom_ok "这个域名对吗? (回车默认 y 确认 / n 重新输入): "
+        if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入 y 或 n。"; sleep 1; continue; fi
+        case "$_dom_ok" in
+          ""|y|Y) break;;
+          n|N) echo "重新输入面板域名:"; break;;
+          *) echo "请输入 y 或 n (回车默认 y)。";;
+        esac
+      done
+      case "$_dom_ok" in
+        ""|y|Y) break;;
+        *) continue;;
+      esac
     done
-    ask_tty _pp "面板端口 [默认 $PANEL_PORT]: "
-    PANEL_PORT_BIND="${_pp:-$PANEL_PORT}"
+    # 面板端口: 这个端口要和隧道域名绑定的端口一致, 也就是 Zero Trust
+    # 路由里要填的 $PANEL_DOMAIN -> http://127.0.0.1:<端口> 那个端口;
+    # 面板本身也会改到这个端口上, 面板端口 / 路由端口 / 面板地址三处必须一致。
+    echo ""
+    echo "面板端口 (要和隧道域名绑定的端口一致, 即 Zero Trust 路由里的端口):"
+    while true; do
+      ask_tty _pp "面板端口 [默认 $PANEL_PORT]: "
+      PANEL_PORT_BIND="${_pp:-$PANEL_PORT}"
+      if ! [[ "$PANEL_PORT_BIND" =~ ^[0-9]+$ ]] || (( PANEL_PORT_BIND < 1 || PANEL_PORT_BIND > 65535 )); then
+        echo "面板端口必须是 1-65535 的数字, 收到的是 '$PANEL_PORT_BIND', 请重新输入。"
+        continue
+      fi
+      echo "已设置面板端口: $PANEL_PORT_BIND (Zero Trust 路由请填: $PANEL_DOMAIN -> http://127.0.0.1:$PANEL_PORT_BIND)"
+      _port_ok=""
+      while true; do
+        ask_tty _port_ok "这个端口对吗? (回车默认 y 确认 / n 重新输入): "
+        if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入 y 或 n。"; sleep 1; continue; fi
+        case "$_port_ok" in
+          ""|y|Y) break;;
+          n|N) echo "重新输入面板端口:"; break;;
+          *) echo "请输入 y 或 n (回车默认 y)。";;
+        esac
+      done
+      case "$_port_ok" in
+        ""|y|Y) break;;
+        *) continue;;
+      esac
+    done
+    # 2026-11-19 实测 bug: 原来这里填了新端口 (例如 8555) 只改了下面
+    # 路由那行字, 面板本身还监听在旧端口 (2053) 上, 隧道过去自然不通。
+    # 现在: 填了新端口就真把面板重启到那个端口, 路由和面板地址一起改。
+    if [ "$PANEL_PORT_BIND" != "$PANEL_PORT" ]; then
+      log "面板端口改为 $PANEL_PORT_BIND, 正在重启面板 ..."
+      docker rm -f nexus-panel >/dev/null 2>&1 || true
+      docker run -d --name nexus-panel --restart unless-stopped --network host \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v "$WORKDIR:/opt/nexus-argo" \
+        -e PANEL_DIR="$PANEL_DIR" -e PANEL_PORT="$PANEL_PORT_BIND" \
+        nexus-panel || die "面板容器重启失败"
+      for _ in $(seq 1 20); do
+        if curl -fsS --max-time 2 -o /dev/null "http://127.0.0.1:$PANEL_PORT_BIND/" 2>/dev/null; then break; fi
+        sleep 1
+      done
+      curl -fsS --max-time 5 -o /dev/null "http://127.0.0.1:$PANEL_PORT_BIND/" 2>/dev/null \
+        || die "面板在新端口 $PANEL_PORT_BIND 上没起来, 看日志: docker logs nexus-panel"
+      PANEL_PORT="$PANEL_PORT_BIND"
+      PANEL_URL="http://$PUB_IP:$PANEL_PORT"
+      ok "面板已改到端口 $PANEL_PORT, 地址: $PANEL_URL"
+    fi
     docker rm -f nexus-panel-argo >/dev/null 2>&1 || true
     docker run -d --name nexus-panel-argo --restart unless-stopped --network host \
       cloudflare/cloudflared:latest tunnel --no-autoupdate run --token "$ARGO_TOKEN" \
