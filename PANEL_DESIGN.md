@@ -96,6 +96,40 @@ nexus-sub 重启）—— 需 SHU 在 VPS 上跑一次。
 - 卸载：停掉并删除全部 Nexus-Argo 容器和文件。
 - 关于：版本。
 
+## 第 2 步：全协议（2026-11-19）
+
+部署页按流程分步排：①部署方式 → ②协议选择（Argo 组 / 直连组，可折叠，带已选计数）→ ③域名与端口 → ④证书配置 → ⑤节点与订阅 → ⑥开始部署。只显示当前模式相关的区（不选隧道收起隧道区，不选直连收起直连区和证书区）；证书区只在直连勾选了需要证书的协议时才出现。
+
+### 部署页后续调整（2026-11-19，用户反馈）
+- **③ 域名与端口的顺序**：两个方式都选时，直连配置在前、隧道配置在后。两块用不同样式区分：直连区是绿框（绿色左框线、绿色标题），隧道区是蓝紫框（蓝紫左框线、蓝紫标题），一眼能分开。
+- **② 协议选择是同一处**：隧道协议与直连协议放在同一个协议选择区里，各自有 Argo 组 / 直连组小标题（可折叠、带已选计数），每条协议后面都有自己的端口设置。只勾一种方式时，另一组的协议整个隐藏，不显示；两组都选时，一处勾完所有协议。
+- **UUID 只有一个**：不给每个方式各设一个 UUID。同一个 UUID 就是 Xray、Sing-box、隧道和直连全部协议的客户端身份，订阅地址也只用这一个 UUID（`/sub/raw/<uuid>`）；分开设会把订阅拆成两份、多一倍管理，UUID 本身是标识不是密码，分开也没有安全收益。步骤 ⑤ 保留单个 UUID 字段 + 安全生成按钮，下方有说明文字。
+- **总览 Argo 隧道状态修复**：之前总览只查节点隧道容器 `nexus-argo`，面板自身的隧道容器叫 `nexus-panel-argo`，所以用户明明已通过隧道进面板，总览仍显示灰色。修复：后端 `_argo_tunnel_state()` 取两者任一在跑即运行中（`nexus-argo` 或 `nexus-panel-argo`），总览的 Argo 隧道卡片用这个合并值；服务列表里两者都列出。总览登录时自动刷新一次（`showApp` 调用 `loadStatus`），15 秒轮询一次，刷新状态按钮已加粗显示并带“上次刷新”时间；前端按服务单独取值，某项缺失不让整个总览变空白。
+
+### 协议清单（全部可单独勾选，只装选中的，只进订阅选中的）
+- **[Argo] 隧道**（6 个，不变；优选地址裂变只对这 6 个生效）：Xray xhttp_h1 / h2 / h3，Sing-box ws / httpupgrade / grpc。
+- **[直连] VLESS 组**：VLESS+TCP（8082，明文）、VLESS+TLS（443）、VLESS+Reality（9447）、VLESS+WS（8083，明文，path /ws）、VLESS+gRPC（8084，TLS）、VLESS+QUIC（443，UDP）。
+- **[直连] Trojan / VMess 组**：Trojan+TLS（9443，密码 = UUID）、VMess+WS（9444，TLS，alterId 0）、Trojan+TLS（Sing-box，9445）。
+- **[直连] Shadowsocks / Hysteria2 组**：Shadowsocks（8388，aes-256-gcm，密码 = UUID）、Hysteria2（9446，UDP，密码 = UUID，alpn h3）。
+- 直连节点地址一律是 DIRECT_DOMAIN（与隧道域名分开的子域名；同域名两边共用会互相暴露：直连 DNS 漏 VPS IP，隧道 SNI 漏域名），原样进订阅，永不裂变。端口默认值如上，面板可改；TCP 端口冲突校验覆盖全部直连 TCP 端口，QUIC / Hysteria2 走 UDP，只校验范围。
+
+### 证书（直连）
+- 三种模式：自签名（默认，openssl 10 年证书，无需续期，客户端需 allowInsecure）、上传自己的证书（面板贴 cert_pem / key_pem，点部署时才写到 $WORKDIR/direct/cert.pem / key.pem，install.sh 永不覆盖已上传的证书）、ACME（域名须解析到 VPS、端口 80 放行，Let's Encrypt 90 天，到期前 30 天自动续期，续完重载核心；申请失败自动回退自签名，部署不中断）。
+- 面板总览与证书区显示证书状态（GET /api/cert）：类型、CN、到期日、剩余天数、自动续期状态。
+- Reality 不需要大厂域名的证书：面板“扫描大厂域名”（POST /api/reality-scan，测 www.microsoft.com / apple / google / amazon / cloudflare / bing / dl.google.com 的延迟，返回排序与最低延迟）选出目标域名后，自动填 SNI 与目标地址；install.sh 生成 X25519 密钥对与 shortId，存 $WORKDIR/direct/reality.json（private_key / public_key / short_id / dest），重部署复用。
+
+### 订阅路径
+- SUB_PATH 只改中间一段（后缀 / 文件名）：https://&lt;订阅域名&gt;/&lt;SUB_PATH&gt;/raw/&lt;uuid&gt;，域名与后面的 /raw/&lt;uuid&gt; 固定。面板以模板形式显示，只允许编辑中间段，正则 ^[A-Za-z0-9._-]{1,32}$，保留 api / config.json / help.txt，不可带 /。
+
+### 必填与选填
+- 必填（红 *）：隧道模式下 Argo Token、节点 UUID、已启用核心的子域名 + 回源端口、每个已启用核心至少勾一个协议；直连模式下至少勾一个直连协议、Reality 勾选时的大厂域名、ACME 模式下的域名。直连域名标注“必填（可留空自动检测公网 IP）”，留空不拦截（ACME 模式除外）。
+- 选填：节点名称前缀、优选地址、订阅路径（默认 sub）、隧道传输（auto）。
+- 点“开始部署”前前端先校验，缺的字段标红并定位到第一个；后端 validate_config 的报错指到具体字段。
+
+### 未做 / 已知限制
+- ACME 真实发证未在 VPS 上实测（需域名解析到 VPS 且 80 端口可达）；失败回退自签名已验证。
+- 无 Docker 环境下未做真实 Xray / Sing-box 握手测试；渲染与订阅格式已本地验证。
+
 ## 待定 / 以后再说
 
 - 单节点延迟测试、流量统计（总览 / 节点页以后可加，第一版不做）。

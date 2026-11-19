@@ -16,10 +16,49 @@
 #   custom-subscription-address setting.
 #   ENABLE_DIRECT (default false): serve nodes straight from the VPS
 #   public IP/domain (backup only — exposes the real IP). Direct
-#   protocols: DIRECT_XRAY_TLS (+TLS_PORT, default 443, TCP),
-#   DIRECT_XRAY_QUIC (+QUIC_PORT, default 443, UDP — may share the
-#   number with the TCP port), DIRECT_SB_TLS (+SB_TLS_PORT, default
-#   8443). DIRECT_DOMAIN empty = auto-detect the public IP.
+#   protocols (each individually checkable, [直连], address =
+#   DIRECT_DOMAIN, a separate subdomain from the tunnel domains;
+#   direct nodes enter the subscription as-is, never fissioned):
+#     Xray:  DIRECT_VLESS_TCP (+_PORT, default 8082, plain TCP, no TLS)
+#            DIRECT_VLESS_TLS = DIRECT_XRAY_TLS (+_PORT, default 443, TCP+TLS)
+#            DIRECT_VLESS_REALITY (+_PORT, default 9447, TCP+Reality,
+#              dest = big-domain SNI, see REALITY_* below)
+#            DIRECT_VLESS_WS (+_PORT, default 8083, plain ws, path /ws)
+#            DIRECT_VLESS_GRPC (+_PORT, default 8084, gRPC+TLS, serviceName grpc)
+#            DIRECT_VLESS_QUIC = DIRECT_XRAY_QUIC (+_PORT, default 443, UDP)
+#            DIRECT_TROJAN (+_PORT, default 9443, TCP+TLS, password = NODE_UUID)
+#            DIRECT_VMESS_WS (+_PORT, default 9444, ws+TLS, path /ws, alterId 0)
+#     Sing-box: DIRECT_SB_TLS (+_PORT, default 8443, VLESS+TLS)
+#            DIRECT_SB_TROJAN (+_PORT, default 9445, Trojan+TLS, password = NODE_UUID)
+#            DIRECT_SS (+_PORT, default 8388, Shadowsocks aes-256-gcm, password = NODE_UUID)
+#            DIRECT_HY2 (+_PORT, default 9446, UDP, Hysteria2, password = NODE_UUID,
+#              TLS cert, alpn h3)
+#   All DIRECT_VLESS_* / DIRECT_TROJAN / DIRECT_VMESS_WS / DIRECT_SB_* /
+#   DIRECT_SS / DIRECT_HY2 default false, except DIRECT_VLESS_TLS and
+#   DIRECT_SB_TLS which default true (kept from the earlier direct set).
+#   Aliases: DIRECT_VLESS_TLS / DIRECT_VLESS_QUIC are honoured if set,
+#   otherwise DIRECT_XRAY_TLS / DIRECT_XRAY_QUIC apply (same for their
+#   _PORT variables).
+#   CERT_MODE=selfsigned|upload|acme (default selfsigned): how the
+#   direct TLS cert at $WORKDIR/direct/cert.pem/key.pem is obtained.
+#   selfsigned — generate a 10-year cert only if missing, never overwrite.
+#   upload — the panel writes cert.pem/key.pem before deploy; install.sh
+#     never overwrites/regenerates when they exist; missing files warn
+#     and fall back to selfsigned. acme — try acme.sh standalone http-01
+#     on port 80 for DIRECT_DOMAIN (must be a domain, not an IP); on
+#     failure warn and fall back to selfsigned, never fail the deploy;
+#     on success add a daily `acme.sh --cron` crontab entry (idempotent,
+#     only if crontab exists).
+#   REALITY_DEST (required when DIRECT_VLESS_REALITY=true): the big
+#   domain used as Reality dest/SNI (e.g. www.microsoft.com) — a
+#   domain, not an IP, no port. REALITY_SNI overrides the SNI /
+#   serverNames when set, otherwise REALITY_DEST is used.
+#   REALITY_PRIVATE_KEY (empty = generate an X25519 keypair and persist
+#   it); REALITY_SHORT_ID (empty = `openssl rand -hex 4`, 8 hex chars).
+#   Keys persist in $WORKDIR/direct/reality.json and are reused across
+#   redeploys when the env vars are empty. No cert is needed for the
+#   Reality dest domain. TLS direct links carry allowInsecure=1 unless
+#   CERT_MODE=acme (valid cert); plain-TCP / plain-WS links carry none.
 #   Direct uses one self-signed cert (clients need allowInsecure=1);
 #   direct nodes enter the subscription as-is, never fissioned.
 #   TUNNEL_PROTOCOL=auto|http2|quic (default auto)
@@ -80,6 +119,45 @@ DIRECT_XRAY_QUIC="${DIRECT_XRAY_QUIC:-false}"
 DIRECT_XRAY_QUIC_PORT="${DIRECT_XRAY_QUIC_PORT:-443}"
 DIRECT_SB_TLS="${DIRECT_SB_TLS:-true}"
 DIRECT_SB_TLS_PORT="${DIRECT_SB_TLS_PORT:-8443}"
+# Aliases: DIRECT_VLESS_TLS / DIRECT_VLESS_QUIC (and their _PORT vars)
+# win over the DIRECT_XRAY_* names when set; otherwise the XRAY names apply.
+DIRECT_VLESS_TLS="${DIRECT_VLESS_TLS:-$DIRECT_XRAY_TLS}"
+DIRECT_XRAY_TLS="$DIRECT_VLESS_TLS"
+DIRECT_VLESS_TLS_PORT="${DIRECT_VLESS_TLS_PORT:-$DIRECT_XRAY_TLS_PORT}"
+DIRECT_XRAY_TLS_PORT="$DIRECT_VLESS_TLS_PORT"
+DIRECT_VLESS_QUIC="${DIRECT_VLESS_QUIC:-$DIRECT_XRAY_QUIC}"
+DIRECT_XRAY_QUIC="$DIRECT_VLESS_QUIC"
+DIRECT_VLESS_QUIC_PORT="${DIRECT_VLESS_QUIC_PORT:-$DIRECT_XRAY_QUIC_PORT}"
+DIRECT_XRAY_QUIC_PORT="$DIRECT_VLESS_QUIC_PORT"
+# New direct protocols (all default false; only enabled ones render).
+DIRECT_VLESS_TCP="${DIRECT_VLESS_TCP:-false}"
+DIRECT_VLESS_TCP_PORT="${DIRECT_VLESS_TCP_PORT:-8082}"
+DIRECT_VLESS_REALITY="${DIRECT_VLESS_REALITY:-false}"
+DIRECT_VLESS_REALITY_PORT="${DIRECT_VLESS_REALITY_PORT:-9447}"
+REALITY_DEST="${REALITY_DEST:-}"
+REALITY_SNI="${REALITY_SNI:-}"
+REALITY_PRIVATE_KEY="${REALITY_PRIVATE_KEY:-}"
+REALITY_SHORT_ID="${REALITY_SHORT_ID:-}"
+DIRECT_VLESS_WS="${DIRECT_VLESS_WS:-false}"
+DIRECT_VLESS_WS_PORT="${DIRECT_VLESS_WS_PORT:-8083}"
+DIRECT_VLESS_GRPC="${DIRECT_VLESS_GRPC:-false}"
+DIRECT_VLESS_GRPC_PORT="${DIRECT_VLESS_GRPC_PORT:-8084}"
+DIRECT_TROJAN="${DIRECT_TROJAN:-false}"
+DIRECT_TROJAN_PORT="${DIRECT_TROJAN_PORT:-9443}"
+DIRECT_VMESS_WS="${DIRECT_VMESS_WS:-false}"
+DIRECT_VMESS_WS_PORT="${DIRECT_VMESS_WS_PORT:-9444}"
+DIRECT_SB_TROJAN="${DIRECT_SB_TROJAN:-false}"
+DIRECT_SB_TROJAN_PORT="${DIRECT_SB_TROJAN_PORT:-9445}"
+DIRECT_SS="${DIRECT_SS:-false}"
+DIRECT_SS_PORT="${DIRECT_SS_PORT:-8388}"
+DIRECT_HY2="${DIRECT_HY2:-false}"
+DIRECT_HY2_PORT="${DIRECT_HY2_PORT:-9446}"
+CERT_MODE="${CERT_MODE:-selfsigned}"
+# Filled in by the cert / Reality setup below (before render); exported
+# to the Python render block and to the nexus-sub container.
+REALITY_PUBLIC_KEY="${REALITY_PUBLIC_KEY:-}"
+# Effective Reality SNI (REALITY_SNI or REALITY_DEST); set below.
+REALITY_EFF_SNI="${REALITY_EFF_SNI:-}"
 
 log() { echo "[nexus-argo] $*"; }
 die() { echo "[nexus-argo] ERROR: $*" >&2; exit 1; }
@@ -176,28 +254,65 @@ else
   log "Sing-box disabled — skipping"
 fi
 # Direct mode: nodes served straight from the VPS (self-signed cert,
-# clients need allowInsecure=1). TLS ports are TCP and must not
-# collide with other TCP listeners; QUIC is UDP, so its port number
-# may equal a TCP port (e.g. TLS 443 TCP + QUIC 443 UDP coexist).
+# clients need allowInsecure=1). TCP direct ports must not collide
+# with each other, 8080, or any origin/subscription port; QUIC and
+# Hysteria2 are UDP, so their port numbers are only range-checked
+# (they may share a number with a TCP port, e.g. TLS 443 TCP + QUIC 443 UDP).
+_is_domain() {
+  # A domain: letters/digits/hyphens/dots, at least one dot, not an IPv4 address, no port.
+  case "$1" in *:*|*/*) return 1;; esac
+  [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$ ]] || return 1
+  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && return 1
+  return 0
+}
 _direct_any=false
 if is_true "$ENABLE_DIRECT"; then
+  case "$CERT_MODE" in selfsigned|upload|acme) ;; *) die "CERT_MODE must be selfsigned|upload|acme, got '$CERT_MODE'";; esac
+  check_port "DIRECT_VLESS_TCP_PORT" "$DIRECT_VLESS_TCP_PORT"
   check_port "DIRECT_XRAY_TLS_PORT" "$DIRECT_XRAY_TLS_PORT"
+  check_port "DIRECT_VLESS_REALITY_PORT" "$DIRECT_VLESS_REALITY_PORT"
+  check_port "DIRECT_VLESS_WS_PORT" "$DIRECT_VLESS_WS_PORT"
+  check_port "DIRECT_VLESS_GRPC_PORT" "$DIRECT_VLESS_GRPC_PORT"
   check_port "DIRECT_XRAY_QUIC_PORT" "$DIRECT_XRAY_QUIC_PORT"
+  check_port "DIRECT_TROJAN_PORT" "$DIRECT_TROJAN_PORT"
+  check_port "DIRECT_VMESS_WS_PORT" "$DIRECT_VMESS_WS_PORT"
   check_port "DIRECT_SB_TLS_PORT" "$DIRECT_SB_TLS_PORT"
-  if is_true "$DIRECT_XRAY_TLS" || is_true "$DIRECT_XRAY_QUIC" || is_true "$DIRECT_SB_TLS"; then
-    _direct_any=true
-  else
-    die "ENABLE_DIRECT but no direct protocol selected"
-  fi
-  if is_true "$DIRECT_XRAY_TLS"; then
-    for _p in 8080 "$XRAY_PORT" "$SINGBOX_PORT" "$SUB_PORT"; do
-      [ "$DIRECT_XRAY_TLS_PORT" != "$_p" ] || die "DIRECT_XRAY_TLS_PORT collides with $_p"
+  check_port "DIRECT_SB_TROJAN_PORT" "$DIRECT_SB_TROJAN_PORT"
+  check_port "DIRECT_SS_PORT" "$DIRECT_SS_PORT"
+  check_port "DIRECT_HY2_PORT" "$DIRECT_HY2_PORT"
+  for _flag in DIRECT_VLESS_TCP DIRECT_XRAY_TLS DIRECT_VLESS_REALITY DIRECT_VLESS_WS \
+      DIRECT_VLESS_GRPC DIRECT_XRAY_QUIC DIRECT_TROJAN DIRECT_VMESS_WS \
+      DIRECT_SB_TLS DIRECT_SB_TROJAN DIRECT_SS DIRECT_HY2; do
+    is_true "${!_flag}" && _direct_any=true
+  done
+  [ "$_direct_any" = "true" ] || die "ENABLE_DIRECT but no direct protocol selected"
+  # TCP direct ports: no duplicates among themselves, no collision
+  # with 8080 / XRAY_PORT / SINGBOX_PORT / SUB_PORT / dispatcher internals.
+  _tcp_ports=""
+  for _pair in "DIRECT_VLESS_TCP:$DIRECT_VLESS_TCP_PORT" "DIRECT_XRAY_TLS:$DIRECT_XRAY_TLS_PORT" \
+      "DIRECT_VLESS_REALITY:$DIRECT_VLESS_REALITY_PORT" "DIRECT_VLESS_WS:$DIRECT_VLESS_WS_PORT" \
+      "DIRECT_VLESS_GRPC:$DIRECT_VLESS_GRPC_PORT" "DIRECT_TROJAN:$DIRECT_TROJAN_PORT" \
+      "DIRECT_VMESS_WS:$DIRECT_VMESS_WS_PORT" "DIRECT_SB_TLS:$DIRECT_SB_TLS_PORT" \
+      "DIRECT_SB_TROJAN:$DIRECT_SB_TROJAN_PORT" "DIRECT_SS:$DIRECT_SS_PORT"; do
+    _name="${_pair%%:*}"; _p="${_pair##*:}"
+    is_true "${!_name}" || continue
+    for _taken in 8080 "$XRAY_PORT" "$SINGBOX_PORT" "$SUB_PORT" $_tcp_ports; do
+      [ "$_p" != "$_taken" ] || die "$_name port $_p collides with $_taken (8080 / XRAY_PORT / SINGBOX_PORT / SUB_PORT / another direct TCP port)"
     done
-  fi
-  if is_true "$DIRECT_SB_TLS"; then
-    for _p in 8080 "$XRAY_PORT" "$SINGBOX_PORT" "$SUB_PORT" "$DIRECT_XRAY_TLS_PORT"; do
-      [ "$DIRECT_SB_TLS_PORT" != "$_p" ] || die "DIRECT_SB_TLS_PORT collides with $_p"
-    done
+    if is_true "$ENABLE_SINGBOX"; then
+      for _off in 1 2 3; do
+        [ "$_p" != "$(( SINGBOX_PORT + _off ))" ] || die "$_name port $_p collides with Sing-box dispatcher internal port $(( SINGBOX_PORT + _off ))"
+      done
+    fi
+    _tcp_ports="$_tcp_ports $_p"
+  done
+  # Reality: dest must be a domain (not an IP, no port).
+  if is_true "$DIRECT_VLESS_REALITY"; then
+    [ -n "$REALITY_DEST" ] || die "DIRECT_VLESS_REALITY is on but REALITY_DEST is empty — set a big domain (e.g. www.microsoft.com)"
+    _is_domain "$REALITY_DEST" || die "REALITY_DEST must be a domain (not an IP, no port), got '$REALITY_DEST'"
+    if [ -n "$REALITY_SNI" ]; then
+      _is_domain "$REALITY_SNI" || die "REALITY_SNI must be a domain (not an IP, no port), got '$REALITY_SNI'"
+    fi
   fi
   if [ -z "$DIRECT_DOMAIN" ]; then
     DIRECT_DOMAIN="$(curl -fsS --max-time 5 https://ifconfig.me/ip 2>/dev/null || curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
@@ -213,17 +328,112 @@ fi
 case "$TUNNEL_PROTOCOL" in auto|http2|quic) ;; *) die "TUNNEL_PROTOCOL must be auto|http2|quic, got $TUNNEL_PROTOCOL";; esac
 
 mkdir -p "$WORKDIR"/{xray,singbox,web,sub}
-# Direct mode: one self-signed cert, shared by the direct inbounds.
-# Kept across redeploys (only generated if missing) so the cert
-# stays stable; clients use allowInsecure=1 anyway.
+# Direct mode: TLS cert + Reality keys, before render.
+# Cert (CERT_MODE): selfsigned — generate a 10-year cert only if
+# missing, never overwrite; upload — the panel already wrote
+# cert.pem/key.pem, never overwrite/regenerate when present, missing
+# files warn and fall back to selfsigned; acme — try acme.sh
+# standalone http-01 on port 80, on any failure warn and fall back
+# to selfsigned, never fail the deploy; on success add a daily
+# `acme.sh --cron` crontab entry (idempotent, only if crontab exists).
+# Reality keys persist in $WORKDIR/direct/reality.json and are reused
+# across redeploys when REALITY_PRIVATE_KEY / REALITY_SHORT_ID are empty.
+_b64url() { python3 -c "import sys,base64; sys.stdout.write(base64.urlsafe_b64encode(sys.stdin.buffer.read()).decode().rstrip('='))"; }
 if is_true "$ENABLE_DIRECT"; then
   mkdir -p "$WORKDIR/direct"
-  if [ ! -f "$WORKDIR/direct/cert.pem" ] || [ ! -f "$WORKDIR/direct/key.pem" ]; then
+  _cert_ok=false
+  if [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
+    _cert_ok=true
+    [ "$CERT_MODE" = "upload" ] && log "直连证书: 使用已上传的证书 ($WORKDIR/direct/cert.pem)"
+  fi
+  if [ "$CERT_MODE" = "acme" ] && [ "$_cert_ok" = "false" ]; then
+    if ! _is_domain "$DIRECT_DOMAIN"; then
+      warn "CERT_MODE=acme 但 DIRECT_DOMAIN 不是域名 ($DIRECT_DOMAIN), 无法申请证书 — 回退到自签名证书"
+    else
+      _acme=""
+      if [ -x "$HOME/.acme.sh/acme.sh" ]; then _acme="$HOME/.acme.sh/acme.sh";
+      elif command -v acme.sh >/dev/null 2>&1; then _acme="$(command -v acme.sh)"; fi
+      if [ -z "$_acme" ]; then
+        if command -v timeout >/dev/null 2>&1; then
+          timeout 180 curl -fsSL https://get.acme.sh -o /tmp/get.acme.sh 2>/dev/null && sh /tmp/get.acme.sh --install-online >/dev/null 2>&1
+        else
+          curl -fsSL https://get.acme.sh 2>/dev/null | sh -s -- --install-online >/dev/null 2>&1
+        fi
+        if [ -x "$HOME/.acme.sh/acme.sh" ]; then _acme="$HOME/.acme.sh/acme.sh"; else warn "acme.sh 安装失败 — 回退到自签名证书"; fi
+      fi
+      if [ -n "$_acme" ]; then
+        if "$_acme" --issue -d "$DIRECT_DOMAIN" --standalone >/dev/null 2>&1 \
+           && "$_acme" --install-cert -d "$DIRECT_DOMAIN" \
+                --key-file "$WORKDIR/direct/key.pem" \
+                --fullchain-file "$WORKDIR/direct/cert.pem" >/dev/null 2>&1 \
+           && [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
+          _cert_ok=true
+          log "ACME 证书已签发 ($DIRECT_DOMAIN)"
+          if command -v crontab >/dev/null 2>&1; then
+            _cron="0 0 * * * $_acme --cron --home $HOME/.acme.sh > /dev/null 2>&1"
+            if ! crontab -l 2>/dev/null | grep -Fq "acme.sh --cron"; then
+              (crontab -l 2>/dev/null; echo "$_cron") | crontab - 2>/dev/null \
+                && log "ACME 自动续期已加入 crontab (每日检查)" \
+                || warn "crontab 写入失败 — ACME 证书不会自动续期, 请手动续期"
+            fi
+          fi
+        else
+          warn "ACME 签发失败 (域名 $DIRECT_DOMAIN 需解析到本机且 80 端口可达) — 回退到自签名证书"
+        fi
+      fi
+    fi
+  fi
+  if [ "$_cert_ok" = "false" ]; then
+    [ "$CERT_MODE" = "upload" ] && warn "CERT_MODE=upload 但未找到已上传的证书 — 回退到自签名证书"
     openssl req -x509 -newkey rsa:2048 -keyout "$WORKDIR/direct/key.pem" \
       -out "$WORKDIR/direct/cert.pem" -days 3650 -nodes \
       -subj "/CN=$DIRECT_DOMAIN" >/dev/null 2>&1 \
       || die "自签名证书生成失败 (需要 openssl)"
     log "直连自签名证书已生成 ($WORKDIR/direct/cert.pem, CN=$DIRECT_DOMAIN)"
+  fi
+  # Reality X25519 keypair (only when the Reality inbound is on).
+  # Private key = last 32 bytes of the PKCS#8 DER, public key = last
+  # 32 bytes of the SubjectPublicKeyInfo DER, both base64url, no padding.
+  if is_true "$DIRECT_VLESS_REALITY"; then
+    REALITY_EFF_SNI="${REALITY_SNI:-$REALITY_DEST}"
+    _reality_json="$WORKDIR/direct/reality.json"
+    if [ -z "$REALITY_PRIVATE_KEY" ] && [ -f "$_reality_json" ]; then
+      REALITY_PRIVATE_KEY="$(python3 -c "import json; print(json.load(open('$_reality_json')).get('private_key',''))" 2>/dev/null || true)"
+      REALITY_PUBLIC_KEY="$(python3 -c "import json; print(json.load(open('$_reality_json')).get('public_key',''))" 2>/dev/null || true)"
+      [ -z "$REALITY_SHORT_ID" ] && REALITY_SHORT_ID="$(python3 -c "import json; print(json.load(open('$_reality_json')).get('short_id',''))" 2>/dev/null || true)"
+      [ -n "$REALITY_PRIVATE_KEY" ] && [ -n "$REALITY_PUBLIC_KEY" ] && log "Reality 密钥已复用 ($WORKDIR/direct/reality.json)"
+    fi
+    if [ -z "$REALITY_PRIVATE_KEY" ]; then
+      _priv_pem="$(mktemp)"
+      openssl genpkey -algorithm X25519 -out "$_priv_pem" 2>/dev/null \
+        || die "Reality X25519 密钥生成失败 (需要 openssl)"
+      REALITY_PRIVATE_KEY="$(openssl pkey -in "$_priv_pem" -outform DER 2>/dev/null | tail -c 32 | _b64url)"
+      REALITY_PUBLIC_KEY="$(openssl pkey -in "$_priv_pem" -pubout -outform DER 2>/dev/null | tail -c 32 | _b64url)"
+      rm -f "$_priv_pem"
+      [ -n "$REALITY_PRIVATE_KEY" ] && [ -n "$REALITY_PUBLIC_KEY" ] || die "Reality 密钥派生失败"
+    elif [ -z "$REALITY_PUBLIC_KEY" ]; then
+      # Private key supplied by env, public key not: derive it from
+      # the raw private key via a temporary PKCS#8 PEM.
+      _priv_pem="$(mktemp)"
+      python3 - "$_priv_pem" "$REALITY_PRIVATE_KEY" <<'PYEOF' || die "Reality 私钥格式错误"
+import base64, sys
+raw = base64.urlsafe_b64decode(sys.argv[2] + "=" * (-len(sys.argv[2]) % 4))
+# PKCS#8 DER for an X25519 key: 302e020100300506032b656e04220420 + 32 raw bytes
+der = bytes.fromhex("302e020100300506032b656e04220420") + raw
+open(sys.argv[1], "wb").write(b"-----BEGIN PRIVATE KEY-----\n" + base64.encodebytes(der) + b"-----END PRIVATE KEY-----\n")
+PYEOF
+      REALITY_PUBLIC_KEY="$(openssl pkey -in "$_priv_pem" -pubout -outform DER 2>/dev/null | tail -c 32 | _b64url)"
+      rm -f "$_priv_pem"
+      [ -n "$REALITY_PUBLIC_KEY" ] || die "Reality 公钥派生失败"
+    fi
+    [ -n "$REALITY_SHORT_ID" ] || REALITY_SHORT_ID="$(openssl rand -hex 4)"
+    python3 - "$_reality_json" "$REALITY_PRIVATE_KEY" "$REALITY_PUBLIC_KEY" "$REALITY_SHORT_ID" "$REALITY_DEST" <<'PYEOF'
+import json, sys
+with open(sys.argv[1], "w") as f:
+    json.dump({"private_key": sys.argv[2], "public_key": sys.argv[3],
+               "short_id": sys.argv[4], "dest": sys.argv[5]}, f, indent=2)
+PYEOF
+    log "Reality 密钥已保存 ($WORKDIR/direct/reality.json, dest=$REALITY_DEST)"
   fi
 fi
 # Stale configs from a previous deploy (e.g. a core disabled since then)
@@ -251,6 +461,12 @@ export NODE_UUID XRAY_PORT XRAY_DOMAIN XRAY_CONFIGS SINGBOX_PORT SINGBOX_DOMAIN 
 export ENABLE_XRAY ENABLE_SINGBOX WORKDIR NODE_PREFIX OPT_ADDRS
 export ENABLE_DIRECT DIRECT_DOMAIN DIRECT_XRAY_TLS DIRECT_XRAY_TLS_PORT
 export DIRECT_XRAY_QUIC DIRECT_XRAY_QUIC_PORT DIRECT_SB_TLS DIRECT_SB_TLS_PORT
+export DIRECT_VLESS_TCP DIRECT_VLESS_TCP_PORT DIRECT_VLESS_REALITY DIRECT_VLESS_REALITY_PORT
+export DIRECT_VLESS_WS DIRECT_VLESS_WS_PORT DIRECT_VLESS_GRPC DIRECT_VLESS_GRPC_PORT
+export DIRECT_TROJAN DIRECT_TROJAN_PORT DIRECT_VMESS_WS DIRECT_VMESS_WS_PORT
+export DIRECT_SB_TROJAN DIRECT_SB_TROJAN_PORT DIRECT_SS DIRECT_SS_PORT
+export DIRECT_HY2 DIRECT_HY2_PORT CERT_MODE
+export REALITY_DEST REALITY_SNI REALITY_EFF_SNI REALITY_PRIVATE_KEY REALITY_PUBLIC_KEY REALITY_SHORT_ID
 python3 - <<'PYEOF'
 import json, os, sys
 work = os.environ["WORKDIR"]
@@ -311,12 +527,47 @@ def render_xray(port, configs):
             }
         })
     if _is_true(os.environ.get("ENABLE_DIRECT")):
+        _dd = os.environ.get("DIRECT_DOMAIN", "").strip()
+        if _is_true(os.environ.get("DIRECT_VLESS_TCP")):
+            inbounds.append({
+                "port": int(os.environ.get("DIRECT_VLESS_TCP_PORT", "8082")), "protocol": "vless",
+                "settings": {"clients": [{"id": uuid}], "decryption": "none"},
+                "streamSettings": {"network": "tcp", "security": "none"}
+            })
         if _is_true(os.environ.get("DIRECT_XRAY_TLS")):
             inbounds.append({
                 "port": int(os.environ.get("DIRECT_XRAY_TLS_PORT", "443")), "protocol": "vless",
                 "settings": {"clients": [{"id": uuid}], "decryption": "none"},
                 "streamSettings": {"network": "tcp", "security": "tls",
                                    "tlsSettings": _direct_tls()}
+            })
+        if _is_true(os.environ.get("DIRECT_VLESS_REALITY")):
+            _dest = os.environ.get("REALITY_DEST", "").strip()
+            _sni = os.environ.get("REALITY_EFF_SNI", "").strip() or _dest
+            inbounds.append({
+                "port": int(os.environ.get("DIRECT_VLESS_REALITY_PORT", "9447")), "protocol": "vless",
+                "settings": {"clients": [{"id": uuid}], "decryption": "none"},
+                "streamSettings": {"network": "tcp", "security": "reality",
+                                   "realitySettings": {
+                                       "show": False, "dest": f"{_dest}:443", "xver": 0,
+                                       "serverNames": [_sni],
+                                       "privateKey": os.environ.get("REALITY_PRIVATE_KEY", ""),
+                                       "shortIds": [os.environ.get("REALITY_SHORT_ID", "")]}}
+            })
+        if _is_true(os.environ.get("DIRECT_VLESS_WS")):
+            inbounds.append({
+                "port": int(os.environ.get("DIRECT_VLESS_WS_PORT", "8083")), "protocol": "vless",
+                "settings": {"clients": [{"id": uuid}], "decryption": "none"},
+                "streamSettings": {"network": "ws", "security": "none",
+                                   "wsSettings": {"path": "/ws"}}
+            })
+        if _is_true(os.environ.get("DIRECT_VLESS_GRPC")):
+            inbounds.append({
+                "port": int(os.environ.get("DIRECT_VLESS_GRPC_PORT", "8084")), "protocol": "vless",
+                "settings": {"clients": [{"id": uuid}], "decryption": "none"},
+                "streamSettings": {"network": "grpc", "security": "tls",
+                                   "tlsSettings": _direct_tls(),
+                                   "grpcSettings": {"serviceName": "grpc"}}
             })
         if _is_true(os.environ.get("DIRECT_XRAY_QUIC")):
             inbounds.append({
@@ -325,6 +576,21 @@ def render_xray(port, configs):
                 "streamSettings": {"network": "quic", "security": "tls",
                                    "tlsSettings": _direct_tls(),
                                    "quicSettings": {"security": "none", "key": "", "header": {"type": "none"}}}
+            })
+        if _is_true(os.environ.get("DIRECT_TROJAN")):
+            inbounds.append({
+                "port": int(os.environ.get("DIRECT_TROJAN_PORT", "9443")), "protocol": "trojan",
+                "settings": {"clients": [{"password": uuid}]},
+                "streamSettings": {"network": "tcp", "security": "tls",
+                                   "tlsSettings": _direct_tls()}
+            })
+        if _is_true(os.environ.get("DIRECT_VMESS_WS")):
+            inbounds.append({
+                "port": int(os.environ.get("DIRECT_VMESS_WS_PORT", "9444")), "protocol": "vmess",
+                "settings": {"clients": [{"id": uuid, "alterId": 0}]},
+                "streamSettings": {"network": "ws", "security": "tls",
+                                   "tlsSettings": _direct_tls(),
+                                   "wsSettings": {"path": "/ws"}}
             })
     if not inbounds:
         return None
@@ -361,15 +627,42 @@ def render_singbox(port, configs):
             "users": [{"uuid": uuid}],
             "transport": transport
         })
-    if _is_true(os.environ.get("ENABLE_DIRECT")) and _is_true(os.environ.get("DIRECT_SB_TLS")):
-        inbounds.append({
-            "type": "vless", "listen": "0.0.0.0",
-            "listen_port": int(os.environ.get("DIRECT_SB_TLS_PORT", "8443")),
-            "users": [{"uuid": uuid}],
-            "tls": {"enabled": True,
-                    "certificate_path": "/etc/nexus-direct/cert.pem",
-                    "key_path": "/etc/nexus-direct/key.pem"}
-        })
+    if _is_true(os.environ.get("ENABLE_DIRECT")):
+        if _is_true(os.environ.get("DIRECT_SB_TLS")):
+            inbounds.append({
+                "type": "vless", "listen": "0.0.0.0",
+                "listen_port": int(os.environ.get("DIRECT_SB_TLS_PORT", "8443")),
+                "users": [{"uuid": uuid}],
+                "tls": {"enabled": True,
+                        "certificate_path": "/etc/nexus-direct/cert.pem",
+                        "key_path": "/etc/nexus-direct/key.pem"}
+            })
+        if _is_true(os.environ.get("DIRECT_SB_TROJAN")):
+            inbounds.append({
+                "type": "trojan", "listen": "0.0.0.0",
+                "listen_port": int(os.environ.get("DIRECT_SB_TROJAN_PORT", "9445")),
+                "users": [{"password": uuid}],
+                "tls": {"enabled": True,
+                        "certificate_path": "/etc/nexus-direct/cert.pem",
+                        "key_path": "/etc/nexus-direct/key.pem"}
+            })
+        if _is_true(os.environ.get("DIRECT_SS")):
+            inbounds.append({
+                "type": "shadowsocks", "listen": "0.0.0.0",
+                "listen_port": int(os.environ.get("DIRECT_SS_PORT", "8388")),
+                "method": "aes-256-gcm",
+                "password": uuid
+            })
+        if _is_true(os.environ.get("DIRECT_HY2")):
+            inbounds.append({
+                "type": "hysteria2", "listen": "0.0.0.0",
+                "listen_port": int(os.environ.get("DIRECT_HY2_PORT", "9446")),
+                "users": [{"password": uuid}],
+                "tls": {"enabled": True,
+                        "certificate_path": "/etc/nexus-direct/cert.pem",
+                        "key_path": "/etc/nexus-direct/key.pem",
+                        "alpn": ["h3"]}
+            })
     if not inbounds:
         return None
     return {
@@ -436,18 +729,58 @@ if _is_true(os.environ.get("ENABLE_SINGBOX")):
     for c in parse_configs(os.environ["SINGBOX_CONFIGS"]):
         tunnel_native.append(vless_link(os.environ["SINGBOX_DOMAIN"], os.environ["SINGBOX_DOMAIN"], c["proto"], c["port"], "sb"))
 # Direct nodes enter the subscription as-is — never fissioned
-# (their address is the VPS itself). Self-signed cert, so clients
-# need allowInsecure=1; direct is a backup, not the main path.
+# (their address is the VPS itself). TLS direct links carry
+# allowInsecure=1 unless CERT_MODE=acme (valid cert); plain-TCP /
+# plain-WS links carry none; direct is a backup, not the main path.
+# Remark format: "<prefix>丨直连丨<Name>". Keep in sync with
+# web/sub-server.py direct_links() — same names, same link shapes.
+import base64 as _b64link
+
+def _ai():
+    # allowInsecure suffix for TLS direct links ("" for a valid ACME cert).
+    return "" if os.environ.get("CERT_MODE", "selfsigned") == "acme" else "&allowInsecure=1"
+
+def _vmess_link(dd, port):
+    cfg = {"v": "2", "ps": f"{prefix}丨直连丨Xray-VMess-WS", "add": dd, "port": str(port),
+           "id": uuid, "aid": "0", "net": "ws", "type": "none", "host": dd,
+           "path": "/ws", "tls": "tls", "sni": dd}
+    return "vmess://" + _b64link.b64encode(json.dumps(cfg, ensure_ascii=False).encode()).decode()
+
+def _ss_link(dd, port):
+    raw = f"aes-256-gcm:{uuid}@{dd}:{port}".encode()
+    return ("ss://" + _b64link.urlsafe_b64encode(raw).decode().rstrip("=")
+            + f"#{prefix}丨直连丨Singbox-SS")
+
 direct = []
 if _is_true(os.environ.get("ENABLE_DIRECT")):
     _dd = os.environ.get("DIRECT_DOMAIN", "").strip()
     if _dd:
         if _is_true(os.environ.get("DIRECT_XRAY_TLS")):
-            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_TLS_PORT', '443')}/?encryption=none&security=tls&sni={_dd}&type=tcp&allowInsecure=1#{prefix}丨直连丨Xray-TLS")
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_TLS_PORT', '443')}/?encryption=none&security=tls&sni={_dd}&type=tcp{_ai()}#{prefix}丨直连丨Xray-TLS")
+        if _is_true(os.environ.get("DIRECT_VLESS_TCP")):
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_TCP_PORT', '8082')}/?encryption=none&type=tcp#{prefix}丨直连丨Xray-TCP")
+        if _is_true(os.environ.get("DIRECT_VLESS_REALITY")):
+            _rdest = os.environ.get("REALITY_DEST", "").strip()
+            _rsni = os.environ.get("REALITY_EFF_SNI", "").strip() or _rdest
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_REALITY_PORT', '9447')}/?encryption=none&security=reality&pbk={os.environ.get('REALITY_PUBLIC_KEY', '')}&sid={os.environ.get('REALITY_SHORT_ID', '')}&sni={_rsni}&fp=chrome&type=tcp#{prefix}丨直连丨Xray-Reality")
+        if _is_true(os.environ.get("DIRECT_VLESS_WS")):
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_WS_PORT', '8083')}/?encryption=none&type=ws&path=%2Fws#{prefix}丨直连丨Xray-WS")
+        if _is_true(os.environ.get("DIRECT_VLESS_GRPC")):
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_GRPC_PORT', '8084')}/?encryption=none&security=tls&sni={_dd}&type=grpc&serviceName=grpc{_ai()}#{prefix}丨直连丨Xray-gRPC")
         if _is_true(os.environ.get("DIRECT_XRAY_QUIC")):
-            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_QUIC_PORT', '443')}/?encryption=none&security=tls&sni={_dd}&type=quic&quicSecurity=none&headerType=none&allowInsecure=1#{prefix}丨直连丨Xray-QUIC")
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_QUIC_PORT', '443')}/?encryption=none&security=tls&sni={_dd}&type=quic&quicSecurity=none&headerType=none{_ai()}#{prefix}丨直连丨Xray-QUIC")
+        if _is_true(os.environ.get("DIRECT_TROJAN")):
+            direct.append(f"trojan://{uuid}@{_dd}:{os.environ.get('DIRECT_TROJAN_PORT', '9443')}?security=tls&sni={_dd}{_ai()}#{prefix}丨直连丨Xray-Trojan")
+        if _is_true(os.environ.get("DIRECT_VMESS_WS")):
+            direct.append(_vmess_link(_dd, os.environ.get("DIRECT_VMESS_WS_PORT", "9444")))
         if _is_true(os.environ.get("DIRECT_SB_TLS")):
-            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_SB_TLS_PORT', '8443')}/?encryption=none&security=tls&sni={_dd}&type=tcp&allowInsecure=1#{prefix}丨直连丨Singbox-TLS")
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_SB_TLS_PORT', '8443')}/?encryption=none&security=tls&sni={_dd}&type=tcp{_ai()}#{prefix}丨直连丨Singbox-TLS")
+        if _is_true(os.environ.get("DIRECT_SB_TROJAN")):
+            direct.append(f"trojan://{uuid}@{_dd}:{os.environ.get('DIRECT_SB_TROJAN_PORT', '9445')}?security=tls&sni={_dd}{_ai()}#{prefix}丨直连丨Singbox-Trojan")
+        if _is_true(os.environ.get("DIRECT_SS")):
+            direct.append(_ss_link(_dd, os.environ.get("DIRECT_SS_PORT", "8388")))
+        if _is_true(os.environ.get("DIRECT_HY2")):
+            direct.append(f"hysteria2://{uuid}@{_dd}:{os.environ.get('DIRECT_HY2_PORT', '9446')}?insecure=1&sni={_dd}#{prefix}丨直连丨Singbox-Hysteria2")
 native = tunnel_native + direct
 # merged: re-derive with preferred addr as address, keeping domain as sni.
 # Rebuild from configs (not by string-replacing native links) so sni stays correct.
@@ -512,11 +845,38 @@ EOF
     if is_true "$DIRECT_XRAY_TLS"; then
       printf -- '- Xray VLESS+TLS: %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_XRAY_TLS_PORT" >> "$WORKDIR/ROUTES.md"
     fi
+    if is_true "$DIRECT_VLESS_TCP"; then
+      printf -- '- Xray VLESS+TCP (plain, no TLS): %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_VLESS_TCP_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_VLESS_REALITY"; then
+      printf -- '- Xray VLESS+Reality (dest %s): %s:%s\n' "$REALITY_DEST" "$DIRECT_DOMAIN" "$DIRECT_VLESS_REALITY_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_VLESS_WS"; then
+      printf -- '- Xray VLESS+WS (plain, path /ws): %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_VLESS_WS_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_VLESS_GRPC"; then
+      printf -- '- Xray VLESS+gRPC+TLS (serviceName grpc): %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_VLESS_GRPC_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
     if is_true "$DIRECT_XRAY_QUIC"; then
-      printf -- '- Xray QUIC: %s:%s (UDP)\n' "$DIRECT_DOMAIN" "$DIRECT_XRAY_QUIC_PORT" >> "$WORKDIR/ROUTES.md"
+      printf -- '- Xray VLESS+QUIC (UDP): %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_XRAY_QUIC_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_TROJAN"; then
+      printf -- '- Xray Trojan+TLS: %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_TROJAN_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_VMESS_WS"; then
+      printf -- '- Xray VMess+WS+TLS (path /ws): %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_VMESS_WS_PORT" >> "$WORKDIR/ROUTES.md"
     fi
     if is_true "$DIRECT_SB_TLS"; then
       printf -- '- Sing-box VLESS+TLS: %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_SB_TLS_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_SB_TROJAN"; then
+      printf -- '- Sing-box Trojan+TLS: %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_SB_TROJAN_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_SS"; then
+      printf -- '- Sing-box Shadowsocks (aes-256-gcm): %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_SS_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_HY2"; then
+      printf -- '- Sing-box Hysteria2 (UDP, alpn h3): %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_HY2_PORT" >> "$WORKDIR/ROUTES.md"
     fi
   fi
 fi
@@ -631,6 +991,19 @@ if [ -n "$SUB_DOMAIN" ]; then
       -e DIRECT_XRAY_TLS="$DIRECT_XRAY_TLS" -e DIRECT_XRAY_TLS_PORT="$DIRECT_XRAY_TLS_PORT" \
       -e DIRECT_XRAY_QUIC="$DIRECT_XRAY_QUIC" -e DIRECT_XRAY_QUIC_PORT="$DIRECT_XRAY_QUIC_PORT" \
       -e DIRECT_SB_TLS="$DIRECT_SB_TLS" -e DIRECT_SB_TLS_PORT="$DIRECT_SB_TLS_PORT" \
+      -e DIRECT_VLESS_TCP="$DIRECT_VLESS_TCP" -e DIRECT_VLESS_TCP_PORT="$DIRECT_VLESS_TCP_PORT" \
+      -e DIRECT_VLESS_REALITY="$DIRECT_VLESS_REALITY" -e DIRECT_VLESS_REALITY_PORT="$DIRECT_VLESS_REALITY_PORT" \
+      -e DIRECT_VLESS_WS="$DIRECT_VLESS_WS" -e DIRECT_VLESS_WS_PORT="$DIRECT_VLESS_WS_PORT" \
+      -e DIRECT_VLESS_GRPC="$DIRECT_VLESS_GRPC" -e DIRECT_VLESS_GRPC_PORT="$DIRECT_VLESS_GRPC_PORT" \
+      -e DIRECT_TROJAN="$DIRECT_TROJAN" -e DIRECT_TROJAN_PORT="$DIRECT_TROJAN_PORT" \
+      -e DIRECT_VMESS_WS="$DIRECT_VMESS_WS" -e DIRECT_VMESS_WS_PORT="$DIRECT_VMESS_WS_PORT" \
+      -e DIRECT_SB_TROJAN="$DIRECT_SB_TROJAN" -e DIRECT_SB_TROJAN_PORT="$DIRECT_SB_TROJAN_PORT" \
+      -e DIRECT_SS="$DIRECT_SS" -e DIRECT_SS_PORT="$DIRECT_SS_PORT" \
+      -e DIRECT_HY2="$DIRECT_HY2" -e DIRECT_HY2_PORT="$DIRECT_HY2_PORT" \
+      -e CERT_MODE="$CERT_MODE" \
+      -e REALITY_DEST="$REALITY_DEST" -e REALITY_SNI="$REALITY_SNI" \
+      -e REALITY_EFF_SNI="$REALITY_EFF_SNI" -e REALITY_PUBLIC_KEY="$REALITY_PUBLIC_KEY" \
+      -e REALITY_SHORT_ID="$REALITY_SHORT_ID" \
       -v "$WORKDIR/web/sub-server.py:/app/sub-server.py:ro" \
       "${_gen_vol[@]}" \
       "$PYTHON_IMAGE" python3 /app/sub-server.py
@@ -674,7 +1047,7 @@ done
 if command -v curl >/dev/null 2>&1; then
   if [ -n "$SUB_DOMAIN" ] && docker inspect nexus-sub >/dev/null 2>&1; then
     _sub_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_PATH/raw/$NODE_UUID" 2>/dev/null || true)"
-    if [ -z "$_sub_body" ] || ! printf '%s' "$_sub_body" | base64 -d 2>/dev/null | grep -q '^vless://'; then
+    if [ -z "$_sub_body" ] || ! printf '%s' "$_sub_body" | base64 -d 2>/dev/null | grep -q '://'; then
       echo "[nexus-argo] ERROR: nexus-sub is running but /$SUB_PATH/raw/<uuid> did not return subscription data — check: docker logs nexus-sub"
       fail=1
     else
@@ -686,10 +1059,15 @@ if command -v curl >/dev/null 2>&1; then
     # only served static files would return the deploy-time count instead.
     if [ "$fail" = "0" ]; then
       _native_n=$(grep -c . "$WORKDIR/sub/raw.txt" 2>/dev/null || true); _native_n="${_native_n:-0}"
-      _direct_n=$(grep -c '丨直连丨' "$WORKDIR/sub/raw.txt" 2>/dev/null || true); _direct_n="${_direct_n:-0}"
-      _want=$(( (_native_n - _direct_n) * 2 + _direct_n ))
+      # Tunnel links carry a literal 丨Xray丨 / 丨Singbox丨 remark; direct
+      # links are the rest (the VMess link's remark is base64-encoded
+      # inside the link, so grep '丨直连丨' would miss it — count direct
+      # as native minus tunnel instead).
+      _tunnel_n=$(grep -cE '丨(Xray|Singbox)丨' "$WORKDIR/sub/raw.txt" 2>/dev/null || true); _tunnel_n="${_tunnel_n:-0}"
+      _direct_n=$(( _native_n - _tunnel_n ))
+      _want=$(( _tunnel_n * 2 + _direct_n ))
       _merged_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_PATH/merged/$NODE_UUID?addrs=cf.xreak.top,cf.3666888.xyz" 2>/dev/null || true)"
-      _merged_n=$(printf '%s' "$_merged_body" | base64 -d 2>/dev/null | grep -c '^vless://' || true)
+      _merged_n=$(printf '%s' "$_merged_body" | base64 -d 2>/dev/null | grep -c '://' || true)
       if [ "$_merged_n" != "$_want" ]; then
         echo "[nexus-argo] ERROR: nexus-sub ?addrs= fission check failed — expected $_want links for 2 addrs, got ${_merged_n:-0} — check: docker logs nexus-sub"
         fail=1
@@ -768,7 +1146,10 @@ fi
 if is_true "$ENABLE_DIRECT"; then
   echo ""
   echo "${C_YELLOW}⚠ 直连节点 (自签名证书, 客户端需 allowInsecure=1, 仅作备用):${C_RESET}"
-  grep '丨直连丨' "$WORKDIR/sub/raw.txt" 2>/dev/null || true
+  # Direct links are the raw.txt lines without a tunnel remark
+  # (丨Xray丨 / 丨Singbox丨); the VMess link's remark is base64-encoded
+  # inside the link, so grep '丨直连丨' would miss it.
+  grep -vE '丨(Xray|Singbox)丨' "$WORKDIR/sub/raw.txt" 2>/dev/null || true
 fi
 echo ""
 echo "原生节点 (可直接复制到客户端):"
