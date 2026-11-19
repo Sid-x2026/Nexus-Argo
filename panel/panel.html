@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus-Argo 面板</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f5fb; color: #1e293b; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 14px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 18px 14px 40px; }
+  .hero { background: linear-gradient(135deg, #4f46e5, #7c3aed 55%, #06b6d4); color: #fff; border-radius: 18px; padding: 22px 24px; box-shadow: 0 8px 24px rgba(79, 70, 229, .25); }
+  .hero h1 { margin: 0; font-size: 22px; }
+  .hero h1 .tag { font-size: 11px; background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.35); padding: 2px 8px; border-radius: 20px; vertical-align: middle; margin-left: 8px; font-weight: 400; }
+  .hero p { margin: 6px 0 0; opacity: .92; font-size: 13px; }
+  .hero .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .hero button { background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.4); }
+  .hero button:hover { background: rgba(255,255,255,.28); }
+  .card { background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(15, 23, 42, .06); padding: 18px 20px; margin-top: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 16px; }
+  .card h3 { margin: 0 0 10px; font-size: 14px; color: #4f46e5; }
+  .hint { color: #64748b; font-size: 12.5px; margin: 0 0 12px; line-height: 1.6; }
+  .tabs { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .tabs button { border: 1px solid #e2e8f0; background: #fff; color: #334155; border-radius: 20px; padding: 8px 18px; font-size: 13.5px; cursor: pointer; }
+  .tabs button.on { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border-color: transparent; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 760px) { .grid4 { grid-template-columns: repeat(2, 1fr); } }
+  .stat { background: #fff; border-radius: 14px; padding: 14px; box-shadow: 0 2px 10px rgba(15, 23, 42, .06); }
+  .stat .t { font-size: 12.5px; color: #64748b; }
+  .stat .v { font-size: 18px; font-weight: 700; margin-top: 4px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .dot.ok { background: #22c55e; } .dot.bad { background: #ef4444; } .dot.off { background: #94a3b8; } .dot.run { background: #f59e0b; }
+  label.f { display: block; font-size: 12.5px; color: #475569; margin: 12px 0 5px; font-weight: 600; }
+  input[type=text], input[type=password], input[type=number], textarea, select { width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; font-size: 13.5px; background: #fff; color: #1e293b; outline: none; }
+  input:focus, textarea:focus, select:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, .12); }
+  input[type=number] { font-family: monospace; }
+  .mono { font-family: monospace; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .row2, .row3 { grid-template-columns: 1fr; } }
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e2e8f0; border-radius: 20px; padding: 7px 14px; cursor: pointer; font-size: 13px; background: #fff; user-select: none; }
+  .pill:has(input:checked) { background: #eef2ff; border-color: #4f46e5; color: #4f46e5; font-weight: 600; }
+  .pill input { accent-color: #4f46e5; }
+  .proto { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #eef0fb; background: #fafaff; border-radius: 12px; padding: 9px 12px; margin-top: 8px; }
+  .proto label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+  .proto input[type=checkbox] { accent-color: #4f46e5; width: 16px; height: 16px; }
+  .proto .port { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 12px; }
+  .proto .port input { width: 76px; padding: 6px 8px; }
+  .proto.off { opacity: .45; }
+  button { border: none; border-radius: 10px; padding: 10px 20px; font-size: 14px; cursor: pointer; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; font-weight: 600; }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
+  button.green { background: #16a34a; }
+  button.red { background: #dc2626; }
+  button.sm { padding: 7px 14px; font-size: 13px; }
+  .btnrow { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
+  .status { margin-top: 12px; font-size: 13px; min-height: 20px; line-height: 1.6; }
+  .status.err { color: #dc2626; } .status.ok { color: #16a34a; } .status.info { color: #475569; }
+  .log { background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px; height: 260px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin-top: 10px; }
+  .addr-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  .addr { flex: 1; min-width: 0; height: 44px; line-height: 44px; padding: 0 14px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; color: #334155; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; }
+  .addr.empty { color: #94a3b8; }
+  .addr-row button { flex-shrink: 0; height: 44px; padding: 0 18px; font-size: 14px; }
+  .addr-label { font-size: 12.5px; color: #475569; font-weight: 600; margin-top: 14px; }
+  .hidden { display: none !important; }
+  .login-box { max-width: 420px; margin: 80px auto 0; }
+  .login-box .card { padding: 26px 26px 22px; }
+  .warn { background: #fef9c3; border: 1px solid #fde68a; color: #854d0e; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.6; margin-top: 10px; }
+  .num { font-size: 22px; font-weight: 700; }
+  .muted { color: #64748b; font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 登录 -->
+  <div id="loginView" class="login-box hidden">
+    <div class="hero" style="text-align:center;">
+      <h1>Nexus-Argo 面板</h1>
+      <p>请输入面板账号密码登录</p>
+    </div>
+    <div class="card">
+      <label class="f" style="margin-top:0;">账号</label>
+      <input type="text" id="loginUser" value="admin" autocomplete="username">
+      <label class="f">密码</label>
+      <input type="password" id="loginPass" autocomplete="current-password" placeholder="安装时生成的密码">
+      <div class="btnrow"><button id="btnLogin" style="flex:1;">登录</button></div>
+      <div id="loginOut" class="status err"></div>
+      <p class="hint" style="margin-top:14px;">忘记密码：SSH 进 VPS，查看 /opt/nexus-argo/panel/auth.json 同目录的密码文件，或重跑 panel-install.sh 重置。</p>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="appView" class="hidden">
+    <div class="hero">
+      <div class="row">
+        <div>
+          <h1>Nexus-Argo 面板 <span class="tag">v1 精简版</span></h1>
+          <p>上面部署节点，下面拿订阅。只保留核心部署功能。</p>
+        </div>
+        <button id="btnLogout" class="sm">退出登录</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button data-tab="overview" class="on">总览</button>
+      <button data-tab="deploy">部署安装</button>
+      <button data-tab="sub">订阅地址</button>
+    </div>
+
+    <!-- 总览 -->
+    <div id="tab-overview">
+      <div class="grid4" style="margin-top:16px;">
+        <div class="stat"><div class="t">Argo 隧道</div><div class="v" id="stArgo">—</div></div>
+        <div class="stat"><div class="t">Xray</div><div class="v" id="stXray">—</div></div>
+        <div class="stat"><div class="t">Sing-box</div><div class="v" id="stSb">—</div></div>
+        <div class="stat"><div class="t">订阅服务</div><div class="v" id="stSub">—</div></div>
+      </div>
+      <div class="card">
+        <h2>节点与订阅</h2>
+        <p class="hint">节点数来自本次部署生成的订阅文件；部署后刷新即可看到。</p>
+        <div class="row3">
+          <div><div class="muted">原生节点</div><div class="num" id="nNative">—</div></div>
+          <div><div class="muted">动态节点（原生 × 优选地址）</div><div class="num" id="nMerged">—</div></div>
+          <div><div class="muted">部署状态</div><div class="num" id="nDeploy" style="font-size:16px;">—</div></div>
+        </div>
+        <div class="btnrow">
+          <button class="sm" id="btnGoDeploy">去部署</button>
+          <button class="sm ghost" id="btnGoSub">订阅地址</button>
+          <button class="sm ghost" id="btnRefresh">刷新状态</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>快捷说明</h2>
+        <p class="hint">部署方式：Argo 隧道（默认）或直连节点，两种可以一起装；协议各自勾选，只装选中的。订阅统一拉取隧道节点（裂变后）和直连节点（原样），一个订阅里全有。裂变请用订阅生成器或其它工具手动完成，本面板不做裂变。</p>
+      </div>
+    </div>
+
+    <!-- 部署安装 -->
+    <div id="tab-deploy" class="hidden">
+      <div class="card">
+        <h2>部署安装</h2>
+        <p class="hint">填好设置，点「开始部署」，面板在 VPS 上自动完成部署。部署日志和检查结果在下方查看。</p>
+
+        <h3>部署方式</h3>
+        <div class="pills">
+          <label class="pill"><input type="checkbox" id="modeTunnel" checked> Argo 隧道</label>
+          <label class="pill"><input type="checkbox" id="modeDirect"> 直连节点</label>
+        </div>
+        <p class="hint" style="margin-top:8px;">Argo 为默认；直连会暴露 VPS 真实 IP，仅作备用。两种可以一起装。</p>
+
+        <div id="tunnelBox">
+          <h3>隧道协议（各自勾选）</h3>
+          <div class="row2">
+            <div>
+              <label class="pill" style="margin-bottom:4px;"><input type="checkbox" id="enableXray" checked> Xray-core</label>
+              <div id="xrayProtos">
+                <div class="proto" data-proto="xhttp_h1"><label><input type="checkbox" class="xp" value="xhttp_h1" checked> xhttp_h1</label><span class="port">端口 <input type="number" id="port_xhttp_h1" value="443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="xhttp_h2"><label><input type="checkbox" class="xp" value="xhttp_h2" checked> xhttp_h2</label><span class="port">端口 <input type="number" id="port_xhttp_h2" value="443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="xhttp_h3"><label><input type="checkbox" class="xp" value="xhttp_h3" checked> xhttp_h3</label><span class="port">端口 <input type="number" id="port_xhttp_h3" value="443" min="1" max="65535"></span></div>
+              </div>
+            </div>
+            <div>
+              <label class="pill" style="margin-bottom:4px;"><input type="checkbox" id="enableSb" checked> Sing-box</label>
+              <div id="sbProtos">
+                <div class="proto" data-proto="ws"><label><input type="checkbox" class="sp" value="ws" checked> ws</label><span class="port">端口 <input type="number" id="port_ws" value="8443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="httpupgrade"><label><input type="checkbox" class="sp" value="httpupgrade" checked> httpupgrade</label><span class="port">端口 <input type="number" id="port_httpupgrade" value="8443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="grpc"><label><input type="checkbox" class="sp" value="grpc" checked> grpc</label><span class="port">端口 <input type="number" id="port_grpc" value="8443" min="1" max="65535"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <h3 style="margin-top:16px;">Argo 隧道与域名</h3>
+          <label class="f">Argo Tunnel Token（直连模式可留空）</label>
+          <input type="text" id="argoToken" class="mono" placeholder="粘贴 Argo Tunnel Token" autocomplete="off">
+          <div class="row2">
+            <div>
+              <label class="f">Xray 子域名</label>
+              <input type="text" id="xrayDomain" value="xr.ahstshu.eu.cc" class="mono">
+              <label class="f">Xray 回源端口</label>
+              <input type="number" id="xrayPort" value="8001" min="1" max="65535">
+            </div>
+            <div>
+              <label class="f">Sing-box 子域名</label>
+              <input type="text" id="sbDomain" value="sb.ahstshu.eu.cc" class="mono">
+              <label class="f">Sing-box 回源端口</label>
+              <input type="number" id="sbPort" value="8002" min="1" max="65535">
+            </div>
+          </div>
+          <div class="row2">
+            <div>
+              <label class="f">订阅子域名</label>
+              <input type="text" id="subDomain" value="sub.ahstshu.eu.cc" class="mono">
+            </div>
+            <div>
+              <label class="f">订阅服务端口</label>
+              <input type="number" id="subPort" value="18080" min="1" max="65535">
+            </div>
+          </div>
+          <p class="hint">Zero Trust 里要加路由：Xray 域名 → 127.0.0.1:Xray 回源端口；Sing-box 域名 → 127.0.0.1:Sing-box 回源端口；订阅域名 → 127.0.0.1:订阅端口。</p>
+        </div>
+
+        <div id="directBox" class="hidden">
+          <h3 style="margin-top:16px;">直连节点</h3>
+          <div class="warn">直连使用自签名证书，客户端需允许不安全证书；直连会暴露 VPS 真实 IP，仅作备用。</div>
+          <label class="f">直连域名或 VPS 公网 IP（留空自动检测公网 IP）</label>
+          <input type="text" id="directDomain" class="mono" placeholder="例如 1.2.3.4 或直连域名">
+          <div class="proto" data-proto="d-tls"><label><input type="checkbox" id="directXrayTls" checked> VLESS + TLS（Xray）</label><span class="port">端口 <input type="number" id="directXrayTlsPort" value="443" min="1" max="65535"></span></div>
+          <div class="proto" data-proto="d-quic"><label><input type="checkbox" id="directXrayQuic"> QUIC（Xray，UDP，可与 TLS 同端口）</label><span class="port">端口 <input type="number" id="directXrayQuicPort" value="443" min="1" max="65535"></span></div>
+          <div class="proto" data-proto="d-sb"><label><input type="checkbox" id="directSbTls" checked> VLESS + TLS（Sing-box）</label><span class="port">端口 <input type="number" id="directSbTlsPort" value="8443" min="1" max="65535"></span></div>
+        </div>
+
+        <h3 style="margin-top:16px;">节点与订阅</h3>
+        <div class="row2">
+          <div>
+            <label class="f">节点 UUID</label>
+            <div style="display:flex; gap:8px;"><input type="text" id="nodeUuid" class="mono" placeholder="点右侧生成"><button class="ghost sm" id="btnGenUuid" type="button">安全生成</button></div>
+          </div>
+          <div>
+            <label class="f">节点名称前缀</label>
+            <input type="text" id="nodePrefix" value="Nexus">
+          </div>
+        </div>
+        <label class="f">订阅路径（自定义订阅地址，默认 sub）</label>
+        <input type="text" id="subPath" value="sub" class="mono">
+        <p class="hint">订阅地址形如 https://订阅域名/订阅路径/raw/UUID。改这里，下次部署生效；已部署的可在「订阅地址」页直接改。</p>
+        <label class="f">客户端优选地址（每行一个，用于动态订阅裂变；留空用默认）</label>
+        <textarea id="optAddress" rows="3" class="mono" placeholder="例如：&#10;cf.xreak.top&#10;cf.3666888.xyz"></textarea>
+
+        <div class="btnrow">
+          <button id="btnDeploy">开始部署</button>
+          <button id="btnSaveCfg" class="ghost">只保存配置</button>
+          <button id="btnClear" class="red">清除部署</button>
+        </div>
+        <div id="deployOut" class="status info"></div>
+        <div id="logWrap" class="hidden">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">
+            <span style="font-weight:700;">安装日志</span><span id="deployState" class="muted"></span>
+          </div>
+          <div class="log" id="deployLog"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 订阅地址 -->
+    <div id="tab-sub" class="hidden">
+      <div class="card">
+        <h2>订阅地址</h2>
+        <p class="hint">订阅统一拉取隧道节点（裂变后）和直连节点（原样），一个订阅里全有。裂变请用订阅生成器或其它工具手动完成，本面板不做裂变。</p>
+        <div class="addr-label">原生订阅地址</div>
+        <div class="addr-row"><div class="addr empty" id="subRaw" data-hint="尚未部署">尚未部署</div><button class="sm" id="btnCopyRaw">复制</button></div>
+        <div class="addr-label">动态订阅地址（原生 × 优选地址）</div>
+        <div class="addr-row"><div class="addr empty" id="subMerged" data-hint="尚未部署">尚未部署</div><button class="sm" id="btnCopyMerged">复制</button></div>
+        <div class="addr-label">订阅生成器面板</div>
+        <div class="addr-row"><div class="addr empty" id="subGen" data-hint="未设置订阅域名">未设置订阅域名</div><button class="sm" id="btnCopyGen">复制</button></div>
+        <h3 style="margin-top:20px;">自定义订阅地址</h3>
+        <p class="hint">改订阅路径（后缀），所有订阅地址实时更新。订阅服务正在运行时直接重启生效，不用重新部署。</p>
+        <div style="display:flex; gap:8px; max-width:420px;"><input type="text" id="subPathEdit" class="mono" value="sub"><button class="green sm" id="btnSaveSubPath">保存并生效</button></div>
+        <div id="subOut" class="status info"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let authed = false, logTimer = null, statusTimer = null, logOffset = 0;
+
+async function api(path, opts) {
+  const r = await fetch(path, Object.assign({headers: {"Content-Type": "application/json"}}, opts || {}));
+  if (r.status === 401) { showLogin(); throw new Error("未登录"); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ("请求失败 " + r.status));
+  return j;
+}
+function showLogin() {
+  authed = false;
+  $("loginView").classList.remove("hidden");
+  $("appView").classList.add("hidden");
+  stopTimers();
+}
+function showApp() {
+  authed = true;
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  loadStatus(); loadConfig(); loadSubscription();
+  statusTimer = setInterval(() => { if (authed) loadStatus(); }, 15000);
+}
+function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) clearInterval(statusTimer); logTimer = statusTimer = null; }
+
+function switchTab(name) {
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  ["overview", "deploy", "sub"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
+  if (name === "sub") loadSubscription();
+  if (name === "overview") loadStatus();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+$("btnGoDeploy").onclick = () => switchTab("deploy");
+$("btnGoSub").onclick = () => switchTab("sub");
+$("btnRefresh").onclick = () => loadStatus();
+$("btnLogout").onclick = async () => { try { await api("/api/logout", {method: "POST"}); } catch (e) {} showLogin(); };
+
+$("btnLogin").onclick = async () => {
+  $("loginOut").textContent = "";
+  try {
+    await api("/api/login", {method: "POST", body: JSON.stringify({user: $("loginUser").value.trim(), password: $("loginPass").value})});
+    $("loginPass").value = "";
+    showApp();
+  } catch (e) { $("loginOut").textContent = e.message || "登录失败"; }
+};
+$("loginPass").addEventListener("keydown", e => { if (e.key === "Enter") $("btnLogin").click(); });
+
+function statHtml(state) {
+  if (state === "running") return '<span class="dot ok"></span>运行中';
+  if (state === "stopped") return '<span class="dot bad"></span>已停止';
+  return '<span class="dot off"></span>未安装';
+}
+async function loadStatus() {
+  try {
+    const s = await api("/api/status");
+    $("stArgo").innerHTML = statHtml(s.services.find(x => x.name === "nexus-argo").state);
+    $("stXray").innerHTML = statHtml(s.services.find(x => x.name === "nexus-xray").state);
+    $("stSb").innerHTML = statHtml(s.services.find(x => x.name === "nexus-singbox").state);
+    $("stSub").innerHTML = statHtml(s.services.find(x => x.name === "nexus-sub").state);
+    $("nNative").textContent = s.nodes.native;
+    $("nMerged").textContent = s.nodes.dynamic;
+    const ds = {idle: "未部署", running: "部署中…", ok: "已部署", failed: "部署失败"}[s.deploy_state] || s.deploy_state;
+    $("nDeploy").textContent = ds;
+  } catch (e) {}
+}
+
+function collectConfig() {
+  const protos = (cls) => { const o = {}; document.querySelectorAll("." + cls).forEach(el => { if (el.checked) o[el.value] = parseInt($("port_" + el.value).value, 10) || 443; }); return o; };
+  return {
+    node_uuid: $("nodeUuid").value.trim(),
+    node_prefix: $("nodePrefix").value.trim() || "Nexus",
+    argo_token: $("argoToken").value.trim(),
+    tunnel_protocol: "auto",
+    enable_xray: $("modeTunnel").checked && $("enableXray").checked,
+    xray_port: parseInt($("xrayPort").value, 10) || 8001,
+    xray_domain: $("xrayDomain").value.trim(),
+    xray_protocols: protos("xp"),
+    enable_singbox: $("modeTunnel").checked && $("enableSb").checked,
+    singbox_port: parseInt($("sbPort").value, 10) || 8002,
+    singbox_domain: $("sbDomain").value.trim(),
+    singbox_protocols: protos("sp"),
+    opt_addrs: $("optAddress").value.split("\n").map(s => s.trim()).filter(Boolean),
+    sub_domain: $("subDomain").value.trim(),
+    sub_port: parseInt($("subPort").value, 10) || 18080,
+    sub_path: $("subPath").value.trim() || "sub",
+    enable_direct: $("modeDirect").checked,
+    direct_domain: $("directDomain").value.trim(),
+    direct_xray_tls: $("directXrayTls").checked,
+    direct_xray_tls_port: parseInt($("directXrayTlsPort").value, 10) || 443,
+    direct_xray_quic: $("directXrayQuic").checked,
+    direct_xray_quic_port: parseInt($("directXrayQuicPort").value, 10) || 443,
+    direct_sb_tls: $("directSbTls").checked,
+    direct_sb_tls_port: parseInt($("directSbTlsPort").value, 10) || 8443,
+  };
+}
+function fillConfig(c) {
+  $("nodeUuid").value = c.node_uuid || "";
+  $("nodePrefix").value = c.node_prefix || "Nexus";
+  $("argoToken").value = c.argo_token || "";
+  $("modeTunnel").checked = !!c.enable_xray || !!c.enable_singbox;
+  $("enableXray").checked = !!c.enable_xray;
+  $("xrayPort").value = c.xray_port || 8001;
+  $("xrayDomain").value = c.xray_domain || "";
+  $("enableSb").checked = !!c.enable_singbox;
+  $("sbPort").value = c.singbox_port || 8002;
+  $("sbDomain").value = c.singbox_domain || "";
+  document.querySelectorAll(".xp").forEach(el => { el.checked = !!(c.xray_protocols && c.xray_protocols[el.value] != null); const p = $("port_" + el.value); if (p && c.xray_protocols && c.xray_protocols[el.value] != null) p.value = c.xray_protocols[el.value]; });
+  document.querySelectorAll(".sp").forEach(el => { el.checked = !!(c.singbox_protocols && c.singbox_protocols[el.value] != null); const p = $("port_" + el.value); if (p && c.singbox_protocols && c.singbox_protocols[el.value] != null) p.value = c.singbox_protocols[el.value]; });
+  $("optAddress").value = (c.opt_addrs || []).join("\n");
+  $("subDomain").value = c.sub_domain || "";
+  $("subPort").value = c.sub_port || 18080;
+  $("subPath").value = c.sub_path || "sub";
+  $("modeDirect").checked = !!c.enable_direct;
+  $("directDomain").value = c.direct_domain || "";
+  $("directXrayTls").checked = !!c.direct_xray_tls;
+  $("directXrayTlsPort").value = c.direct_xray_tls_port || 443;
+  $("directXrayQuic").checked = !!c.direct_xray_quic;
+  $("directXrayQuicPort").value = c.direct_xray_quic_port || 443;
+  $("directSbTls").checked = !!c.direct_sb_tls;
+  $("directSbTlsPort").value = c.direct_sb_tls_port || 8443;
+  toggleMode();
+}
+async function loadConfig() {
+  try { fillConfig(await api("/api/config")); } catch (e) {}
+}
+function toggleMode() {
+  const tunnel = $("modeTunnel").checked;
+  const direct = $("modeDirect").checked;
+  $("tunnelBox").classList.toggle("hidden", !tunnel);
+  $("directBox").classList.toggle("hidden", !direct);
+  $("enableXray").disabled = !tunnel; $("enableSb").disabled = !tunnel;
+}
+$("modeTunnel").onchange = toggleMode;
+$("modeDirect").onchange = toggleMode;
+$("enableXray").onchange = () => { document.querySelectorAll("#xrayProtos .proto").forEach(p => p.classList.toggle("off", !$("enableXray").checked)); };
+$("enableSb").onchange = () => { document.querySelectorAll("#sbProtos .proto").forEach(p => p.classList.toggle("off", !$("enableSb").checked)); };
+$("btnGenUuid").onclick = () => {
+  const u = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16); });
+  $("nodeUuid").value = u;
+};
+function setOut(el, msg, cls) { el.textContent = msg; el.className = "status " + (cls || "info"); }
+
+$("btnSaveCfg").onclick = async () => {
+  try {
+    await api("/api/config", {method: "POST", body: JSON.stringify(collectConfig())});
+    setOut($("deployOut"), "配置已保存", "ok");
+  } catch (e) { setOut($("deployOut"), e.message, "err"); }
+};
+$("btnDeploy").onclick = async () => {
+  setOut($("deployOut"), "正在启动部署…", "info");
+  $("btnDeploy").disabled = true;
+  $("logWrap").classList.remove("hidden");
+  $("deployLog").textContent = "";
+  logOffset = 0;
+  try {
+    await api("/api/deploy", {method: "POST", body: JSON.stringify(collectConfig())});
+    setOut($("deployOut"), "部署已开始，下方查看安装日志", "info");
+    if (logTimer) clearInterval(logTimer);
+    logTimer = setInterval(pollDeploy, 1500);
+    pollDeploy();
+  } catch (e) {
+    setOut($("deployOut"), e.message, "err");
+    $("btnDeploy").disabled = false;
+  }
+};
+async function pollDeploy() {
+  try {
+    const s = await api("/api/deploy/status");
+    $("deployState").textContent = {idle: "未部署", running: "部署中…", ok: "部署完成", failed: "部署失败"}[s.state] || s.state;
+    const l = await api("/api/deploy/log?offset=" + logOffset);
+    if (l.log) { $("deployLog").textContent += l.log; $("deployLog").scrollTop = $("deployLog").scrollHeight; }
+    logOffset = l.offset;
+    if (s.state === "ok" || s.state === "failed") {
+      clearInterval(logTimer); logTimer = null;
+      $("btnDeploy").disabled = false;
+      setOut($("deployOut"), s.message || (s.state === "ok" ? "部署完成" : "部署失败"), s.state === "ok" ? "ok" : "err");
+      loadStatus(); loadSubscription();
+    }
+  } catch (e) { /* 隧道重启导致短暂断开时, 下次轮询自动恢复 */ }
+}
+$("btnClear").onclick = async () => {
+  if (!confirm("确定清除本次部署吗？节点容器和配置文件会被删除，面板本身保留，部署配置还在，可以一键重新部署。")) return;
+  try {
+    const r = await api("/api/clear", {method: "POST"});
+    setOut($("deployOut"), r.message, "ok");
+    loadStatus(); loadSubscription();
+  } catch (e) { setOut($("deployOut"), e.message, "err"); }
+};
+
+function setAddr(id, url, hint) {
+  const el = $(id);
+  if (url) { el.textContent = url; el.classList.remove("empty"); el.dataset.url = url; el.title = url; }
+  else { el.textContent = hint; el.classList.add("empty"); el.dataset.url = ""; el.title = ""; }
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch (e) { const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand("copy"); } catch (_) {} ta.remove(); return ok; }
+}
+async function copyAddr(id, outEl) {
+  const u = $(id).dataset.url || "";
+  if (!u) { setOut($(outEl), "还没有可复制的订阅地址，请先部署", "err"); return; }
+  const ok = await copyText(u);
+  setOut($(outEl), ok ? "已复制订阅地址" : "复制失败，请手动选中复制", ok ? "ok" : "err");
+}
+$("btnCopyRaw").onclick = () => copyAddr("subRaw", "subOut");
+$("btnCopyMerged").onclick = () => copyAddr("subMerged", "subOut");
+$("btnCopyGen").onclick = () => copyAddr("subGen", "subOut");
+async function loadSubscription() {
+  try {
+    const s = await api("/api/subscription");
+    setAddr("subRaw", s.raw_url, "尚未部署");
+    setAddr("subMerged", s.merged_url, "尚未部署");
+    setAddr("subGen", s.generator_url, "未设置订阅域名");
+    $("subPathEdit").value = s.sub_path || "sub";
+  } catch (e) {}
+}
+$("btnSaveSubPath").onclick = async () => {
+  try {
+    const r = await api("/api/subscription", {method: "POST", body: JSON.stringify({sub_path: $("subPathEdit").value.trim()})});
+    setOut($("subOut"), r.message, "ok");
+    loadSubscription();
+  } catch (e) { setOut($("subOut"), e.message, "err"); }
+};
+
+// 进页面先试一次登录态, 已登录直接进, 否则显示登录
+(async () => {
+  try { await api("/api/status"); showApp(); }
+  catch (e) { showLogin(); }
+})();
+</script>
+</body>
+</html>
