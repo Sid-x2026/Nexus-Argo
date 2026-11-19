@@ -90,6 +90,10 @@ SERVICES = ["nexus-argo", "nexus-panel-argo", "nexus-xray", "nexus-singbox", "ne
 DEFAULT_CONFIG = {
     "node_uuid": "",
     "node_prefix": "Nexus",
+    # 节点前缀分开: 隧道与直连各一个 (Part A/B 合同字段)。
+    # node_prefix 只作兼容: 旧配置里只有它时, 读出来当 argo_prefix。
+    "argo_prefix": "Argo",
+    "direct_prefix": "直连",
     "argo_token": "",
     "tunnel_protocol": "auto",
     "enable_xray": True,
@@ -115,6 +119,12 @@ DEFAULT_CONFIG = {
     "direct_vless_reality_port": 9447,
     "reality_dest": "",
     "reality_sni": "",
+    # Reality 额外参数 (Part A/B 合同字段): 指纹 / flow / 加密方式 /
+    # spiderX。publicKey 与 shortId 不放配置里, 自动生成存 reality.json。
+    "reality_fingerprint": "chrome",
+    "reality_flow": "xtls-rprx-vision",
+    "reality_encryption": "mlkem768x25519plus.native",
+    "reality_spiderx": "/",
     "direct_vless_ws": False,
     "direct_vless_ws_port": 8083,
     "direct_vless_grpc": False,
@@ -213,6 +223,12 @@ def load_config():
     for k, v in saved.items():
         if k in cfg:
             cfg[k] = v
+    # 旧配置只有单个 node_prefix 时, 它就是隧道前缀 (直连前缀用默认值)。
+    # 全新配置 (saved 里没有 node_prefix) 不动, argo_prefix 保持默认 "Argo"。
+    # 新配置以 argo_prefix 为准, node_prefix 跟着它走, 保持兼容。
+    if not saved.get("argo_prefix") and saved.get("node_prefix"):
+        cfg["argo_prefix"] = cfg["node_prefix"]
+    cfg["node_prefix"] = cfg["argo_prefix"]
     # 旧字段与新字段保持一致 (新字段为准, 旧配置里只有旧字段时已在上面映射过)
     cfg["direct_xray_tls"] = cfg["direct_vless_tls"]
     cfg["direct_xray_tls_port"] = cfg["direct_vless_tls_port"]
@@ -309,7 +325,14 @@ def validate_config(raw):
     elif cfg["node_uuid"] and not UUID_RE.match(cfg["node_uuid"]):
         errors.append("节点 UUID 格式不正确, 请点「安全生成」重新生成一个")
 
-    cfg["node_prefix"] = str(cfg.get("node_prefix") or "Nexus").strip() or "Nexus"
+    # 节点前缀分开: 旧客户端只发 node_prefix (没发 argo_prefix) 时,
+    # 它就是隧道前缀; 否则 argo_prefix 为准。
+    _raw = raw if isinstance(raw, dict) else {}
+    if (not str(_raw.get("argo_prefix") or "").strip()) and _raw.get("node_prefix"):
+        cfg["argo_prefix"] = str(_raw.get("node_prefix")).strip()
+    cfg["argo_prefix"] = str(cfg.get("argo_prefix") or "Argo").strip() or "Argo"
+    cfg["direct_prefix"] = str(cfg.get("direct_prefix") or "直连").strip() or "直连"
+    cfg["node_prefix"] = cfg["argo_prefix"]
     cfg["tunnel_protocol"] = str(cfg.get("tunnel_protocol") or "auto").strip().lower()
     if cfg["tunnel_protocol"] not in ("auto", "http2", "quic"):
         errors.append("隧道传输只能是 auto / http2 / quic")
@@ -322,19 +345,42 @@ def validate_config(raw):
                         ("sub_port", "订阅端口")):
         if not _port_ok(cfg[name]):
             errors.append(f"{label}必须是 1-65535 的端口")
-    if cfg["xray_port"] == cfg["singbox_port"]:
-        errors.append("Xray 与 Sing-box 回源端口冲突, 请改成不一样的")
-    if cfg["xray_port"] == 8080 or cfg["singbox_port"] == 8080:
-        errors.append("回源端口不能是 8080 (面板端口)")
-    if cfg["sub_port"] in (8080, cfg["xray_port"], cfg["singbox_port"]):
-        errors.append("订阅端口不能是 8080, 也不能和回源端口相同")
-    if cfg["enable_singbox"] and cfg["singbox_port"] > 65532:
-        errors.append("Sing-box 回源端口不能大于 65532 (分发器要用 +1/+2/+3)")
-    if cfg["enable_singbox"]:
-        for off in (1, 2, 3):
-            if cfg["singbox_port"] + off in (cfg["xray_port"], 8080, cfg["sub_port"]):
-                errors.append(f"Sing-box 分发器内部端口 {cfg['singbox_port'] + off} 与其它端口冲突")
-                break
+    # ---- 端口冲突 (同传输层才算冲突) ----
+    # 只校验已启用的端口: 没启用的核心 / 没勾选的协议, 端口再冲突也不拦保存。
+    # 不能冲突: 面板端口、订阅端口、Xray / Sing-box 回源端口、Sing-box
+    # 分发器回源+1/+2/+3、直连 TCP 协议端口 (彼此之间及与上述端口之间)、
+    # 系统端口 22 / 80。可以共用: 同核心的隧道协议共用一个端口
+    # (Xray h1/h2/h3 同 443、Sing-box ws/httpupgrade/grpc 同 8443);
+    # TCP 与 UDP 同号 (如 TCP 443 与 QUIC UDP 443)。
+    # 固定保留端口先占位, 启用的端口按顺序加入, 撞上就报错 (只报第一处)。
+    fixed = {}  # 端口 -> 名称 (已占用的端口)
+    for port, label in ((PANEL_PORT, f"面板端口 {PANEL_PORT}"), (8080, "面板端口 8080"),
+                        (22, "系统端口 22"), (80, "系统端口 80")):
+        fixed.setdefault(port, label)
+    if _port_ok(cfg["sub_port"]):
+        if cfg["sub_port"] in fixed:
+            errors.append(f"订阅端口与{fixed[cfg['sub_port']]}冲突, 请更换")
+        else:
+            fixed[cfg["sub_port"]] = "订阅端口"
+    if cfg["enable_xray"] and _port_ok(cfg["xray_port"]):
+        if cfg["xray_port"] in fixed:
+            errors.append(f"Xray 回源端口与{fixed[cfg['xray_port']]}冲突, 请更换")
+        else:
+            fixed[cfg["xray_port"]] = "Xray 回源端口"
+    dispatch_ports = set()
+    if cfg["enable_singbox"] and _port_ok(cfg["singbox_port"]):
+        if cfg["singbox_port"] > 65532:
+            errors.append("Sing-box 回源端口不能大于 65532 (分发器要用 +1/+2/+3)")
+        if cfg["singbox_port"] in fixed:
+            errors.append(f"Sing-box 回源端口与{fixed[cfg['singbox_port']]}冲突, 请更换")
+        else:
+            fixed[cfg["singbox_port"]] = "Sing-box 回源端口"
+            for off in (1, 2, 3):
+                dp = cfg["singbox_port"] + off
+                dispatch_ports.add(dp)
+                if dp in fixed:
+                    errors.append(f"Sing-box 分发器内部端口 {dp} 与{fixed[dp]}冲突, 请更换")
+                    break
 
     for key in ("xray_domain", "singbox_domain", "sub_domain"):
         cfg[key] = str(cfg.get(key) or "").strip()
@@ -404,6 +450,10 @@ def validate_config(raw):
 
     cfg["reality_dest"] = str(cfg.get("reality_dest") or "").strip()
     cfg["reality_sni"] = str(cfg.get("reality_sni") or "").strip()
+    cfg["reality_fingerprint"] = str(cfg.get("reality_fingerprint") or "chrome").strip().lower() or "chrome"
+    cfg["reality_flow"] = str(cfg.get("reality_flow") or "xtls-rprx-vision").strip() or "xtls-rprx-vision"
+    cfg["reality_encryption"] = str(cfg.get("reality_encryption") or "mlkem768x25519plus.native").strip() or "mlkem768x25519plus.native"
+    cfg["reality_spiderx"] = str(cfg.get("reality_spiderx") or "/").strip() or "/"
     cfg["cert_mode"] = str(cfg.get("cert_mode") or "selfsigned").strip().lower()
     cfg["cert_pem"] = str(cfg.get("cert_pem") or "")
     cfg["cert_key"] = str(cfg.get("cert_key") or "")
@@ -414,9 +464,11 @@ def validate_config(raw):
                           if cfg[flag]]
         if not enabled_direct:
             errors.append("启用直连时至少勾选一个直连协议")
-        # TCP 直连端口之间不能冲突, 也不能和 8080 / 回源端口 / 订阅端口冲突;
-        # QUIC 与 Hysteria2 走 UDP, 不参与 TCP 冲突检查。
+        # TCP 直连端口之间不能冲突, 也不能和面板端口 / 系统端口 / 订阅端口 /
+        # 回源端口 / 分发器内部端口冲突; QUIC 与 Hysteria2 走 UDP, 不参与
+        # TCP 冲突检查 (TCP 与 UDP 同号可以共用)。
         # 只检查已勾选的协议 —— 没勾选的协议端口不拦保存, 勾选时再校验。
+        # fixed 与 dispatch_ports 是上面回源端口一段建好的已占用端口表。
         tcp_ports = [(label, cfg[port_key])
                      for flag, port_key, label, is_tcp in DIRECT_PROTOCOLS
                      if is_tcp and cfg[flag]]
@@ -424,15 +476,12 @@ def validate_config(raw):
         for label, port in tcp_ports:
             if port in seen:
                 errors.append(f"{label}端口与{seen[port]}端口冲突, 请更换")
+            elif port in fixed:
+                errors.append(f"{label}端口与{fixed[port]}冲突, 请更换")
+            elif port in dispatch_ports:
+                errors.append(f"{label}端口与 Sing-box 分发器内部端口 {port} 冲突, 请更换")
             else:
                 seen[port] = label
-        reserved = ((8080, "面板端口 8080"), (cfg["xray_port"], "Xray 回源端口"),
-                    (cfg["singbox_port"], "Sing-box 回源端口"), (cfg["sub_port"], "订阅端口"))
-        for label, port in tcp_ports:
-            for rport, rlabel in reserved:
-                if port == rport:
-                    errors.append(f"{label}端口与{rlabel}冲突, 请更换")
-                    break
 
     # REALITY 开了就必须配目标域名 (域名, 不能是 IP); 直连没开时不校验,
     # 否则只保存隧道配置也会被直连的残留设置拦住。
@@ -443,6 +492,8 @@ def validate_config(raw):
             errors.append("REALITY 目标域名格式不正确, 请填写域名 (不能是 IP 地址)")
         if cfg["reality_sni"] and not _is_domain(cfg["reality_sni"]):
             errors.append("REALITY SNI 格式不正确, 请填写域名 (不能是 IP 地址)")
+        if cfg["reality_fingerprint"] not in ("chrome", "firefox", "safari"):
+            errors.append("REALITY 指纹只能是 chrome / firefox / safari")
 
     # 证书模式: 只在直连开启时校验; 直连没开时证书设置不拦保存。
     if cfg["enable_direct"] and cfg["cert_mode"] not in ("selfsigned", "upload", "acme"):
@@ -519,7 +570,9 @@ def config_to_env(cfg):
     reality = _load_reality_keys()
     env = {
         "NODE_UUID": cfg["node_uuid"],
-        "NODE_PREFIX": cfg["node_prefix"],
+        "NODE_PREFIX": cfg["argo_prefix"],
+        "NODE_PREFIX_ARGO": cfg["argo_prefix"],
+        "NODE_PREFIX_DIRECT": cfg["direct_prefix"],
         "ARGO_TOKEN": cfg["argo_token"],
         "TUNNEL_PROTOCOL": cfg["tunnel_protocol"],
         "ENABLE_XRAY": _b(cfg["enable_xray"]),
@@ -544,6 +597,10 @@ def config_to_env(cfg):
         "DIRECT_VLESS_REALITY_PORT": str(cfg["direct_vless_reality_port"]),
         "REALITY_DEST": cfg["reality_dest"],
         "REALITY_SNI": cfg["reality_sni"],
+        "REALITY_FINGERPRINT": cfg["reality_fingerprint"],
+        "REALITY_FLOW": cfg["reality_flow"],
+        "REALITY_ENCRYPTION": cfg["reality_encryption"],
+        "REALITY_SPIDERX": cfg["reality_spiderx"],
         "REALITY_PRIVATE_KEY": reality["private_key"],
         "REALITY_PUBLIC_KEY": reality["public_key"],
         "REALITY_SHORT_ID": reality["short_id"],
