@@ -9,7 +9,9 @@
 # 跑法 (install.sh 起 nexus-sub 容器, python:3-alpine, 只有标准库):
 #   python3 /app/sub-server.py
 #   环境变量全部由 install.sh 从部署命令传进来:
-#     NODE_UUID, NODE_PREFIX,
+#     NODE_UUID, NODE_PREFIX (旧单前缀, 仅作回退),
+#     NODE_PREFIX_ARGO (默认 "Argo", 隧道节点备注前缀),
+#     NODE_PREFIX_DIRECT (默认 "直连", 直连节点备注前缀),
 #     XRAY_DOMAIN, XRAY_CONFIGS, SINGBOX_DOMAIN, SINGBOX_CONFIGS,
 #     ENABLE_XRAY, ENABLE_SINGBOX,
 #     OPT_ADDRS (默认优选地址, 不带 ?addrs= 时用它),
@@ -32,7 +34,11 @@
 #     CERT_MODE (selfsigned|upload|acme): TLS 直连链接带 allowInsecure=1,
 #     acme 有效证书时不带。Reality 公钥/shortId/dest 由 install.sh
 #     以 REALITY_PUBLIC_KEY / REALITY_SHORT_ID / REALITY_DEST /
-#     REALITY_EFF_SNI 环境变量传进来 (nexus-sub 容器不挂载 reality.json)。
+#     REALITY_EFF_SNI 环境变量传进来 (nexus-sub 容器不挂载 reality.json);
+#     指纹 / flow / 加密方式 / spiderX 以 REALITY_FINGERPRINT /
+#     REALITY_FLOW / REALITY_ENCRYPTION / REALITY_SPIDERX 传进来,
+#     客户端加密串以 REALITY_ENC_CLIENT 传进来 (install.sh 已拼好的
+#     完整 mlkem768x25519plus.…0rtt.<公钥>, "none" = 不开加密层)。
 #   容器内监听 0.0.0.0 (Docker 端口映射进来的流量到的是容器网卡,
 #   不是 loopback), 主机侧 docker 只绑 127.0.0.1:$SUB_PORT,
 #   公网入口只有 Cloudflare Zero Trust 的一条路由:
@@ -47,10 +53,13 @@
 #   GET /<SUB_PATH>/merged/<uuid>?addrs=a,b
 #       动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上;
 #       不带 addrs 就用部署时的 OPT_ADDRS
-#       &format=singbox: 只去掉 xhttp 节点 (Sing-box 没有 xhttp
-#       传输, 其余都留着: trojan/vmess/ss/hysteria2/vless 含
-#       quic/reality 都支持), 仍是 base64; &format=clash: Mihomo YAML
-#       (QUIC 除外, Mihomo 不支持 QUIC; 支持 trojan/vmess/ss/
+#       &format=singbox: 只去掉 xhttp 节点与带 VLESS 加密层的节点
+#       (Sing-box 没有 xhttp 传输, 也不支持 VLESS Encryption, 其余
+#       都留着: trojan/vmess/ss/hysteria2/vless 含 quic/reality 都
+#       支持, 开了加密层的 Reality 节点除外), 仍是 base64;
+#       &format=clash: Mihomo YAML
+#       (QUIC 与带 VLESS 加密层的节点除外, Mihomo 不支持 QUIC /
+#       VLESS Encryption; 支持 trojan/vmess/ss/
 #       hysteria2/vless-reality)
 #   GET /<SUB_PATH>/merged?url=<外部订阅地址>&addrs=a,b
 #       外部订阅裂变 (Worker v2 就有这个路由, v3 静态文件做不到),
@@ -77,7 +86,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 _GENERATOR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sub-generator.html")
 
 UUID = os.environ.get("NODE_UUID", "").strip()
-PREFIX = os.environ.get("NODE_PREFIX", "Nexus").strip() or "Nexus"
+# 节点前缀分开 (Part A/B 合同): 隧道节点用 Argo 前缀, 直连节点用
+# 直连前缀。旧单前缀 NODE_PREFIX 只作回退 (新变量为空时用它)。
+_NODE_PREFIX_RAW = os.environ.get("NODE_PREFIX", "").strip()
+PREFIX_ARGO = os.environ.get("NODE_PREFIX_ARGO", "").strip() or _NODE_PREFIX_RAW or "Argo"
+PREFIX_DIRECT = os.environ.get("NODE_PREFIX_DIRECT", "").strip() or _NODE_PREFIX_RAW or "直连"
+PREFIX = PREFIX_ARGO  # 兼容旧字段: /config.json 的 prefix 仍是隧道前缀
 XRAY_DOMAIN = os.environ.get("XRAY_DOMAIN", "").strip()
 XRAY_CONFIGS = os.environ.get("XRAY_CONFIGS", "")
 SINGBOX_DOMAIN = os.environ.get("SINGBOX_DOMAIN", "").strip()
@@ -125,6 +139,14 @@ REALITY_SNI = os.environ.get("REALITY_SNI", "").strip()
 REALITY_EFF_SNI = os.environ.get("REALITY_EFF_SNI", "").strip() or REALITY_SNI or REALITY_DEST
 REALITY_PUBLIC_KEY = os.environ.get("REALITY_PUBLIC_KEY", "").strip()
 REALITY_SHORT_ID = os.environ.get("REALITY_SHORT_ID", "").strip()
+# Reality 链接参数 (Part A/B 合同): 指纹 / flow / 加密方式 /
+# spiderX, 与 install.sh 同一套默认值。REALITY_ENC_CLIENT 是
+# install.sh 已拼好的完整客户端加密串 ("none" = 不开加密层)。
+REALITY_FINGERPRINT = os.environ.get("REALITY_FINGERPRINT", "").strip().lower() or "chrome"
+REALITY_FLOW = os.environ.get("REALITY_FLOW", "").strip() or "xtls-rprx-vision"
+REALITY_ENCRYPTION = os.environ.get("REALITY_ENCRYPTION", "").strip() or "mlkem768x25519plus.native"
+REALITY_SPIDERX = os.environ.get("REALITY_SPIDERX", "").strip() or "/"
+REALITY_ENC_CLIENT = os.environ.get("REALITY_ENC_CLIENT", "").strip() or "none"
 
 HELP = (
     "Nexus-Argo 动态订阅\n\n"
@@ -134,11 +156,14 @@ HELP = (
     "    动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上\n"
     "    不带 addrs: 用部署时的优选地址\n\n"
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=singbox\n"
-    "    Sing-box 订阅: 只去掉 xhttp 节点 (base64, Sing-box 没有 xhttp 传输;\n"
-    "    trojan/vmess/ss/hysteria2/vless 含 quic/reality 都保留)\n\n"
+    "    Sing-box 订阅: 只去掉 xhttp 节点与带 VLESS 加密层的节点\n"
+    "    (base64, Sing-box 没有 xhttp 传输、也不支持 VLESS Encryption;\n"
+    "    trojan/vmess/ss/hysteria2/vless 含 quic/reality 都保留, 开了\n"
+    "    加密层的 Reality 节点除外)\n\n"
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=clash\n"
-    "    Clash 订阅: Mihomo YAML (xhttp 需 Mihomo 1.19+, QUIC 除外; 支持\n"
-    "    trojan/vmess/ss/hysteria2/vless-reality)\n\n"
+    "    Clash 订阅: Mihomo YAML (xhttp 需 Mihomo 1.19+, QUIC 与带\n"
+    "    VLESS 加密层的节点除外; 支持 trojan/vmess/ss/\n"
+    "    hysteria2/vless-reality)\n\n"
     "直连协议: Xray VLESS 明文 TCP / TLS / Reality / 明文 WS / gRPC+TLS /\n"
     "QUIC、Trojan+TLS、VMess+WS+TLS; Sing-box VLESS+TLS、Trojan+TLS、\n"
     "Shadowsocks (aes-256-gcm)、Hysteria2。直连节点原样进订阅, 不裂变。\n\n"
@@ -171,7 +196,7 @@ def vless_link(addr, domain, proto, port, core):
         mode = "packet-up" if proto == "xhttp_h3" else "auto"
         return (f"vless://{UUID}@{addr}:{port}/?encryption=none&security=tls"
                 f"&sni={domain}&type=xhttp&mode={mode}&path=%2F&alpn={alpn}"
-                f"#{PREFIX}丨Xray丨{proto}")
+                f"#{PREFIX_ARGO}丨Xray丨{proto}")
     if proto == "grpc":
         svc = "&serviceName=grpc"
     elif proto == "httpupgrade":
@@ -181,7 +206,7 @@ def vless_link(addr, domain, proto, port, core):
     alpn = "h2" if proto == "grpc" else "http/1.1"
     return (f"vless://{UUID}@{addr}:{port}/?encryption=none&security=tls"
             f"&sni={domain}&type={proto}{svc}&alpn={alpn}"
-            f"#{PREFIX}丨Singbox丨{proto}")
+            f"#{PREFIX_ARGO}丨Singbox丨{proto}")
 
 
 def tunnel_links():
@@ -203,7 +228,7 @@ def _ai():
 
 
 def _vmess_link():
-    cfg = {"v": "2", "ps": f"{PREFIX}丨直连丨Xray-VMess-WS", "add": DIRECT_DOMAIN,
+    cfg = {"v": "2", "ps": f"{PREFIX_DIRECT}丨Xray-VMess-WS", "add": DIRECT_DOMAIN,
            "port": str(DIRECT_VMESS_WS_PORT), "id": UUID, "aid": "0", "net": "ws",
            "type": "none", "host": DIRECT_DOMAIN, "path": "/ws", "tls": "tls",
            "sni": DIRECT_DOMAIN}
@@ -213,7 +238,7 @@ def _vmess_link():
 def _ss_link():
     raw = f"aes-256-gcm:{UUID}@{DIRECT_DOMAIN}:{DIRECT_SS_PORT}".encode()
     return ("ss://" + base64.urlsafe_b64encode(raw).decode().rstrip("=")
-            + f"#{PREFIX}丨直连丨Singbox-SS")
+            + f"#{PREFIX_DIRECT}丨Singbox-SS")
 
 
 def direct_links():
@@ -228,42 +253,54 @@ def direct_links():
     if DIRECT_XRAY_TLS:
         links.append(f"vless://{UUID}@{dd}:{DIRECT_XRAY_TLS_PORT}/?encryption=none&security=tls"
                      f"&sni={dd}&type=tcp{_ai()}"
-                     f"#{PREFIX}丨直连丨Xray-TLS")
+                     f"#{PREFIX_DIRECT}丨Xray-TLS")
     if DIRECT_VLESS_TCP:
         links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_TCP_PORT}/?encryption=none&type=tcp"
-                     f"#{PREFIX}丨直连丨Xray-TCP")
+                     f"#{PREFIX_DIRECT}丨Xray-TCP")
     if DIRECT_VLESS_REALITY:
-        links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_REALITY_PORT}/?encryption=none&security=reality"
-                     f"&pbk={REALITY_PUBLIC_KEY}&sid={REALITY_SHORT_ID}&sni={REALITY_EFF_SNI}&fp=chrome&type=tcp"
-                     f"#{PREFIX}丨直连丨Xray-Reality")
+        # Reality 链接 (与 install.sh 里同一套规则, 改一处要改另一处):
+        # 地址 = 直连域名 (或 VPS IP), SNI = 大厂域名 (reality_dest,
+        # 或 reality_sni); 带指纹 / flow / 加密层 / spiderX (spiderX
+        # 只在不是默认值 "/" 时才带)。
+        _rlink = (f"vless://{UUID}@{dd}:{DIRECT_VLESS_REALITY_PORT}/"
+                  f"?encryption={REALITY_ENC_CLIENT}&security=reality"
+                  f"&pbk={REALITY_PUBLIC_KEY}&sid={REALITY_SHORT_ID}"
+                  f"&sni={REALITY_EFF_SNI}&fp={REALITY_FINGERPRINT}")
+        if REALITY_FLOW and REALITY_FLOW.lower() != "none":
+            _rlink += f"&flow={REALITY_FLOW}"
+        _rlink += "&type=tcp"
+        if REALITY_SPIDERX != "/":
+            _rlink += "&spiderX=" + urllib.parse.quote(REALITY_SPIDERX, safe="/")
+        _rlink += f"#{PREFIX_DIRECT}丨Xray-Reality"
+        links.append(_rlink)
     if DIRECT_VLESS_WS:
         links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_WS_PORT}/?encryption=none&type=ws&path=%2Fws"
-                     f"#{PREFIX}丨直连丨Xray-WS")
+                     f"#{PREFIX_DIRECT}丨Xray-WS")
     if DIRECT_VLESS_GRPC:
         links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_GRPC_PORT}/?encryption=none&security=tls"
                      f"&sni={dd}&type=grpc&serviceName=grpc{_ai()}"
-                     f"#{PREFIX}丨直连丨Xray-gRPC")
+                     f"#{PREFIX_DIRECT}丨Xray-gRPC")
     if DIRECT_XRAY_QUIC:
         links.append(f"vless://{UUID}@{dd}:{DIRECT_XRAY_QUIC_PORT}/?encryption=none&security=tls"
                      f"&sni={dd}&type=quic&quicSecurity=none&headerType=none{_ai()}"
-                     f"#{PREFIX}丨直连丨Xray-QUIC")
+                     f"#{PREFIX_DIRECT}丨Xray-QUIC")
     if DIRECT_TROJAN:
         links.append(f"trojan://{UUID}@{dd}:{DIRECT_TROJAN_PORT}?security=tls&sni={dd}{_ai()}"
-                     f"#{PREFIX}丨直连丨Xray-Trojan")
+                     f"#{PREFIX_DIRECT}丨Xray-Trojan")
     if DIRECT_VMESS_WS:
         links.append(_vmess_link())
     if DIRECT_SB_TLS:
         links.append(f"vless://{UUID}@{dd}:{DIRECT_SB_TLS_PORT}/?encryption=none&security=tls"
                      f"&sni={dd}&type=tcp{_ai()}"
-                     f"#{PREFIX}丨直连丨Singbox-TLS")
+                     f"#{PREFIX_DIRECT}丨Singbox-TLS")
     if DIRECT_SB_TROJAN:
         links.append(f"trojan://{UUID}@{dd}:{DIRECT_SB_TROJAN_PORT}?security=tls&sni={dd}{_ai()}"
-                     f"#{PREFIX}丨直连丨Singbox-Trojan")
+                     f"#{PREFIX_DIRECT}丨Singbox-Trojan")
     if DIRECT_SS:
         links.append(_ss_link())
     if DIRECT_HY2:
         links.append(f"hysteria2://{UUID}@{dd}:{DIRECT_HY2_PORT}?insecure=1&sni={dd}"
-                     f"#{PREFIX}丨直连丨Singbox-Hysteria2")
+                     f"#{PREFIX_DIRECT}丨Singbox-Hysteria2")
     return links
 
 
@@ -296,8 +333,9 @@ def encode_subscription(lines):
 
 
 # vless 链接解析 (供格式转换用): 只认 vless://, 取 uuid/host/port/
-# type/sni/path/mode/serviceName/alpn 和备注。备注里是
-# "前缀丨内核丨协议" (如 Nexus丨Xray丨xhttp_h1)。
+# type/sni/path/mode/serviceName/alpn/encryption 和备注。备注是
+# "前缀丨内核丨协议" (隧道, 如 Argo丨Xray丨xhttp_h1) 或
+# "前缀丨协议名" (直连, 如 直连丨Xray-TLS)。
 def _vless_parts(link):
     try:
         u = urllib.parse.urlparse(link)
@@ -322,6 +360,9 @@ def _vless_parts(link):
             "pbk": get("pbk", ""),
             "sid": get("sid", ""),
             "fp": get("fp", ""),
+            "flow": get("flow", ""),
+            "encryption": get("encryption", ""),
+            "spiderx": get("spiderX", ""),
             "cipher": "",
             "remark": urllib.parse.unquote(u.fragment or ""),
         }
@@ -332,6 +373,19 @@ def _vless_parts(link):
 def _vless_type(link):
     p = _vless_parts(link)
     return p["type"] if p else ""
+
+
+def _vless_encryption(link):
+    # vless 链接的 VLESS 加密层参数 ("" 或 "none" = 没开加密层)。
+    p = _vless_parts(link)
+    return (p or {}).get("encryption", "") or ""
+
+
+def _has_vless_encryption(link):
+    # Sing-box / Clash (Mihomo) 不支持 VLESS Encryption, 带加密层
+    # 的节点在这些格式里要去掉 (和 xhttp 之于 Sing-box 一个道理)。
+    enc = _vless_encryption(link)
+    return enc not in ("", "none")
 
 
 def _b64decode(s):
@@ -446,6 +500,10 @@ def clash_yaml(links):
             continue
         if p["scheme"] == "vless" and p["type"] not in ("xhttp", "ws", "httpupgrade", "grpc", "tcp"):
             continue
+        if p["scheme"] == "vless" and (p.get("encryption", "") or "none") not in ("", "none"):
+            # Mihomo / Clash 不支持 VLESS Encryption: 带加密层的节点
+            # 在 Clash 订阅里会静默失败, 不如不给 (Sing-box 格式同理)。
+            continue
         if p["scheme"] not in ("vless", "trojan", "vmess", "ss", "hysteria2"):
             continue
         proxies.append(p)
@@ -455,8 +513,10 @@ def clash_yaml(links):
            "proxies:"]
     names = []
     for p in proxies:
-        parts = (p["remark"] or "").split("丨")
-        name = f"{parts[1]}-{parts[2]} @ {p['addr']}" if len(parts) >= 3 else f"{p['scheme']} @ {p['addr']}"
+        # 节点名 = 完整备注 (含前缀) + 地址: 隧道 Argo-Xray-xhttp_h2,
+        # 直连 直连-Xray-TLS。备注有 3 段 (隧道) 或 2 段 (直连)。
+        parts = [s for s in (p["remark"] or "").split("丨") if s]
+        name = f"{'-'.join(parts)} @ {p['addr']}" if parts else f"{p['scheme']} @ {p['addr']}"
         names.append(name)
         out.append(f"  - name: {_yq(name)}")
         if p["scheme"] == "trojan":
@@ -558,7 +618,8 @@ def clash_yaml(links):
             # 直连 TLS / 明文 TCP: Mihomo 默认就是 TCP, 不用写 network
         out.append("    udp: true")
     out.append("proxy-groups:")
-    out.append(f"  - name: {_yq(PREFIX + '-Argo')}")
+    _gname = PREFIX_ARGO if PREFIX_ARGO.lower().endswith("argo") else PREFIX_ARGO + "-Argo"
+    out.append(f"  - name: {_yq(_gname)}")
     out.append("    type: select")
     out.append("    proxies:")
     for n in names:
@@ -634,7 +695,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _config(self):
         self._send(json.dumps({
-            "uuid": UUID, "prefix": PREFIX, "opt_addrs": OPT_ADDRS,
+            "uuid": UUID, "prefix": PREFIX, "prefix_argo": PREFIX_ARGO,
+            "prefix_direct": PREFIX_DIRECT, "opt_addrs": OPT_ADDRS,
             "xray_domain": XRAY_DOMAIN, "singbox_domain": SINGBOX_DOMAIN,
             "sub_path": SUB_PATH,
         }, ensure_ascii=False), ctype="application/json; charset=utf-8")
@@ -715,7 +777,8 @@ class Handler(BaseHTTPRequestHandler):
                         return
                     self._send(yaml, ctype="text/yaml; charset=utf-8")
                 elif any(k in ua for k in ("sing-box", "singbox", "nekobox", "hiddify", "sfi")):
-                    merged = [l for l in merged if _vless_type(l) != "xhttp"]
+                    merged = [l for l in merged
+                              if _vless_type(l) != "xhttp" and not _has_vless_encryption(l)]
                     if not merged:
                         self._send("订阅为空: 没有 Sing-box 支持的节点", 502)
                         return
@@ -723,8 +786,10 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self._sub(merged)
             elif fmt == "singbox":
-                # Sing-box 没有 xhttp 传输: 只去掉 xhttp, 其余都留着
-                merged = [l for l in merged if _vless_type(l) != "xhttp"]
+                # Sing-box 没有 xhttp 传输, 也不支持 VLESS Encryption:
+                # 只去掉 xhttp 与带加密层的节点, 其余都留着
+                merged = [l for l in merged
+                          if _vless_type(l) != "xhttp" and not _has_vless_encryption(l)]
                 if not merged:
                     self._send("订阅为空: 没有 Sing-box 支持的节点", 502)
                     return
