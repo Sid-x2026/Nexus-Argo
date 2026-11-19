@@ -4,11 +4,10 @@
 # 只做两件事: 核心部署 + 自定义订阅地址。裂变/优选生成器不在面板里,
 # 手动用别的工具完成 (生成器方案保留在 web/sub-generator.html)。
 #
-# v2 新增: 直连协议扩展 (VLESS TCP/TLS/REALITY/WS/gRPC/QUIC、Trojan、
+# v2 新增: 直连协议扩展 (VLESS TCP/TLS/REALITY/WS/gRPC、Trojan、
 # VMess WS、Sing-box Trojan、Shadowsocks、Hysteria2)、证书模式
 # (selfsigned / upload / acme) 与证书状态查询、REALITY 目标延迟探测。
-# 旧字段名 direct_xray_tls / direct_xray_quic 仍可用, 会映射到
-# direct_vless_tls / direct_vless_quic。
+# 旧字段名 direct_xray_tls 仍可用, 会映射到 direct_vless_tls。
 #
 # 跑法 (panel-install.sh 起 nexus-panel 容器, python:3-alpine, 只有标准库):
 #   python3 /app/panel-server.py
@@ -32,7 +31,13 @@
 #   GET  /api/subscription        订阅地址 + 自定义路径
 #   POST /api/subscription        {sub_path} 改订阅路径, 重启 nexus-sub 生效
 #   GET  /api/cert               证书状态 (是否已部署 / 颁发给谁 / 到期时间 / 续期方式)
-#   POST /api/reality-scan       测几个常用域名的延迟, 挑 REALITY 目标域名
+#   POST /api/reality-scan       3X-UI 式 Reality 目标扫描 (域名/IP/CIDR, 返回
+#                                 目标/状态/TLS/ALPN/密钥交换/证书/延迟表)
+#   GET  /api/reality-keys       公钥 + Short IDs (私钥绝不返回)
+#   POST /api/reality-keys       {action: regenerate|clear} 重新生成 / 清空密钥
+#   GET  /api/outbounds          出站列表 (默认 direct + blocked)
+#   POST /api/outbounds          整表保存出站 (本版只存面板, 不接进核心渲染)
+#   POST /api/outbounds/test     全部测试 (测每条出站的延迟)
 #   POST /api/clear               清除本次部署 (节点容器 + 配置文件, 面板本身保留)
 #
 # 安全边界: 面板用账号密码登录 (默认 admin, 密码安装时随机生成,
@@ -42,6 +47,7 @@
 
 import datetime
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -52,6 +58,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PANEL_DIR = os.environ.get("PANEL_DIR", "/opt/nexus-argo/panel").rstrip("/")
@@ -84,6 +91,27 @@ def _is_domain(s):
     """域名判断: 符合 DOMAIN_RE 且不是 IP 地址。"""
     return bool(s) and bool(DOMAIN_RE.match(s)) and not _is_ipv4(s)
 
+
+def _split_host_port(s):
+    """把 "host" / "host:443" 拆成 (host, port), 端口缺省 443。
+    端口非法时返回 (host, 443), host 本身非法时返回 ("", 443)。"""
+    s = str(s or "").strip()
+    if not s:
+        return "", 443
+    if s.startswith("["):
+        # [IPv6]:port, Reality 目标不用 IPv6, 直接当非法
+        return "", 443
+    if ":" in s:
+        host, _, port_s = s.rpartition(":")
+        try:
+            port = int(port_s)
+        except Exception:
+            return host.strip(), 443
+        if not 1 <= port <= 65535:
+            return host.strip(), 443
+        return host.strip(), port
+    return s, 443
+
 # 部署过的服务容器 (健康检查用, 和 install.sh 里起的名字一致)
 SERVICES = ["nexus-argo", "nexus-panel-argo", "nexus-xray", "nexus-singbox", "nexus-sb-dispatch", "nexus-sub", "nexus-web-panel"]
 
@@ -110,7 +138,7 @@ DEFAULT_CONFIG = {
     "sub_path": "sub",
     "enable_direct": False,
     "direct_domain": "",
-    # 直连 VLESS 系列 (TCP/TLS/REALITY/WS/gRPC/QUIC)
+    # 直连 VLESS 系列 (TCP/TLS/REALITY/WS/gRPC)
     "direct_vless_tcp": False,
     "direct_vless_tcp_port": 8082,
     "direct_vless_tls": True,
@@ -125,12 +153,17 @@ DEFAULT_CONFIG = {
     "reality_flow": "xtls-rprx-vision",
     "reality_encryption": "mlkem768x25519plus.native",
     "reality_spiderx": "/",
+    # Reality 3X-UI 式字段: 目标带端口 (reality_dest, 如
+    # www.cloudflare.com:443)、最大时间差、客户端版本范围、多个
+    # Short ID (reality_short_ids, 第一项即 reality.json 的 short_id)。
+    "reality_max_time_diff": 0,
+    "reality_min_client_ver": "1.0.0",
+    "reality_max_client_ver": "x.y.z",
+    "reality_short_ids": [],
     "direct_vless_ws": False,
     "direct_vless_ws_port": 8083,
     "direct_vless_grpc": False,
     "direct_vless_grpc_port": 8084,
-    "direct_vless_quic": False,
-    "direct_vless_quic_port": 443,
     # 直连其它协议
     "direct_trojan": False,
     "direct_trojan_port": 9443,
@@ -147,24 +180,21 @@ DEFAULT_CONFIG = {
     "cert_pem": "",
     "cert_key": "",
     # 旧字段名 (兼容): direct_xray_tls -> direct_vless_tls,
-    # direct_xray_quic -> direct_vless_quic, direct_sb_tls 保持原义。
+    # direct_sb_tls 保持原义。
     "direct_xray_tls": True,
     "direct_xray_tls_port": 443,
-    "direct_xray_quic": False,
-    "direct_xray_quic_port": 443,
     "direct_sb_tls": True,
     "direct_sb_tls_port": 8443,
 }
 
 # 直连协议表: (开关字段, 端口字段, 正式名称, 是否走 TCP)
-# QUIC 与 Hysteria2 走 UDP, 端口只校验范围, 不参与 TCP 端口冲突检查。
+# Hysteria2 走 UDP, 端口只校验范围, 不参与 TCP 端口冲突检查。
 DIRECT_PROTOCOLS = [
     ("direct_vless_tcp", "direct_vless_tcp_port", "直连 VLESS TCP", True),
     ("direct_vless_tls", "direct_vless_tls_port", "直连 VLESS TLS", True),
     ("direct_vless_reality", "direct_vless_reality_port", "直连 VLESS REALITY", True),
     ("direct_vless_ws", "direct_vless_ws_port", "直连 VLESS WebSocket", True),
     ("direct_vless_grpc", "direct_vless_grpc_port", "直连 VLESS gRPC", True),
-    ("direct_vless_quic", "direct_vless_quic_port", "直连 VLESS QUIC", False),
     ("direct_trojan", "direct_trojan_port", "直连 Trojan", True),
     ("direct_vmess_ws", "direct_vmess_ws_port", "直连 VMess WebSocket", True),
     ("direct_sb_trojan", "direct_sb_trojan_port", "直连 Sing-box Trojan", True),
@@ -177,9 +207,51 @@ DIRECT_PROTOCOLS = [
 _DIRECT_ALIASES = (
     ("direct_vless_tls", "direct_xray_tls"),
     ("direct_vless_tls_port", "direct_xray_tls_port"),
-    ("direct_vless_quic", "direct_xray_quic"),
-    ("direct_vless_quic_port", "direct_xray_quic_port"),
 )
+
+
+# ---- 出站 (3X-UI 式统一管理, 第一版只做管理 + 测速) ----
+# 默认两条: direct 直出 (freedom)、blocked 拦截 (blackhole)。
+# 出站只存放在面板里 (PANEL_DIR/outbounds.json), 本版不接进
+# install.sh 的核心渲染 (家宽对接是下一步), 部署不受影响。
+OUTBOUNDS_PATH = os.path.join(PANEL_DIR, "outbounds.json")
+OUTBOUND_TYPES = {"freedom", "blackhole", "socks", "http", "vless",
+                  "vmess", "trojan", "shadowsocks", "hysteria2",
+                  "wireguard", "dns"}
+DEFAULT_OUTBOUNDS = [
+    {"tag": "direct", "type": "freedom", "address": "", "export": "",
+     "country": "", "traffic": "", "latency_ms": None},
+    {"tag": "blocked", "type": "blackhole", "address": "", "export": "",
+     "country": "", "traffic": "", "latency_ms": None},
+]
+
+
+def load_outbounds():
+    """读出站列表; 文件不存在或损坏时返回默认两条, 不报错。"""
+    data = _load_json(OUTBOUNDS_PATH, None)
+    if isinstance(data, dict) and isinstance(data.get("outbounds"), list):
+        data = data["outbounds"]
+    if not isinstance(data, list):
+        return [dict(o) for o in DEFAULT_OUTBOUNDS]
+    out = []
+    seen = set()
+    for o in data:
+        if not isinstance(o, dict):
+            continue
+        tag = str(o.get("tag") or "").strip()
+        if not tag or tag in seen:
+            continue
+        seen.add(tag)
+        out.append({
+            "tag": tag,
+            "type": str(o.get("type") or "freedom").strip().lower() or "freedom",
+            "address": str(o.get("address") or "").strip(),
+            "export": str(o.get("export") or "").strip(),
+            "country": str(o.get("country") or "").strip(),
+            "traffic": str(o.get("traffic") or "").strip(),
+            "latency_ms": o.get("latency_ms"),
+        })
+    return out or [dict(o) for o in DEFAULT_OUTBOUNDS]
 
 
 def _apply_direct_aliases(raw):
@@ -232,8 +304,6 @@ def load_config():
     # 旧字段与新字段保持一致 (新字段为准, 旧配置里只有旧字段时已在上面映射过)
     cfg["direct_xray_tls"] = cfg["direct_vless_tls"]
     cfg["direct_xray_tls_port"] = cfg["direct_vless_tls_port"]
-    cfg["direct_xray_quic"] = cfg["direct_vless_quic"]
-    cfg["direct_xray_quic_port"] = cfg["direct_vless_quic_port"]
     return cfg
 
 
@@ -351,7 +421,7 @@ def validate_config(raw):
     # 分发器回源+1/+2/+3、直连 TCP 协议端口 (彼此之间及与上述端口之间)、
     # 系统端口 22 / 80。可以共用: 同核心的隧道协议共用一个端口
     # (Xray h1/h2/h3 同 443、Sing-box ws/httpupgrade/grpc 同 8443);
-    # TCP 与 UDP 同号 (如 TCP 443 与 QUIC UDP 443)。
+    # TCP 与 UDP 同号 (如 TCP 443 与 Hy2 UDP 443)。
     # 固定保留端口先占位, 启用的端口按顺序加入, 撞上就报错 (只报第一处)。
     fixed = {}  # 端口 -> 名称 (已占用的端口)
     for port, label in ((PANEL_PORT, f"面板端口 {PANEL_PORT}"), (8080, "面板端口 8080"),
@@ -431,7 +501,7 @@ def validate_config(raw):
     _direct_port_defaults = {
         "direct_vless_tcp_port": 8082, "direct_vless_tls_port": 443,
         "direct_vless_reality_port": 9447, "direct_vless_ws_port": 8083,
-        "direct_vless_grpc_port": 8084, "direct_vless_quic_port": 443,
+        "direct_vless_grpc_port": 8084,
         "direct_trojan_port": 9443, "direct_vmess_ws_port": 9444,
         "direct_sb_trojan_port": 9445, "direct_ss_port": 8388,
         "direct_hy2_port": 9446, "direct_sb_tls_port": 8443,
@@ -441,19 +511,40 @@ def validate_config(raw):
     # 旧字段与新字段保持一致 (新字段为准)
     cfg["direct_xray_tls"] = cfg["direct_vless_tls"]
     cfg["direct_xray_tls_port"] = cfg["direct_vless_tls_port"]
-    cfg["direct_xray_quic"] = cfg["direct_vless_quic"]
-    cfg["direct_xray_quic_port"] = cfg["direct_vless_quic_port"]
-    # 直连端口范围 (全部协议, 含 UDP 的 QUIC / Hysteria2)
+    # 直连端口范围 (全部协议, 含 UDP 的 Hysteria2)
     for _flag, port_key, label, _is_tcp in DIRECT_PROTOCOLS:
         if not _port_ok(cfg[port_key]):
             errors.append(f"{label}端口必须是 1-65535 的端口")
 
+    # Reality 目标带端口 (3X-UI 式, 如 www.cloudflare.com:443)。
+    # 存的就是带端口的写法, 部署时 install.sh / sub-server 会剥掉
+    # 端口再用; 旧配置只有域名时补上 :443。
     cfg["reality_dest"] = str(cfg.get("reality_dest") or "").strip()
+    _dest_host, _dest_port = _split_host_port(cfg["reality_dest"])
+    if _dest_host:
+        cfg["reality_dest"] = f"{_dest_host}:{_dest_port}"
     cfg["reality_sni"] = str(cfg.get("reality_sni") or "").strip()
     cfg["reality_fingerprint"] = str(cfg.get("reality_fingerprint") or "chrome").strip().lower() or "chrome"
     cfg["reality_flow"] = str(cfg.get("reality_flow") or "xtls-rprx-vision").strip() or "xtls-rprx-vision"
     cfg["reality_encryption"] = str(cfg.get("reality_encryption") or "mlkem768x25519plus.native").strip() or "mlkem768x25519plus.native"
     cfg["reality_spiderx"] = str(cfg.get("reality_spiderx") or "/").strip() or "/"
+    cfg["reality_max_time_diff"] = _as_int(cfg.get("reality_max_time_diff"), 0)
+    cfg["reality_min_client_ver"] = str(cfg.get("reality_min_client_ver") or "1.0.0").strip() or "1.0.0"
+    cfg["reality_max_client_ver"] = str(cfg.get("reality_max_client_ver") or "x.y.z").strip() or "x.y.z"
+    # Short IDs: 多个, 每个 2-16 位 hex, 去重, 最多 8 个。
+    # 前端没发时沿用 reality.json 里的 (第一项即旧 short_id)。
+    _sids = cfg.get("reality_short_ids")
+    if isinstance(_sids, str):
+        _sids = [s.strip() for s in _sids.replace(",", " ").split() if s.strip()]
+    if not isinstance(_sids, list) or not _sids:
+        _file_keys = _load_reality_keys()
+        _sids = _file_keys.get("short_ids") or ([_file_keys["short_id"]] if _file_keys.get("short_id") else [])
+    _clean_sids = []
+    for _s in _sids:
+        _s = str(_s).strip().lower()
+        if re.fullmatch(r"[0-9a-f]{2,16}", _s) and _s not in _clean_sids:
+            _clean_sids.append(_s)
+    cfg["reality_short_ids"] = _clean_sids[:8]
     cfg["cert_mode"] = str(cfg.get("cert_mode") or "selfsigned").strip().lower()
     cfg["cert_pem"] = str(cfg.get("cert_pem") or "")
     cfg["cert_key"] = str(cfg.get("cert_key") or "")
@@ -465,7 +556,7 @@ def validate_config(raw):
         if not enabled_direct:
             errors.append("启用直连时至少勾选一个直连协议")
         # TCP 直连端口之间不能冲突, 也不能和面板端口 / 系统端口 / 订阅端口 /
-        # 回源端口 / 分发器内部端口冲突; QUIC 与 Hysteria2 走 UDP, 不参与
+        # 回源端口 / 分发器内部端口冲突; Hysteria2 走 UDP, 不参与
         # TCP 冲突检查 (TCP 与 UDP 同号可以共用)。
         # 只检查已勾选的协议 —— 没勾选的协议端口不拦保存, 勾选时再校验。
         # fixed 与 dispatch_ports 是上面回源端口一段建好的已占用端口表。
@@ -483,17 +574,24 @@ def validate_config(raw):
             else:
                 seen[port] = label
 
-    # REALITY 开了就必须配目标域名 (域名, 不能是 IP); 直连没开时不校验,
-    # 否则只保存隧道配置也会被直连的残留设置拦住。
+    # REALITY 开了就必须配目标 (域名, 不能是 IP, 可带 :端口); 直连没开
+    # 时不校验, 否则只保存隧道配置也会被直连的残留设置拦住。
     if cfg["enable_direct"] and cfg["direct_vless_reality"]:
+        _dh, _dp = _split_host_port(cfg["reality_dest"])
         if not cfg["reality_dest"]:
-            errors.append("REALITY 目标域名未填写, 请填写一个常用网站域名 (如 www.microsoft.com)")
-        elif not _is_domain(cfg["reality_dest"]):
-            errors.append("REALITY 目标域名格式不正确, 请填写域名 (不能是 IP 地址)")
+            errors.append("REALITY 目标未填写, 请填写一个常用网站域名 (如 www.microsoft.com:443)")
+        elif not _is_domain(_dh):
+            errors.append("REALITY 目标格式不正确, 请填写域名 (不能是 IP 地址, 可带 :443 端口)")
         if cfg["reality_sni"] and not _is_domain(cfg["reality_sni"]):
             errors.append("REALITY SNI 格式不正确, 请填写域名 (不能是 IP 地址)")
         if cfg["reality_fingerprint"] not in ("chrome", "firefox", "safari"):
             errors.append("REALITY 指纹只能是 chrome / firefox / safari")
+        if cfg["reality_max_time_diff"] < 0:
+            errors.append("REALITY 最大时间差不能小于 0")
+        for _ver_key, _ver_label in (("reality_min_client_ver", "REALITY 最小客户端版本"),
+                                     ("reality_max_client_ver", "REALITY 最大客户端版本")):
+            if not re.fullmatch(r"[0-9xXyYzZ][0-9xXyYzZ.]*", cfg[_ver_key]):
+                errors.append(f"{_ver_label}格式不正确, 如 1.0.0 或 x.y.z")
 
     # 证书模式: 只在直连开启时校验; 直连没开时证书设置不拦保存。
     if cfg["enable_direct"] and cfg["cert_mode"] not in ("selfsigned", "upload", "acme"):
@@ -518,10 +616,65 @@ def validate_config(raw):
     return cfg, errors
 
 
+def _reality_json_path():
+    return os.path.join(WORKDIR, "direct", "reality.json")
+
+
+def _load_reality_json():
+    """读 reality.json 原样返回 (dict), 不存在返回 {}。"""
+    try:
+        with open(_reality_json_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_reality_json(data):
+    d = os.path.join(WORKDIR, "direct")
+    os.makedirs(d, exist_ok=True)
+    path = _reality_json_path()
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def _b64url(raw):
+    import base64
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _gen_x25519_keypair():
+    """生成一对 X25519 密钥 (与 install.sh 同一套做法): 私钥取 DER
+    末 32 字节 base64url, 公钥同理。失败返回 ("", "")。"""
+    try:
+        priv_der = subprocess.run(
+            ["openssl", "genpkey", "-algorithm", "X25519"],
+            capture_output=True, timeout=10).stdout
+        # genpkey 输出 PEM, 转 DER 再取末 32 字节
+        proc = subprocess.run(["openssl", "pkey", "-outform", "DER"],
+                              input=priv_der, capture_output=True, timeout=10)
+        der = proc.stdout
+        if len(der) < 32:
+            return "", ""
+        private_key = _b64url(der[-32:])
+        proc2 = subprocess.run(["openssl", "pkey", "-pubout", "-outform", "DER"],
+                               input=priv_der, capture_output=True, timeout=10)
+        pub_der = proc2.stdout
+        if len(pub_der) < 32:
+            return "", ""
+        return private_key, _b64url(pub_der[-32:])
+    except Exception:
+        return "", ""
+
+
 def _load_reality_keys():
     """读 $WORKDIR/direct/reality.json (install.sh 生成的 REALITY 密钥)。
-    文件不存在返回空值, 不报错。键名兼容几种写法。"""
-    data = _load_json(os.path.join(WORKDIR, "direct", "reality.json"), {})
+    文件不存在返回空值, 不报错。键名兼容几种写法。
+    short_ids 是列表, 第一项即旧的 short_id。"""
+    data = _load_reality_json()
 
     def _pick(*names):
         for n in names:
@@ -530,10 +683,16 @@ def _load_reality_keys():
                 return v
         return ""
 
+    short_id = _pick("short_id", "shortId", "REALITY_SHORT_ID")
+    sids = data.get("short_ids")
+    if not isinstance(sids, list):
+        sids = [short_id] if short_id else []
+    sids = [str(s).strip().lower() for s in sids if str(s).strip()][:8]
     return {
         "private_key": _pick("private_key", "privateKey", "REALITY_PRIVATE_KEY"),
         "public_key": _pick("public_key", "publicKey", "REALITY_PUBLIC_KEY"),
-        "short_id": _pick("short_id", "shortId", "REALITY_SHORT_ID"),
+        "short_id": short_id,
+        "short_ids": sids,
     }
 
 
@@ -603,13 +762,16 @@ def config_to_env(cfg):
         "REALITY_SPIDERX": cfg["reality_spiderx"],
         "REALITY_PRIVATE_KEY": reality["private_key"],
         "REALITY_PUBLIC_KEY": reality["public_key"],
-        "REALITY_SHORT_ID": reality["short_id"],
+        # Short ID 用配置里的第一项, 没配才用 reality.json 里的。
+        "REALITY_SHORT_ID": (cfg.get("reality_short_ids") or [None])[0] or reality["short_id"],
+        "REALITY_SHORT_IDS": ",".join(cfg.get("reality_short_ids") or reality.get("short_ids") or []),
+        "REALITY_MAX_TIME_DIFF": str(cfg.get("reality_max_time_diff", 0)),
+        "REALITY_MIN_CLIENT_VER": cfg.get("reality_min_client_ver", "1.0.0"),
+        "REALITY_MAX_CLIENT_VER": cfg.get("reality_max_client_ver", "x.y.z"),
         "DIRECT_VLESS_WS": _b(cfg["direct_vless_ws"]),
         "DIRECT_VLESS_WS_PORT": str(cfg["direct_vless_ws_port"]),
         "DIRECT_VLESS_GRPC": _b(cfg["direct_vless_grpc"]),
         "DIRECT_VLESS_GRPC_PORT": str(cfg["direct_vless_grpc_port"]),
-        "DIRECT_VLESS_QUIC": _b(cfg["direct_vless_quic"]),
-        "DIRECT_VLESS_QUIC_PORT": str(cfg["direct_vless_quic_port"]),
         "DIRECT_TROJAN": _b(cfg["direct_trojan"]),
         "DIRECT_TROJAN_PORT": str(cfg["direct_trojan_port"]),
         "DIRECT_VMESS_WS": _b(cfg["direct_vmess_ws"]),
@@ -624,8 +786,6 @@ def config_to_env(cfg):
         # 旧变量名 (兼容): 和新变量同值
         "DIRECT_XRAY_TLS": _b(cfg["direct_vless_tls"]),
         "DIRECT_XRAY_TLS_PORT": str(cfg["direct_vless_tls_port"]),
-        "DIRECT_XRAY_QUIC": _b(cfg["direct_vless_quic"]),
-        "DIRECT_XRAY_QUIC_PORT": str(cfg["direct_vless_quic_port"]),
         "DIRECT_SB_TLS": _b(cfg["direct_sb_tls"]),
         "DIRECT_SB_TLS_PORT": str(cfg["direct_sb_tls_port"]),
     }
@@ -832,6 +992,82 @@ def cert_info(cfg):
     return base
 
 
+# ---- Reality 目标扫描 (3X-UI 式) ----
+REALITY_SCAN_CANDIDATES = [
+    "www.samsung.com", "www.amd.com", "www.intel.com",
+    "www.microsoft.com", "aws.amazon.com", "www.nvidia.com",
+    "www.amazon.com", "www.sony.com", "www.cloudflare.com",
+]
+
+
+def _scan_target_list(target):
+    """把用户输入解析成待扫目标列表: 域名 / IP / CIDR (取前 8 个);
+    留空用常用候选。返回 [host, ...] (不带端口)。"""
+    t = str(target or "").strip()
+    if not t:
+        return list(REALITY_SCAN_CANDIDATES)
+    host, _port = _split_host_port(t)
+    if "/" in t:
+        try:
+            net = ipaddress.ip_network(t, strict=False)
+        except Exception:
+            return []
+        hosts = [str(h) for h in net.hosts()]
+        return hosts[:8] or [str(net.network_address)]
+    if _is_ipv4(host):
+        return [host]
+    if _is_domain(host):
+        return [host]
+    return []
+
+
+def _probe_reality_target(host):
+    """对一个目标做 TLS 握手探测, 返回 3X-UI 式的行:
+    {target, domain, status, tls, alpn, key_exchange, cert, latency_ms}。
+    任何一步失败都记「不可用」, 不抛错、不阻塞。"""
+    row = {"target": f"{host}:443", "domain": host, "status": "不可用",
+           "tls": "", "alpn": "", "key_exchange": "", "cert": "",
+           "latency_ms": None}
+    # 延迟: curl 实测 (IP 目标用 -k, 域名正常校验)
+    try:
+        cmd = ["curl", "-o", "/dev/null", "-s", "-w", "%{time_total}",
+               "--max-time", "5"]
+        if _is_ipv4(host):
+            cmd += ["-k"]
+        cmd.append(f"https://{host}/")
+        out, code = _run(cmd, timeout=6)
+        if code == 0 and out:
+            row["latency_ms"] = int(round(float(out.strip()) * 1000))
+    except Exception:
+        pass
+    # TLS 细节: openssl s_client 握手, 读协议 / ALPN / 临时密钥 / 证书 CN
+    try:
+        proc = subprocess.run(
+            ["openssl", "s_client", "-connect", f"{host}:443",
+             "-servername", host, "-alpn", "h2"],
+            input=b"", capture_output=True, timeout=6)
+        text = (proc.stdout + proc.stderr).decode("utf-8", "replace")
+        m = re.search(r"Protocol\s*:\s*(TLSv[\d.]+)", text)
+        if m:
+            row["tls"] = m.group(1).replace("TLSv", "")
+        m = re.search(r"ALPN protocol\s*:\s*(\S+)", text)
+        if m:
+            row["alpn"] = m.group(1)
+        m = re.search(r"Server Temp Key:\s*([A-Za-z0-9]+)", text)
+        if m:
+            row["key_exchange"] = m.group(1)
+        m = re.search(r"subject=CN\s*=\s*([^\n,;]+)", text)
+        if not m:
+            m = re.search(r"subject.*CN\s*=\s*([^\n,;/]+)", text)
+        if m:
+            row["cert"] = m.group(1).strip()
+        if row["tls"]:
+            row["status"] = "可用"
+    except Exception:
+        pass
+    return row
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
@@ -958,6 +1194,19 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._send_json(cert_info(load_config()))
             return
+        if path == "/api/reality-keys":
+            if not self._need_auth():
+                return
+            keys = _load_reality_keys()
+            self._send_json({"public_key": keys["public_key"],
+                             "short_ids": keys["short_ids"],
+                             "has_private_key": bool(keys["private_key"])})
+            return
+        if path == "/api/outbounds":
+            if not self._need_auth():
+                return
+            self._send_json({"outbounds": load_outbounds()})
+            return
         self._send_json({"error": "未知路径"}, 404)
 
     def do_POST(self):
@@ -1044,28 +1293,126 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/reality-scan":
-            # 测几个常用域名到本机的延迟, 供 REALITY 目标域名挑选。
-            # 延迟是实测值, 失败记 null, 不伪造。
-            if shutil.which("curl") is None:
-                self._send_json({"error": "curl 不可用"}, 500)
+            # 3X-UI 式目标扫描: 输入域名 / IP / CIDR, 留空用常用候选;
+            # 返回每行的目标 / 状态 / TLS / ALPN / 密钥交换 / 证书 / 延迟,
+            # 按延迟排序。并行探测、每目标 6 秒超时, 失败记「不可用」,
+            # 绝不阻塞部署。
+            if shutil.which("curl") is None and shutil.which("openssl") is None:
+                self._send_json({"error": "curl / openssl 都不可用"}, 500)
                 return
-            domains = ["www.microsoft.com", "www.apple.com", "www.google.com",
-                       "www.amazon.com", "www.cloudflare.com", "www.bing.com",
-                       "dl.google.com"]
-            results = []
-            for d in domains:
-                out, code = _run(["curl", "-o", "/dev/null", "-s", "-w", "%{time_total}",
-                                  "--max-time", "5", f"https://{d}/"], timeout=6)
-                latency = None
+            hosts = _scan_target_list(body.get("target") or body.get("domain") or "")
+            if not hosts:
+                self._send_json({"error": "目标格式不正确, 请填域名、IP 或 CIDR (如 1.2.3.0/24)"}, 400)
+                return
+            with ThreadPoolExecutor(max_workers=min(9, len(hosts))) as ex:
+                results = list(ex.map(_probe_reality_target, hosts))
+            results.sort(key=lambda r: (r["latency_ms"] is None, r["latency_ms"] or 0))
+            best = next((r["target"] for r in results if r["status"] == "可用"), None)
+            self._send_json({"results": results, "best": best})
+            return
+
+        if path == "/api/reality-keys":
+            # 公钥 / Short IDs 查询与密钥管理。私钥绝不返回前端。
+            # body: {} 查询; {action:"regenerate"} 重新生成密钥对
+            # (Short IDs 不变, 没有就生成一个); {action:"clear"} 清空
+            # 密钥与 Short IDs (下次部署时 install.sh 会重新生成)。
+            action = str(body.get("action") or "").strip().lower()
+            data = _load_reality_json()
+            if action == "regenerate":
+                priv, pub = _gen_x25519_keypair()
+                if not priv or not pub:
+                    self._send_json({"error": "生成密钥失败, 请检查 openssl"}, 500)
+                    return
+                data["private_key"] = priv
+                data["public_key"] = pub
+                if not data.get("short_ids") and not data.get("short_id"):
+                    data["short_id"] = secrets.token_hex(4)
+                    data["short_ids"] = [data["short_id"]]
+                elif data.get("short_ids"):
+                    data["short_id"] = data["short_ids"][0]
+                _save_reality_json(data)
+            elif action == "clear":
+                data["private_key"] = ""
+                data["public_key"] = ""
+                data["short_id"] = ""
+                data["short_ids"] = []
+                _save_reality_json(data)
+            elif action:
+                self._send_json({"error": "未知的操作"}, 400)
+                return
+            keys = _load_reality_keys()
+            self._send_json({"public_key": keys["public_key"],
+                             "short_ids": keys["short_ids"],
+                             "has_private_key": bool(keys["private_key"])})
+            return
+
+        if path == "/api/outbounds":
+            # 出站管理: 整表保存。标签唯一、类型在白名单内才收。
+            # 本版只存面板里, 不接进 install.sh 渲染 (见文件头注释)。
+            raw_list = body.get("outbounds")
+            if not isinstance(raw_list, list):
+                self._send_json({"error": "outbounds 须为列表"}, 400)
+                return
+            cleaned, seen = [], set()
+            for o in raw_list:
+                if not isinstance(o, dict):
+                    continue
+                tag = str(o.get("tag") or "").strip()
+                if not tag or tag in seen:
+                    continue
+                seen.add(tag)
+                otype = str(o.get("type") or "freedom").strip().lower()
+                if otype not in OUTBOUND_TYPES:
+                    self._send_json({"error": f"出站 {tag} 的类型不正确"}, 400)
+                    return
+                cleaned.append({
+                    "tag": tag, "type": otype,
+                    "address": str(o.get("address") or "").strip(),
+                    "export": str(o.get("export") or "").strip(),
+                    "country": str(o.get("country") or "").strip(),
+                    "traffic": str(o.get("traffic") or "").strip(),
+                    "latency_ms": o.get("latency_ms"),
+                })
+            if not cleaned:
+                self._send_json({"error": "至少保留一条出站"}, 400)
+                return
+            _save_json(OUTBOUNDS_PATH, {"outbounds": cleaned})
+            self._send_json({"ok": True, "outbounds": cleaned})
+            return
+
+        if path == "/api/outbounds/test":
+            # 全部测试: 对每条出站测一次延迟。blackhole 不测,
+            # 直接记拦截; direct / 有地址的测到该地址的延迟。
+            wanted = body.get("tags")
+            all_out = load_outbounds()
+            targets = all_out if not isinstance(wanted, list) else \
+                [o for o in all_out if o["tag"] in wanted]
+
+            def _test_one(o):
+                if o["type"] == "blackhole":
+                    return {"tag": o["tag"], "latency_ms": None, "status": "拦截"}
+                url = None
+                addr = (o.get("address") or "").strip()
+                if addr:
+                    host, _p = _split_host_port(addr)
+                    url = f"https://{host}/" if host else None
+                if not url:
+                    url = "https://www.cloudflare.com/"
+                out, code = _run(["curl", "-o", "/dev/null", "-s", "-w",
+                                  "%{time_total}", "--max-time", "5", url],
+                                 timeout=6)
                 if code == 0 and out:
                     try:
-                        latency = int(round(float(out.strip()) * 1000))
+                        return {"tag": o["tag"],
+                                "latency_ms": int(round(float(out.strip()) * 1000)),
+                                "status": "可用"}
                     except Exception:
-                        latency = None
-                results.append({"domain": d, "latency_ms": latency})
-            results.sort(key=lambda r: (r["latency_ms"] is None, r["latency_ms"] or 0))
-            best = next((r["domain"] for r in results if r["latency_ms"] is not None), None)
-            self._send_json({"results": results, "best": best})
+                        pass
+                return {"tag": o["tag"], "latency_ms": None, "status": "不可用"}
+
+            with ThreadPoolExecutor(max_workers=min(8, len(targets) or 1)) as ex:
+                results = list(ex.map(_test_one, targets))
+            self._send_json({"results": results})
             return
 
         if path == "/api/clear":
