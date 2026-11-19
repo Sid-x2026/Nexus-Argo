@@ -138,6 +138,10 @@ DEFAULT_CONFIG = {
     "sub_path": "sub",
     "enable_direct": False,
     "direct_domain": "",
+    "direct_address": "",
+    "direct_sni": "",
+    "client_selector": "auto",
+    "client_mode": "suitable",
     # 直连 VLESS 系列 (TCP/TLS/REALITY/WS/gRPC)
     "direct_vless_tcp": False,
     "direct_vless_tcp_port": 8082,
@@ -176,7 +180,7 @@ DEFAULT_CONFIG = {
     "direct_hy2": False,
     "direct_hy2_port": 9446,
     # 证书: selfsigned 自签名 / upload 上传 / acme 自动签发
-    "cert_mode": "selfsigned",
+    "cert_mode": "acme",
     "cert_pem": "",
     "cert_key": "",
     # 旧字段名 (兼容): direct_xray_tls -> direct_vless_tls,
@@ -215,6 +219,7 @@ _DIRECT_ALIASES = (
 # 出站只存放在面板里 (PANEL_DIR/outbounds.json), 本版不接进
 # install.sh 的核心渲染 (家宽对接是下一步), 部署不受影响。
 OUTBOUNDS_PATH = os.path.join(PANEL_DIR, "outbounds.json")
+ROUTES_PATH = os.path.join(PANEL_DIR, "routes.json")
 OUTBOUND_TYPES = {"freedom", "blackhole", "socks", "http", "vless",
                   "vmess", "trojan", "shadowsocks", "hysteria2",
                   "wireguard", "dns"}
@@ -490,7 +495,11 @@ def validate_config(raw):
 
     # ---- 直连 ----
     cfg["enable_direct"] = _as_bool(cfg.get("enable_direct"), False)
-    cfg["direct_domain"] = str(cfg.get("direct_domain") or "").strip()
+    cfg["direct_address"] = str(cfg.get("direct_address") or cfg.get("direct_domain") or "").strip()
+    cfg["direct_domain"] = cfg["direct_address"]
+    cfg["direct_sni"] = str(cfg.get("direct_sni") or "").strip()
+    cfg["client_selector"] = str(cfg.get("client_selector") or "auto").strip()
+    cfg["client_mode"] = str(cfg.get("client_mode") or "suitable").strip()
     # 直连域名可为空 (空 = 自动探测公网 IP); 填了就必须是域名或 IPv4
     if cfg["direct_domain"] and not (DOMAIN_RE.match(cfg["direct_domain"]) or _is_ipv4(cfg["direct_domain"])):
         errors.append("直连域名格式不正确, 请填写域名或 IPv4 地址")
@@ -545,7 +554,7 @@ def validate_config(raw):
         if re.fullmatch(r"[0-9a-f]{2,16}", _s) and _s not in _clean_sids:
             _clean_sids.append(_s)
     cfg["reality_short_ids"] = _clean_sids[:8]
-    cfg["cert_mode"] = str(cfg.get("cert_mode") or "selfsigned").strip().lower()
+    cfg["cert_mode"] = str(cfg.get("cert_mode") or "acme").strip().lower()
     cfg["cert_pem"] = str(cfg.get("cert_pem") or "")
     cfg["cert_key"] = str(cfg.get("cert_key") or "")
 
@@ -614,6 +623,20 @@ def validate_config(raw):
     if not cfg["enable_xray"] and not cfg["enable_singbox"] and not cfg["enable_direct"]:
         errors.append("至少启用一个核心或直连")
     return cfg, errors
+
+
+def load_routes():
+    data = _load_json(ROUTES_PATH, None)
+    if isinstance(data, dict) and isinstance(data.get("routes"), list):
+        data = data["routes"]
+    if not isinstance(data, list):
+        return []
+    out = []
+    for r in data:
+        if not isinstance(r, dict):
+            continue
+        out.append({"type": str(r.get("type") or "domain"), "value": str(r.get("value") or ""), "outbound": str(r.get("outbound") or "direct")})
+    return out
 
 
 def _reality_json_path():
@@ -748,6 +771,8 @@ def config_to_env(cfg):
         "SUB_PATH": cfg["sub_path"],
         "ENABLE_DIRECT": _b(cfg["enable_direct"]),
         "DIRECT_DOMAIN": cfg["direct_domain"],
+        "DIRECT_ADDRESS": cfg.get("direct_address") or cfg["direct_domain"],
+        "DIRECT_SNI": cfg.get("direct_sni") or "",
         "DIRECT_VLESS_TCP": _b(cfg["direct_vless_tcp"]),
         "DIRECT_VLESS_TCP_PORT": str(cfg["direct_vless_tcp_port"]),
         "DIRECT_VLESS_TLS": _b(cfg["direct_vless_tls"]),
@@ -865,13 +890,13 @@ def subscription_urls(cfg):
     sub_path = cfg.get("sub_path") or "sub"
     base = None
     if cfg.get("sub_domain"):
-        base = f"https://{cfg['sub_domain']}/{sub_path}"
+        base = f"https://{cfg['sub_domain']}"
     out = {
         "sub_domain": cfg.get("sub_domain") or "",
         "sub_path": sub_path,
         "sub_port": cfg.get("sub_port") or 18080,
-        "raw_url": f"{base}/raw/{uuid}" if base and uuid else "",
-        "merged_url": f"{base}/merged/{uuid}" if base and uuid else "",
+        "raw_url": f"{base}/{uuid}/{sub_path}/raw" if base and uuid else "",
+        "merged_url": f"{base}/{uuid}/{sub_path}/merged" if base and uuid else "",
         "generator_url": f"https://{cfg['sub_domain']}/" if cfg.get("sub_domain") else "",
         "raw_count": _count_lines(os.path.join(WORKDIR, "sub", "raw.txt")),
         "merged_count": _count_lines(os.path.join(WORKDIR, "sub", "merged.txt")),
@@ -1028,16 +1053,15 @@ def _probe_reality_target(host):
     row = {"target": f"{host}:443", "domain": host, "status": "不可用",
            "tls": "", "alpn": "", "key_exchange": "", "cert": "",
            "latency_ms": None}
-    # 延迟: curl 实测 (IP 目标用 -k, 域名正常校验)
+    # 延迟: 只测 TLS 握手时间 (3X-UI 式), 不发完整 HTTP 请求, 数值更低更灵敏
     try:
-        cmd = ["curl", "-o", "/dev/null", "-s", "-w", "%{time_total}",
-               "--max-time", "5"]
-        if _is_ipv4(host):
-            cmd += ["-k"]
-        cmd.append(f"https://{host}/")
-        out, code = _run(cmd, timeout=6)
-        if code == 0 and out:
-            row["latency_ms"] = int(round(float(out.strip()) * 1000))
+        import socket, ssl
+        t0 = time.monotonic()
+        ctx = ssl.create_default_context()
+        with socket.create_connection((host, 443), timeout=5) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                pass
+        row["latency_ms"] = int(round((time.monotonic() - t0) * 1000))
     except Exception:
         pass
     # TLS 细节: openssl s_client 握手, 读协议 / ALPN / 临时密钥 / 证书 CN
@@ -1206,6 +1230,11 @@ class Handler(BaseHTTPRequestHandler):
             if not self._need_auth():
                 return
             self._send_json({"outbounds": load_outbounds()})
+            return
+        if path == "/api/routes":
+            if not self._need_auth():
+                return
+            self._send_json({"routes": load_routes()})
             return
         self._send_json({"error": "未知路径"}, 404)
 
@@ -1378,6 +1407,27 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _save_json(OUTBOUNDS_PATH, {"outbounds": cleaned})
             self._send_json({"ok": True, "outbounds": cleaned})
+            return
+
+        if path == "/api/routes":
+            raw_list = body.get("routes")
+            if not isinstance(raw_list, list):
+                self._send_json({"error": "routes 须为列表"}, 400)
+                return
+            cleaned = []
+            for r in raw_list:
+                if not isinstance(r, dict):
+                    continue
+                v = str(r.get("value") or "").strip()
+                if not v:
+                    continue
+                t = str(r.get("type") or "domain").strip().lower()
+                if t not in ("domain", "ip", "port"):
+                    self._send_json({"error": "路由条件只能是 domain / ip / port"}, 400)
+                    return
+                cleaned.append({"type": t, "value": v, "outbound": str(r.get("outbound") or "direct").strip()})
+            _save_json(ROUTES_PATH, {"routes": cleaned})
+            self._send_json({"ok": True, "routes": cleaned})
             return
 
         if path == "/api/outbounds/test":
