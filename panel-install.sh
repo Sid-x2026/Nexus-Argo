@@ -5,8 +5,8 @@
 #       bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/panel-install.sh)
 #   ② Argo 绑定安装 (变量一键): Token / 域名 / 端口写进命令里, 直接按
 #       变量装, 不做二次确认, 装完走隧道域名进面板。参数用双引号框起来,
-#       只在引号里填占位值 (示例用占位, 不要填真实域名):
-#       ARGO_TOKEN="你的Token" PANEL_DOMAIN="你的隧道域名" PANEL_PORT="2053" \
+#       只在引号里填占位值 (示例用英文占位, 不要填真实域名):
+#       ARGO_TOKEN="your-token" PANEL_DOMAIN="your-panel-domain" PANEL_PORT="2053" \
 #         bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/panel-install.sh)
 #       不写 Token / 域名就是直连 / IP 进面板 (走①)。
 #   bash panel-install.sh uninstall     # 只拆面板, 不动节点部署
@@ -325,18 +325,18 @@ elif [ -t 0 ]; then
     while true; do
       PANEL_DOMAIN=""
       while [ -z "$PANEL_DOMAIN" ]; do
-        ask_tty PANEL_DOMAIN "面板域名 (例如 panel.ahstshu.eu.cc): "
-        if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入面板域名。"; sleep 1; continue; fi
-        [ -n "$PANEL_DOMAIN" ] || echo "面板域名不能为空, 请重新输入。"
+        ask_tty PANEL_DOMAIN "隧道面板域名 (例如 panel.ahstshu.eu.cc): "
+        if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入隧道面板域名。"; sleep 1; continue; fi
+        [ -n "$PANEL_DOMAIN" ] || echo "隧道面板域名不能为空, 请重新输入。"
       done
-      echo "已输入面板域名: $PANEL_DOMAIN"
+      echo "已输入隧道面板域名: $PANEL_DOMAIN"
       _dom_ok=""
       while true; do
-        ask_tty _dom_ok "这个域名对吗? (回车默认 y 确认 / n 重新输入): "
+        ask_tty _dom_ok "这个隧道面板域名对吗? (回车默认 y 确认 / n 重新输入): "
         if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入 y 或 n。"; sleep 1; continue; fi
         case "$_dom_ok" in
           ""|y|Y) break;;
-          n|N) echo "重新输入面板域名:"; break;;
+          n|N) echo "重新输入隧道面板域名:"; break;;
           *) echo "请输入 y 或 n (回车默认 y)。";;
         esac
       done
@@ -377,41 +377,38 @@ else
 fi
 
 echo ""
-center_line "=================================================================="
-center_line "${C_GREEN}${C_BOLD}  ★ 面板已安装完成, 请保存下面这几行 ★${C_RESET}"
-center_line "=================================================================="
-center_line "${C_BOLD}面板地址:${C_RESET}  ${C_GREEN}$PANEL_URL${C_RESET}"
-[ -n "$TUNNEL_URL" ] && center_line "${C_BOLD}隧道地址:${C_RESET}  ${C_GREEN}$TUNNEL_URL${C_RESET}  (加完上面那条路由后可用)"
-center_line "${C_BOLD}账号:${C_RESET}  admin"
-if [ -n "$PASS" ]; then
-  center_line "${C_BOLD}密码:${C_RESET}  ${C_YELLOW}${C_BOLD}$PASS${C_RESET}  ${C_RED}← 只显示这一次, 请立即保存${C_RESET}"
-  center_line "密码也存在 $PANEL_DIR/password.txt (权限 600)"
-else
-  center_line "${C_BOLD}密码:${C_RESET}  不变 (存在 $PANEL_DIR/password.txt)"
-fi
-center_line "=================================================================="
 echo "接下来: 打开面板 -> 填设置 -> 点「开始部署」, 部署日志和检查在面板里看。"
 echo "只用直连协议: 不用绑隧道, 直接用面板装直连协议就行。"
-
+if [ -n "$PASS" ]; then
+  echo "密码也存在 $PANEL_DIR/password.txt (权限 600)"
+fi
 echo ""
 sep
-echo "${C_CYAN}${C_BOLD}  本次安装内容与卸载方式${C_RESET}"
-sep
-echo "已安装 (本次只装了管理面板, 节点尚未部署, 请在面板里填设置点「开始部署」):"
-echo "  管理面板容器: nexus-panel (端口 $PANEL_PORT, $PANEL_URL)"
-[ -n "$TUNNEL_URL" ] && echo "  面板隧道容器: nexus-panel-argo (cloudflared, 域名 $PANEL_DOMAIN, $TUNNEL_URL)"
-echo "  面板镜像: nexus-panel (本地构建)"
-echo "  面板文件: /opt/nexus-argo/panel/ (panel-server.py / panel.html / Dockerfile / auth.json / password.txt, 全新安装时生成账号文件; 部署配置 panel/config.json 由面板保存时生成)"
-echo "  部署脚本与订阅服务: /opt/nexus-argo/install.sh、/opt/nexus-argo/web/sub-server.py (web/sub-generator.html 为可选文件, 缺失不影响安装)"
+echo "=================================================================="
+echo "  ★ 面板已安装完成, 请保存下面这几行 ★"
+echo "=================================================================="
+# 关键内容最后显示, 地址对齐, 隧道域名在前、IP 地址在后
+if [ -n "$TUNNEL_URL" ]; then
+  printf '  %-10s %s\n' "隧道地址:" "$TUNNEL_URL"
+  printf '  %-10s %s\n' "" "(加完上面那条路由后可用)"
+fi
+printf '  %-10s %s\n' "面板地址:" "$PANEL_URL"
+printf '  %-10s %s\n' "账号:" "admin"
+if [ -n "$PASS" ]; then
+  printf '  %-10s %s  %s\n' "密码:" "$PASS" "← 只显示这一次, 请立即保存"
+else
+  printf '  %-10s %s\n' "密码:" "不变"
+fi
 echo ""
-echo "卸载方式 (以下三种都不动 Cloudflare 隧道 / Token / 域名 / Zero Trust 路由, 云端配置重装时直接复用):"
-echo "  只拆面板 (节点部署不动):"
-echo "    bash panel-install.sh uninstall"
-echo "    (等价于: docker rm -f nexus-panel nexus-panel-argo; docker rmi nexus-panel; rm -rf /opt/nexus-argo/panel)"
-echo "  只清节点 (保留面板, 面板账号与部署配置都在):"
-echo "    bash /opt/nexus-argo/install.sh uninstall"
-echo "    (或在面板里点「清除部署」)"
-echo "  全部清掉, 从零重来 (面板 + 节点 + /opt/nexus-argo 整个目录):"
-echo "    bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/cleanup.sh)"
-echo "    清完可直接重跑 panel-install.sh 重新安装面板。"
+echo "  卸载方式 (简单版):"
+echo "    只拆面板:  bash panel-install.sh uninstall"
+echo "    只清节点:  bash /opt/nexus-argo/install.sh uninstall"
+echo "    全部清掉:  bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/cleanup.sh)"
+echo "=================================================================="
+echo ""
+echo "本次安装内容: 只装了管理面板 (nexus-panel, 端口 $PANEL_PORT), 节点尚未部署, 请在面板里填设置点「开始部署」。"
+[ -n "$TUNNEL_URL" ] && echo "面板隧道容器: nexus-panel-argo (cloudflared, 隧道面板域名 $PANEL_DOMAIN)"
+echo "面板文件: /opt/nexus-argo/panel/ (panel-server.py / panel.html / Dockerfile / auth.json / password.txt)"
+echo "部署脚本与订阅服务: /opt/nexus-argo/install.sh、/opt/nexus-argo/web/sub-server.py"
+echo "卸载都不动 Cloudflare 隧道 / Token / 域名 / Zero Trust 路由, 云端配置重装时直接复用。"
 sep

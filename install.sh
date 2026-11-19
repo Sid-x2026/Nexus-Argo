@@ -173,6 +173,9 @@ SUB_PATH="${SUB_PATH:-sub}"
 # cert is generated at $WORKDIR/direct/ and shared by the direct inbounds.
 ENABLE_DIRECT="${ENABLE_DIRECT:-false}"
 DIRECT_DOMAIN="${DIRECT_DOMAIN:-}"
+DIRECT_ADDRESS="${DIRECT_ADDRESS:-$DIRECT_DOMAIN}"
+DIRECT_DOMAIN="${DIRECT_ADDRESS:-$DIRECT_DOMAIN}"
+DIRECT_SNI="${DIRECT_SNI:-}"
 DIRECT_XRAY_TLS="${DIRECT_XRAY_TLS:-true}"
 DIRECT_XRAY_TLS_PORT="${DIRECT_XRAY_TLS_PORT:-443}"
 DIRECT_SB_TLS="${DIRECT_SB_TLS:-true}"
@@ -656,7 +659,7 @@ step "步骤 2/5  渲染配置"
 # ---- render configs with Python (never sed on JSON) ----
 export NODE_UUID XRAY_PORT XRAY_DOMAIN XRAY_CONFIGS SINGBOX_PORT SINGBOX_DOMAIN SINGBOX_CONFIGS
 export ENABLE_XRAY ENABLE_SINGBOX WORKDIR NODE_PREFIX NODE_PREFIX_ARGO NODE_PREFIX_DIRECT OPT_ADDRS
-export ENABLE_DIRECT DIRECT_DOMAIN DIRECT_XRAY_TLS DIRECT_XRAY_TLS_PORT
+export ENABLE_DIRECT DIRECT_DOMAIN DIRECT_ADDRESS DIRECT_SNI DIRECT_XRAY_TLS DIRECT_XRAY_TLS_PORT
 export DIRECT_SB_TLS DIRECT_SB_TLS_PORT
 export DIRECT_VLESS_TCP DIRECT_VLESS_TCP_PORT DIRECT_VLESS_REALITY DIRECT_VLESS_REALITY_PORT
 export DIRECT_VLESS_WS DIRECT_VLESS_WS_PORT DIRECT_VLESS_GRPC DIRECT_VLESS_GRPC_PORT
@@ -977,7 +980,7 @@ if _is_true(os.environ.get("ENABLE_DIRECT")):
     _dd = os.environ.get("DIRECT_DOMAIN", "").strip()
     if _dd:
         if _is_true(os.environ.get("DIRECT_XRAY_TLS")):
-            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_TLS_PORT', '443')}/?encryption=none&security=tls&sni={_dd}&type=tcp{_ai()}#{prefix_direct}丨Xray-TLS")
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_TLS_PORT', '443')}/?encryption=none&security=tls&sni={_dsni}&type=tcp{_ai()}#{prefix_direct}丨Xray-TLS")
         if _is_true(os.environ.get("DIRECT_VLESS_TCP")):
             direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_TCP_PORT', '8082')}/?encryption=none&type=tcp#{prefix_direct}丨Xray-TCP")
         if _is_true(os.environ.get("DIRECT_VLESS_REALITY")):
@@ -1004,19 +1007,19 @@ if _is_true(os.environ.get("ENABLE_DIRECT")):
         if _is_true(os.environ.get("DIRECT_VLESS_WS")):
             direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_WS_PORT', '8083')}/?encryption=none&type=ws&path=%2Fws#{prefix_direct}丨Xray-WS")
         if _is_true(os.environ.get("DIRECT_VLESS_GRPC")):
-            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_GRPC_PORT', '8084')}/?encryption=none&security=tls&sni={_dd}&type=grpc&serviceName=grpc{_ai()}#{prefix_direct}丨Xray-gRPC")
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_GRPC_PORT', '8084')}/?encryption=none&security=tls&sni={_dsni}&type=grpc&serviceName=grpc{_ai()}#{prefix_direct}丨Xray-gRPC")
         if _is_true(os.environ.get("DIRECT_TROJAN")):
-            direct.append(f"trojan://{uuid}@{_dd}:{os.environ.get('DIRECT_TROJAN_PORT', '9443')}?security=tls&sni={_dd}{_ai()}#{prefix_direct}丨Xray-Trojan")
+            direct.append(f"trojan://{uuid}@{_dd}:{os.environ.get('DIRECT_TROJAN_PORT', '9443')}?security=tls&sni={_dsni}{_ai()}#{prefix_direct}丨Xray-Trojan")
         if _is_true(os.environ.get("DIRECT_VMESS_WS")):
             direct.append(_vmess_link(_dd, os.environ.get("DIRECT_VMESS_WS_PORT", "9444")))
         if _is_true(os.environ.get("DIRECT_SB_TLS")):
-            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_SB_TLS_PORT', '8443')}/?encryption=none&security=tls&sni={_dd}&type=tcp{_ai()}#{prefix_direct}丨Singbox-TLS")
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_SB_TLS_PORT', '8443')}/?encryption=none&security=tls&sni={_dsni}&type=tcp{_ai()}#{prefix_direct}丨Singbox-TLS")
         if _is_true(os.environ.get("DIRECT_SB_TROJAN")):
-            direct.append(f"trojan://{uuid}@{_dd}:{os.environ.get('DIRECT_SB_TROJAN_PORT', '9445')}?security=tls&sni={_dd}{_ai()}#{prefix_direct}丨Singbox-Trojan")
+            direct.append(f"trojan://{uuid}@{_dd}:{os.environ.get('DIRECT_SB_TROJAN_PORT', '9445')}?security=tls&sni={_dsni}{_ai()}#{prefix_direct}丨Singbox-Trojan")
         if _is_true(os.environ.get("DIRECT_SS")):
             direct.append(_ss_link(_dd, os.environ.get("DIRECT_SS_PORT", "8388")))
         if _is_true(os.environ.get("DIRECT_HY2")):
-            direct.append(f"hysteria2://{uuid}@{_dd}:{os.environ.get('DIRECT_HY2_PORT', '9446')}?insecure=1&sni={_dd}#{prefix_direct}丨Singbox-Hysteria2")
+            direct.append(f"hysteria2://{uuid}@{_dd}:{os.environ.get('DIRECT_HY2_PORT', '9446')}?insecure=1&sni={_dsni}#{prefix_direct}丨Singbox-Hysteria2")
 native = tunnel_native + direct
 # merged: re-derive with preferred addr as address, keeping domain as sni.
 # Rebuild from configs (not by string-replacing native links) so sni stays correct.

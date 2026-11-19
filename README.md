@@ -75,19 +75,29 @@ bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/pane
 Token、域名、端口直接写进命令里，改变量就直接装完出结果，不做二次确认，省事傻瓜一点。参数用双引号框起来，只在引号里填（下面是占位值，不要填真实域名）：
 
 ```bash
-ARGO_TOKEN="你的Token" PANEL_DOMAIN="你的隧道域名" PANEL_PORT="2053" \
+ARGO_TOKEN="your-token" PANEL_DOMAIN="your-panel-domain" PANEL_PORT="2053" \
   bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/panel-install.sh)
 ```
 
 | 变量 | 说明 | 默认 |
 |---|---|---|
 | `ARGO_TOKEN` | Cloudflare Argo Tunnel Token | 无，不写就是直连 / IP 进面板 |
-| `PANEL_DOMAIN` | 面板隧道域名（Zero Trust 里路由到面板端口） | 无，不写就是直连 / IP 进面板 |
+| `PANEL_DOMAIN` | 隧道面板域名（Zero Trust 里路由到面板端口） | 无，不写就是直连 / IP 进面板 |
 | `PANEL_PORT` | 面板端口，须与 Zero Trust 路由端口一致 | `2053` |
 
 只给其中一个变量（只有 Token 没有域名，或反过来）时，按交互安装走，会再问一遍。变量安装不做二次确认：命令里写什么就按什么装，写错了改命令重跑。装完记得去 Cloudflare Zero Trust 里加路由：`PANEL_DOMAIN -> http://127.0.0.1:<PANEL_PORT>`。
 
-卸载：只拆面板 `bash panel-install.sh uninstall`；全部清掉见 `cleanup.sh`（`bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/cleanup.sh)`）。
+### 卸载 / 一键清理
+
+- 只拆面板（节点不动）：`bash panel-install.sh uninstall`
+- 只清节点（面板保留）：`bash /opt/nexus-argo/install.sh uninstall`，或面板里点「清除部署」
+- 全部清掉，从零重来（面板 + 节点 + `/opt/nexus-argo`）：
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/cleanup.sh)
+```
+
+以上三种都不动 Cloudflare 隧道 / Token / 域名 / Zero Trust 路由，云端配置重装时直接复用。清完可直接重跑 panel-install.sh 重新安装面板。
 
 ## 快速开始
 
@@ -117,7 +127,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/inst
 |---|---|
 | `install.sh` | 安装 / 卸载、校验、Python JSON 渲染、拉起容器、健康巡检 |
 | `web/index.html` | 前端 v3.6，已打核心补丁（见上） |
-| `web/nginx.conf` | 面板 + `/sub/merged/<uuid>`、`/sub/raw/<uuid>` |
+| `web/nginx.conf` | 面板 + `/<uuid>/sub/merged`、`/ <uuid>/sub/raw`（UUID 在前） |
 | `FRONTEND_CONTRACT.md` | 前端契约与 9 处不一致 / 待修复项 |
 
 ## 安全
