@@ -4,6 +4,24 @@
 #   NODE_UUID, ARGO_TOKEN, ENABLE_XRAY, XRAY_PORT, XRAY_DOMAIN, XRAY_CONFIGS
 #   ENABLE_SINGBOX, SINGBOX_PORT, SINGBOX_DOMAIN, SINGBOX_CONFIGS
 #   NODE_PREFIX, OPT_ADDRS (comma-separated, default cloudflare.com)
+#   SUB_DOMAIN, SUB_PORT (subscription-only service, v3.2 2026-11-19:
+#   a tiny Python stdlib server (web/sub-server.py) serving /sub/*
+#   on 127.0.0.1:SUB_PORT, reached via one Zero Trust route
+#   SUB_DOMAIN -> 127.0.0.1:SUB_PORT. No Worker needed, and
+#   ?addrs= live fission works again — the server generates links
+#   from the same deploy-command variables, so nothing is synced
+#   in a second place. Empty SUB_DOMAIN = skip the sub service.)
+#   SUB_PATH (default sub): first path segment of subscription URLs,
+#   i.e. https://<SUB_DOMAIN>/<SUB_PATH>/raw/<uuid> — the panel's
+#   custom-subscription-address setting.
+#   ENABLE_DIRECT (default false): serve nodes straight from the VPS
+#   public IP/domain (backup only — exposes the real IP). Direct
+#   protocols: DIRECT_XRAY_TLS (+TLS_PORT, default 443, TCP),
+#   DIRECT_XRAY_QUIC (+QUIC_PORT, default 443, UDP — may share the
+#   number with the TCP port), DIRECT_SB_TLS (+SB_TLS_PORT, default
+#   8443). DIRECT_DOMAIN empty = auto-detect the public IP.
+#   Direct uses one self-signed cert (clients need allowInsecure=1);
+#   direct nodes enter the subscription as-is, never fissioned.
 #   TUNNEL_PROTOCOL=auto|http2|quic (default auto)
 #   XRAY_CONFIGS / SINGBOX_CONFIGS are comma lists like "xhttp_h1:443,xhttp_h2:443"
 #   and "httpupgrade:443,ws:443,grpc:443"
@@ -28,6 +46,7 @@ XRAY_IMAGE="${XRAY_IMAGE:-ghcr.io/xtls/xray-core:latest}"
 SINGBOX_IMAGE="${SINGBOX_IMAGE:-ghcr.io/sagernet/sing-box:latest}"
 CLOUDFLARED_IMAGE="${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}"
 NGINX_IMAGE="${NGINX_IMAGE:-nginx:alpine}"
+PYTHON_IMAGE="${PYTHON_IMAGE:-python:3-alpine}"
 
 NODE_UUID="${NODE_UUID:-}"
 ARGO_TOKEN="${ARGO_TOKEN:-}"
@@ -42,9 +61,25 @@ SINGBOX_CONFIGS="${SINGBOX_CONFIGS:-httpupgrade:443,ws:443,grpc:443}"
 NODE_PREFIX="${NODE_PREFIX:-Nexus}"
 OPT_ADDRS="${OPT_ADDRS:-cloudflare.com}"
 TUNNEL_PROTOCOL="${TUNNEL_PROTOCOL:-auto}"
-# Worker domain for the public subscription URLs printed at the end of a deploy
-# (e.g. argowork1.deathma.workers.dev). Empty = only the local panel/file links are shown.
-WORKER_DOMAIN="${WORKER_DOMAIN:-}"
+# Subscription-only service (v3.2): its own domain + port, separate
+# from the web panel (127.0.0.1:8080). Serves /sub/raw/<uuid> and
+# /sub/merged/<uuid>?addrs=... (base64, live fission, no Worker).
+# No second deployment, no env vars to keep in sync — UUID / domains /
+# client ports come from this one deploy command only.
+# Empty SUB_DOMAIN = skip it.
+SUB_DOMAIN="${SUB_DOMAIN:-}"
+SUB_PORT="${SUB_PORT:-18080}"
+SUB_PATH="${SUB_PATH:-sub}"
+# Direct mode (backup only — exposes the VPS real IP). One self-signed
+# cert is generated at $WORKDIR/direct/ and shared by the direct inbounds.
+ENABLE_DIRECT="${ENABLE_DIRECT:-false}"
+DIRECT_DOMAIN="${DIRECT_DOMAIN:-}"
+DIRECT_XRAY_TLS="${DIRECT_XRAY_TLS:-true}"
+DIRECT_XRAY_TLS_PORT="${DIRECT_XRAY_TLS_PORT:-443}"
+DIRECT_XRAY_QUIC="${DIRECT_XRAY_QUIC:-false}"
+DIRECT_XRAY_QUIC_PORT="${DIRECT_XRAY_QUIC_PORT:-443}"
+DIRECT_SB_TLS="${DIRECT_SB_TLS:-true}"
+DIRECT_SB_TLS_PORT="${DIRECT_SB_TLS_PORT:-8443}"
 
 log() { echo "[nexus-argo] $*"; }
 die() { echo "[nexus-argo] ERROR: $*" >&2; exit 1; }
@@ -59,14 +94,26 @@ check_port() {
 
 uninstall() {
   log "Uninstalling nexus-* containers and $WORKDIR ..."
-  for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel; do
+  for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel nexus-sub; do
     if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$c"; then
       docker rm -f "$c" >/dev/null || true
       log "removed $c"
     fi
   done
-  rm -rf "$WORKDIR"
-  log "Done. No nexus-* containers or $WORKDIR remain."
+  # Keep the management panel itself (nexus-panel container + $WORKDIR/panel):
+  # uninstalling the nodes must not lock the operator out of the panel.
+  if [ -d "$WORKDIR/panel" ]; then
+    _tmp="$(mktemp -d)"
+    mv "$WORKDIR/panel" "$_tmp/panel"
+    rm -rf "$WORKDIR"
+    mkdir -p "$WORKDIR"
+    mv "$_tmp/panel" "$WORKDIR/panel"
+    rmdir "$_tmp" 2>/dev/null || true
+    log "Kept $WORKDIR/panel (management panel files)"
+  else
+    rm -rf "$WORKDIR"
+  fi
+  log "Done. No nexus-* node containers or $WORKDIR remain (panel kept)."
   exit 0
 }
 
@@ -78,15 +125,20 @@ command -v docker >/dev/null 2>&1 || die "docker not found — install Docker fi
 command -v python3 >/dev/null 2>&1 || die "python3 not found — needed for JSON rendering"
 check_port "XRAY_PORT" "$XRAY_PORT"
 check_port "SINGBOX_PORT" "$SINGBOX_PORT"
+check_port "SUB_PORT" "$SUB_PORT"
 [ "$XRAY_PORT" != "$SINGBOX_PORT" ] || die "XRAY_PORT and SINGBOX_PORT conflict: both $XRAY_PORT"
 [ "$XRAY_PORT" != "8080" ] && [ "$SINGBOX_PORT" != "8080" ] || die "origin port must not be 8080 (web panel)"
+# Subscription port must not collide with the panel (8080), either
+# origin port, or the Sing-box dispatcher internals (SINGBOX_PORT+1..+3).
+[ "$SUB_PORT" != "8080" ] && [ "$SUB_PORT" != "$XRAY_PORT" ] && [ "$SUB_PORT" != "$SINGBOX_PORT" ] \
+  || die "SUB_PORT $SUB_PORT collides with 8080 / XRAY_PORT / SINGBOX_PORT — pick another SUB_PORT"
 # Sing-box dispatcher uses internal ports SINGBOX_PORT+1/+2/+3 (ws/httpupgrade/grpc),
 # so the origin port must leave room for them and must not collide with them.
 if is_true "$ENABLE_SINGBOX"; then
   (( SINGBOX_PORT <= 65532 )) || die "SINGBOX_PORT must be <= 65532 (dispatcher needs +1/+2/+3): $SINGBOX_PORT"
   for _off in 1 2 3; do
     _ip=$(( SINGBOX_PORT + _off ))
-    [ "$_ip" != "$XRAY_PORT" ] && [ "$_ip" != "8080" ] || die "Sing-box dispatcher internal port $_ip collides with XRAY_PORT/8080 — pick another SINGBOX_PORT"
+    [ "$_ip" != "$XRAY_PORT" ] && [ "$_ip" != "8080" ] && [ "$_ip" != "$SUB_PORT" ] || die "Sing-box dispatcher internal port $_ip collides with XRAY_PORT/8080/SUB_PORT — pick another SINGBOX_PORT or SUB_PORT"
   done
 fi
 [[ "$NODE_UUID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] \
@@ -101,13 +153,61 @@ if is_true "$ENABLE_SINGBOX"; then
 else
   log "Sing-box disabled — skipping"
 fi
-if ! is_true "$ENABLE_XRAY" && ! is_true "$ENABLE_SINGBOX"; then
-  die "at least one core must be enabled"
+# Direct mode: nodes served straight from the VPS (self-signed cert,
+# clients need allowInsecure=1). TLS ports are TCP and must not
+# collide with other TCP listeners; QUIC is UDP, so its port number
+# may equal a TCP port (e.g. TLS 443 TCP + QUIC 443 UDP coexist).
+_direct_any=false
+if is_true "$ENABLE_DIRECT"; then
+  check_port "DIRECT_XRAY_TLS_PORT" "$DIRECT_XRAY_TLS_PORT"
+  check_port "DIRECT_XRAY_QUIC_PORT" "$DIRECT_XRAY_QUIC_PORT"
+  check_port "DIRECT_SB_TLS_PORT" "$DIRECT_SB_TLS_PORT"
+  if is_true "$DIRECT_XRAY_TLS" || is_true "$DIRECT_XRAY_QUIC" || is_true "$DIRECT_SB_TLS"; then
+    _direct_any=true
+  else
+    die "ENABLE_DIRECT but no direct protocol selected"
+  fi
+  if is_true "$DIRECT_XRAY_TLS"; then
+    for _p in 8080 "$XRAY_PORT" "$SINGBOX_PORT" "$SUB_PORT"; do
+      [ "$DIRECT_XRAY_TLS_PORT" != "$_p" ] || die "DIRECT_XRAY_TLS_PORT collides with $_p"
+    done
+  fi
+  if is_true "$DIRECT_SB_TLS"; then
+    for _p in 8080 "$XRAY_PORT" "$SINGBOX_PORT" "$SUB_PORT" "$DIRECT_XRAY_TLS_PORT"; do
+      [ "$DIRECT_SB_TLS_PORT" != "$_p" ] || die "DIRECT_SB_TLS_PORT collides with $_p"
+    done
+  fi
+  if [ -z "$DIRECT_DOMAIN" ]; then
+    DIRECT_DOMAIN="$(curl -fsS --max-time 5 https://ifconfig.me/ip 2>/dev/null || curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
+    [ -n "$DIRECT_DOMAIN" ] || die "ENABLE_DIRECT but DIRECT_DOMAIN is empty and the public IP could not be detected — set DIRECT_DOMAIN"
+    log "DIRECT_DOMAIN auto-detected: $DIRECT_DOMAIN"
+  fi
+  command -v openssl >/dev/null 2>&1 || die "openssl not found — needed for the direct-mode self-signed cert"
+fi
+if ! is_true "$ENABLE_XRAY" && ! is_true "$ENABLE_SINGBOX" && [ "$_direct_any" != "true" ]; then
+  die "at least one core or direct mode must be enabled"
 fi
 [ -n "$ARGO_TOKEN" ] || log "WARNING: ARGO_TOKEN is empty — tunnel will not start, nodes can still be previewed locally (by design)"
 case "$TUNNEL_PROTOCOL" in auto|http2|quic) ;; *) die "TUNNEL_PROTOCOL must be auto|http2|quic, got $TUNNEL_PROTOCOL";; esac
 
 mkdir -p "$WORKDIR"/{xray,singbox,web,sub}
+# Direct mode: one self-signed cert, shared by the direct inbounds.
+# Kept across redeploys (only generated if missing) so the cert
+# stays stable; clients use allowInsecure=1 anyway.
+if is_true "$ENABLE_DIRECT"; then
+  mkdir -p "$WORKDIR/direct"
+  if [ ! -f "$WORKDIR/direct/cert.pem" ] || [ ! -f "$WORKDIR/direct/key.pem" ]; then
+    openssl req -x509 -newkey rsa:2048 -keyout "$WORKDIR/direct/key.pem" \
+      -out "$WORKDIR/direct/cert.pem" -days 3650 -nodes \
+      -subj "/CN=$DIRECT_DOMAIN" >/dev/null 2>&1 \
+      || die "自签名证书生成失败 (需要 openssl)"
+    log "直连自签名证书已生成 ($WORKDIR/direct/cert.pem, CN=$DIRECT_DOMAIN)"
+  fi
+fi
+# Stale configs from a previous deploy (e.g. a core disabled since then)
+# must not survive: container startup and the health check key off
+# the config files' existence.
+rm -f "$WORKDIR/xray/config.json" "$WORKDIR/singbox/config.json"
 # Web panel files: when install.sh is run via bash <(curl ...),
 # REPO_DIR is /dev/fd, so cp from the repo never works and Docker
 # then auto-creates $WORKDIR/web/nginx.conf as a DIRECTORY, which
@@ -116,7 +216,7 @@ mkdir -p "$WORKDIR"/{xray,singbox,web,sub}
 # remove a stray directory at either path first, then copy from
 # the repo if present, else download from GitHub raw.
 RAW_BASE="${RAW_BASE:-https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main}"
-for _f in index.html nginx.conf; do
+for _f in index.html nginx.conf sub-server.py sub-generator.html; do
   [ -d "$WORKDIR/web/$_f" ] && rm -rf "$WORKDIR/web/$_f"
   if ! cp "$REPO_DIR/web/$_f" "$WORKDIR/web/$_f" 2>/dev/null; then
     curl -fsSL "$RAW_BASE/web/$_f" -o "$WORKDIR/web/$_f" 2>/dev/null || log "WARNING: could not fetch web/$_f — panel may not start"
@@ -126,6 +226,8 @@ done
 # ---- render configs with Python (never sed on JSON) ----
 export NODE_UUID XRAY_PORT XRAY_DOMAIN XRAY_CONFIGS SINGBOX_PORT SINGBOX_DOMAIN SINGBOX_CONFIGS
 export ENABLE_XRAY ENABLE_SINGBOX WORKDIR NODE_PREFIX OPT_ADDRS
+export ENABLE_DIRECT DIRECT_DOMAIN DIRECT_XRAY_TLS DIRECT_XRAY_TLS_PORT
+export DIRECT_XRAY_QUIC DIRECT_XRAY_QUIC_PORT DIRECT_SB_TLS DIRECT_SB_TLS_PORT
 python3 - <<'PYEOF'
 import json, os, sys
 work = os.environ["WORKDIR"]
@@ -141,39 +243,71 @@ def parse_configs(s):
         out.append({"proto": proto.strip(), "port": int(port.strip() or 443)})
     return out
 
+def _is_true(v):
+    return str(v or "").lower() in ("true", "1", "yes")
+
+
+def _direct_tls():
+    return {"certificates": [{"certificateFile": "/etc/nexus-direct/cert.pem",
+                              "keyFile": "/etc/nexus-direct/key.pem"}]}
+
+
 def render_xray(port, configs):
-    # One unified VLESS/XHTTP inbound. ALPN is the union of the
-    # selected protocols — this is what the frontend's path=/ links imply.
-    # Mode is always "auto" behind a Cloudflare Tunnel: the edge
-    # terminates TLS (h1/h2 TCP, h3 QUIC) and cloudflared forwards
-    # to this origin as plain HTTP/1.1, so "packet-up" never reaches
-    # the origin — with mode="packet-up" the inbound waits for
-    # packet-style upload and every client times out (VPS test
-    # 2026-11-18: tunnel healthy, Xray listening on 8222, all 15
-    # Xray nodes latency -1). "auto" lets Xray detect the forwarded
-    # stream. Client links keep their per-protocol mode (h3 still
-    # says packet-up to the edge); only the origin side changes.
-    alpns = set()
-    for c in configs:
-        if c["proto"] == "xhttp_h1":
-            alpns.add("http/1.1")
-        elif c["proto"] == "xhttp_h2":
-            alpns.add("h2")
-        elif c["proto"] == "xhttp_h3":
-            alpns.add("h3")
-        else:
-            alpns.add("h2")
-    mode = "auto"
-    return {
-        "log": {"loglevel": "warning"},
-        "inbounds": [{
+    # Inbounds: one unified VLESS/XHTTP tunnel inbound (if any tunnel
+    # protocol is selected) + direct inbounds (if direct is on).
+    # Returns None when there is nothing to listen on.
+    inbounds = []
+    if configs:
+        # ALPN is the union of the selected protocols — this is what
+        # the frontend's path=/ links imply. Mode is always "auto"
+        # behind a Cloudflare Tunnel: the edge terminates TLS (h1/h2
+        # TCP, h3 QUIC) and cloudflared forwards to this origin as
+        # plain HTTP/1.1, so "packet-up" never reaches the origin —
+        # with mode="packet-up" the inbound waits for packet-style
+        # upload and every client times out (VPS test 2026-11-18:
+        # tunnel healthy, Xray listening on 8222, all 15 Xray nodes
+        # latency -1). "auto" lets Xray detect the forwarded stream.
+        # Client links keep their per-protocol mode (h3 still says
+        # packet-up to the edge); only the origin side changes.
+        alpns = set()
+        for c in configs:
+            if c["proto"] == "xhttp_h1":
+                alpns.add("http/1.1")
+            elif c["proto"] == "xhttp_h2":
+                alpns.add("h2")
+            elif c["proto"] == "xhttp_h3":
+                alpns.add("h3")
+            else:
+                alpns.add("h2")
+        inbounds.append({
             "port": port, "protocol": "vless",
             "settings": {"clients": [{"id": uuid}], "decryption": "none"},
             "streamSettings": {
                 "network": "xhttp", "security": "none",
-                "xhttpSettings": {"path": "/", "mode": mode, "alpn": sorted(alpns)}
+                "xhttpSettings": {"path": "/", "mode": "auto", "alpn": sorted(alpns)}
             }
-        }],
+        })
+    if _is_true(os.environ.get("ENABLE_DIRECT")):
+        if _is_true(os.environ.get("DIRECT_XRAY_TLS")):
+            inbounds.append({
+                "port": int(os.environ.get("DIRECT_XRAY_TLS_PORT", "443")), "protocol": "vless",
+                "settings": {"clients": [{"id": uuid}], "decryption": "none"},
+                "streamSettings": {"network": "tcp", "security": "tls",
+                                   "tlsSettings": _direct_tls()}
+            })
+        if _is_true(os.environ.get("DIRECT_XRAY_QUIC")):
+            inbounds.append({
+                "port": int(os.environ.get("DIRECT_XRAY_QUIC_PORT", "443")), "protocol": "vless",
+                "settings": {"clients": [{"id": uuid}], "decryption": "none"},
+                "streamSettings": {"network": "quic", "security": "tls",
+                                   "tlsSettings": _direct_tls(),
+                                   "quicSettings": {"security": "none", "key": "", "header": {"type": "none"}}}
+            })
+    if not inbounds:
+        return None
+    return {
+        "log": {"loglevel": "warning"},
+        "inbounds": inbounds,
         "outbounds": [{"protocol": "freedom", "tag": "direct"}]
     }
 
@@ -186,6 +320,8 @@ def render_singbox(port, configs):
     # in front listening on `port` — is what makes all three work on
     # one unified origin port. ws and httpupgrade send the same Upgrade
     # request headers, so they can only be told apart by path.
+    # Plus a direct VLESS+TLS inbound (public port) when direct is on.
+    # Returns None when there is nothing to listen on.
     protos = [c["proto"] for c in configs]
     inbounds = []
     spec = {
@@ -202,22 +338,39 @@ def render_singbox(port, configs):
             "users": [{"uuid": uuid}],
             "transport": transport
         })
+    if _is_true(os.environ.get("ENABLE_DIRECT")) and _is_true(os.environ.get("DIRECT_SB_TLS")):
+        inbounds.append({
+            "type": "vless", "listen": "0.0.0.0",
+            "listen_port": int(os.environ.get("DIRECT_SB_TLS_PORT", "8443")),
+            "users": [{"uuid": uuid}],
+            "tls": {"enabled": True,
+                    "certificate_path": "/etc/nexus-direct/cert.pem",
+                    "key_path": "/etc/nexus-direct/key.pem"}
+        })
+    if not inbounds:
+        return None
     return {
         "log": {"level": "warn"},
         "inbounds": inbounds,
         "outbounds": [{"type": "direct", "tag": "direct"}]
     }
 
-if os.environ.get("ENABLE_XRAY", "true").lower() in ("true", "1", "yes"):
-    cfgs = parse_configs(os.environ["XRAY_CONFIGS"])
+# A core is rendered when it has a tunnel inbound, a direct inbound,
+# or both; a core with nothing to listen on gets no config file at all
+# (container startup and the health check key off the file's existence).
+xray_cfg = render_xray(int(os.environ["XRAY_PORT"]), parse_configs(os.environ["XRAY_CONFIGS"]) if _is_true(os.environ.get("ENABLE_XRAY")) else [])
+if xray_cfg is not None:
     with open(f"{work}/xray/config.json", "w") as f:
-        json.dump(render_xray(int(os.environ["XRAY_PORT"]), cfgs), f, indent=2)
-if os.environ.get("ENABLE_SINGBOX", "true").lower() in ("true", "1", "yes"):
-    cfgs = parse_configs(os.environ["SINGBOX_CONFIGS"])
+        json.dump(xray_cfg, f, indent=2)
+sb_cfg = render_singbox(int(os.environ["SINGBOX_PORT"]), parse_configs(os.environ["SINGBOX_CONFIGS"]) if _is_true(os.environ.get("ENABLE_SINGBOX")) else [])
+if sb_cfg is not None:
     with open(f"{work}/singbox/config.json", "w") as f:
-        json.dump(render_singbox(int(os.environ["SINGBOX_PORT"]), cfgs), f, indent=2)
+        json.dump(sb_cfg, f, indent=2)
 
-# Subscription files served by nginx at /sub/merged/<uuid> and /sub/raw/<uuid>.
+# Subscription files served by the panel nginx at /sub/merged/<uuid>
+# and /sub/raw/<uuid> (static, deploy-time fission). The public
+# sub-domain service (web/sub-server.py, v3.2) generates the same
+# links live from these variables, so ?addrs= works there too.
 # NOTE: the frontend now passes OPT_ADDRS in the SSH command (2026-11-18),
 # so the server reproduces the same fission as the frontend — verified
 # 2026-11-18: frontend nodes == sub/merged.txt, 18/18 identical.
@@ -252,28 +405,50 @@ def vless_link(addr, domain, proto, port, core):
             f"&sni={domain}&type={proto}{svc}&alpn={alpn}"
             f"#{prefix}丨Singbox丨{proto}")
 
-native = []
-if os.environ.get("ENABLE_XRAY", "true").lower() in ("true", "1", "yes"):
+tunnel_native = []
+if _is_true(os.environ.get("ENABLE_XRAY")):
     for c in parse_configs(os.environ["XRAY_CONFIGS"]):
-        native.append(vless_link(os.environ["XRAY_DOMAIN"], os.environ["XRAY_DOMAIN"], c["proto"], c["port"], "xray"))
-if os.environ.get("ENABLE_SINGBOX", "true").lower() in ("true", "1", "yes"):
+        tunnel_native.append(vless_link(os.environ["XRAY_DOMAIN"], os.environ["XRAY_DOMAIN"], c["proto"], c["port"], "xray"))
+if _is_true(os.environ.get("ENABLE_SINGBOX")):
     for c in parse_configs(os.environ["SINGBOX_CONFIGS"]):
-        native.append(vless_link(os.environ["SINGBOX_DOMAIN"], os.environ["SINGBOX_DOMAIN"], c["proto"], c["port"], "sb"))
+        tunnel_native.append(vless_link(os.environ["SINGBOX_DOMAIN"], os.environ["SINGBOX_DOMAIN"], c["proto"], c["port"], "sb"))
+# Direct nodes enter the subscription as-is — never fissioned
+# (their address is the VPS itself). Self-signed cert, so clients
+# need allowInsecure=1; direct is a backup, not the main path.
+direct = []
+if _is_true(os.environ.get("ENABLE_DIRECT")):
+    _dd = os.environ.get("DIRECT_DOMAIN", "").strip()
+    if _dd:
+        if _is_true(os.environ.get("DIRECT_XRAY_TLS")):
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_TLS_PORT', '443')}/?encryption=none&security=tls&sni={_dd}&type=tcp&allowInsecure=1#{prefix}丨直连丨Xray-TLS")
+        if _is_true(os.environ.get("DIRECT_XRAY_QUIC")):
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_QUIC_PORT', '443')}/?encryption=none&security=tls&sni={_dd}&type=quic&quicSecurity=none&headerType=none&allowInsecure=1#{prefix}丨直连丨Xray-QUIC")
+        if _is_true(os.environ.get("DIRECT_SB_TLS")):
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_SB_TLS_PORT', '8443')}/?encryption=none&security=tls&sni={_dd}&type=tcp&allowInsecure=1#{prefix}丨直连丨Singbox-TLS")
+native = tunnel_native + direct
 # merged: re-derive with preferred addr as address, keeping domain as sni.
 # Rebuild from configs (not by string-replacing native links) so sni stays correct.
 merged = []
-if os.environ.get("ENABLE_XRAY", "true").lower() in ("true", "1", "yes"):
+if _is_true(os.environ.get("ENABLE_XRAY")):
     for c in parse_configs(os.environ["XRAY_CONFIGS"]):
         for addr in opt_addrs:
             merged.append(vless_link(addr, os.environ["XRAY_DOMAIN"], c["proto"], c["port"], "xray"))
-if os.environ.get("ENABLE_SINGBOX", "true").lower() in ("true", "1", "yes"):
+if _is_true(os.environ.get("ENABLE_SINGBOX")):
     for c in parse_configs(os.environ["SINGBOX_CONFIGS"]):
         for addr in opt_addrs:
             merged.append(vless_link(addr, os.environ["SINGBOX_DOMAIN"], c["proto"], c["port"], "sb"))
+merged = merged + direct
 with open(f"{work}/sub/raw.txt", "w") as f:
     f.write("\n".join(native) + ("\n" if native else ""))
 with open(f"{work}/sub/merged.txt", "w") as f:
     f.write("\n".join(merged) + ("\n" if merged else ""))
+# base64 versions — what the subscription endpoints serve (same format
+# the Worker used to return, so clients need no change). v3 2026-11-19.
+import base64 as _b64
+with open(f"{work}/sub/raw.b64", "w") as f:
+    f.write(_b64.b64encode(("\n".join(native) + ("\n" if native else "")).encode()).decode())
+with open(f"{work}/sub/merged.b64", "w") as f:
+    f.write(_b64.b64encode(("\n".join(merged) + ("\n" if merged else "")).encode()).decode())
 print(f"rendered {len(native)} native links, {len(merged)} dynamic links ({len(native)} x {len(opt_addrs)} preferred)")
 PYEOF
 
@@ -283,20 +458,44 @@ PYEOF
 # config.yml. Create two hostnames sharing this one token:
 #   <XRAY_DOMAIN>   -> http://127.0.0.1:<XRAY_PORT>
 #   <SINGBOX_DOMAIN> -> http://127.0.0.1:<SINGBOX_PORT>
+#   <SUB_DOMAIN>     -> http://127.0.0.1:<SUB_PORT>   (v3: subscription only,
+#     serves just /sub/* — no panel, no deploy command, nothing else)
+# (Only the hostnames for enabled cores, plus the subscription one.)
 # (Only the hostnames for enabled cores.) No config.yml is written
 # on purpose — a local one would be ignored by `run --token`.
-if [ -n "$ARGO_TOKEN" ]; then
+if [ -n "$ARGO_TOKEN" ] || is_true "$ENABLE_DIRECT"; then
   cat > "$WORKDIR/ROUTES.md" <<EOF
-# Tunnel routes — create these in Cloudflare Zero Trust
+# Routes — create the tunnel ones in Cloudflare Zero Trust
 # Tunnel token: <the ARGO_TOKEN you supplied; do not commit this file>
 EOF
-  if is_true "$ENABLE_XRAY"; then
-    printf -- '- %s -> http://127.0.0.1:%s\n' "$XRAY_DOMAIN" "$XRAY_PORT" >> "$WORKDIR/ROUTES.md"
+  if [ -n "$ARGO_TOKEN" ]; then
+    if is_true "$ENABLE_XRAY"; then
+      printf -- '- %s -> http://127.0.0.1:%s\n' "$XRAY_DOMAIN" "$XRAY_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$ENABLE_SINGBOX"; then
+      printf -- '- %s -> http://127.0.0.1:%s\n' "$SINGBOX_DOMAIN" "$SINGBOX_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if [ -n "$SUB_DOMAIN" ]; then
+      printf -- '- %s -> http://127.0.0.1:%s  (subscription only)\n' "$SUB_DOMAIN" "$SUB_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    log "Create the routes in $WORKDIR/ROUTES.md in Zero Trust before testing the tunnel."
   fi
-  if is_true "$ENABLE_SINGBOX"; then
-    printf -- '- %s -> http://127.0.0.1:%s\n' "$SINGBOX_DOMAIN" "$SINGBOX_PORT" >> "$WORKDIR/ROUTES.md"
+  if is_true "$ENABLE_DIRECT"; then
+    {
+      echo ""
+      echo "# Direct nodes — no tunnel, connect straight to the VPS (backup only, exposes the real IP)"
+      echo "# Self-signed cert: clients need allowInsecure=1"
+    } >> "$WORKDIR/ROUTES.md"
+    if is_true "$DIRECT_XRAY_TLS"; then
+      printf -- '- Xray VLESS+TLS: %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_XRAY_TLS_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_XRAY_QUIC"; then
+      printf -- '- Xray QUIC: %s:%s (UDP)\n' "$DIRECT_DOMAIN" "$DIRECT_XRAY_QUIC_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
+    if is_true "$DIRECT_SB_TLS"; then
+      printf -- '- Sing-box VLESS+TLS: %s:%s\n' "$DIRECT_DOMAIN" "$DIRECT_SB_TLS_PORT" >> "$WORKDIR/ROUTES.md"
+    fi
   fi
-  log "Create the routes in $WORKDIR/ROUTES.md in Zero Trust before testing the tunnel."
 fi
 
 # ---- Sing-box dispatcher: nginx on the unified origin port ----
@@ -329,17 +528,31 @@ if is_true "$ENABLE_SINGBOX"; then
 fi
 
 # ---- (re)start containers — host network so 127.0.0.1 origins work ----
-docker rm -f nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel >/dev/null 2>&1 || true
+docker rm -f nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel nexus-sub >/dev/null 2>&1 || true
 
-if is_true "$ENABLE_XRAY"; then
+# A core container starts when its config file was rendered (tunnel
+# inbound, direct inbound, or both); a core with nothing to listen
+# on gets no container. The dispatcher only serves the tunnel
+# Sing-box origin port, so it only runs when tunnel Sing-box is on.
+if [ -f "$WORKDIR/xray/config.json" ]; then
+  _xray_vol=(-v "$WORKDIR/xray/config.json:/etc/xray/config.json:ro")
+  if is_true "$ENABLE_DIRECT" && [ -d "$WORKDIR/direct" ]; then
+    _xray_vol+=(-v "$WORKDIR/direct:/etc/nexus-direct:ro")
+  fi
   docker run -d --name nexus-xray --restart unless-stopped --network host \
-    -v "$WORKDIR/xray/config.json:/etc/xray/config.json:ro" \
+    "${_xray_vol[@]}" \
     "$XRAY_IMAGE" run -c /etc/xray/config.json
 fi
-if is_true "$ENABLE_SINGBOX"; then
+if [ -f "$WORKDIR/singbox/config.json" ]; then
+  _sb_vol=(-v "$WORKDIR/singbox/config.json:/etc/sing-box/config.json:ro")
+  if is_true "$ENABLE_DIRECT" && [ -d "$WORKDIR/direct" ]; then
+    _sb_vol+=(-v "$WORKDIR/direct:/etc/nexus-direct:ro")
+  fi
   docker run -d --name nexus-singbox --restart unless-stopped --network host \
-    -v "$WORKDIR/singbox/config.json:/etc/sing-box/config.json:ro" \
+    "${_sb_vol[@]}" \
     "$SINGBOX_IMAGE" -c /etc/sing-box/config.json run
+fi
+if is_true "$ENABLE_SINGBOX"; then
   docker run -d --name nexus-sb-dispatch --restart unless-stopped --network host \
     -v "$WORKDIR/sb-dispatch/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
     "$NGINX_IMAGE"
@@ -362,17 +575,51 @@ if [ -f "$WORKDIR/web/nginx.conf" ] && [ -f "$WORKDIR/web/index.html" ]; then
 else
   log "WARNING: web panel files missing — skipping nexus-web-panel, nodes are unaffected"
 fi
+if [ -n "$SUB_DOMAIN" ]; then
+  # v3.2 subscription-only service: a tiny Python stdlib server
+  # (web/sub-server.py) that generates subscriptions on the fly
+  # from this deploy command's variables — so ?addrs= live fission
+  # works again without a Worker. No static files to serve, no
+  # nginx root to misconfigure (v3.1's bug class is gone by design).
+  # Bound to 127.0.0.1 — public access is only via the tunnel route
+  # SUB_DOMAIN -> 127.0.0.1:SUB_PORT (see ROUTES.md).
+  # The server listens on SUB_PORT inside the container too.
+  # 订阅生成器面板 (web/sub-generator.html): 跟着 nexus-sub 一起部署,
+  # 打开 https://$SUB_DOMAIN/ 就是生成器, 上面原生订阅、中间优选域名
+  # 获取+测速、下面裂变出动态订阅, 不用 Worker、不用另外部署。
+  if [ -f "$WORKDIR/web/sub-server.py" ]; then
+    docker run -d --name nexus-sub --restart unless-stopped \
+      -p 127.0.0.1:"$SUB_PORT":"$SUB_PORT" \
+      -e NODE_UUID="$NODE_UUID" -e NODE_PREFIX="$NODE_PREFIX" \
+      -e XRAY_DOMAIN="$XRAY_DOMAIN" -e XRAY_CONFIGS="$XRAY_CONFIGS" \
+      -e SINGBOX_DOMAIN="$SINGBOX_DOMAIN" -e SINGBOX_CONFIGS="$SINGBOX_CONFIGS" \
+      -e ENABLE_XRAY="$ENABLE_XRAY" -e ENABLE_SINGBOX="$ENABLE_SINGBOX" \
+      -e OPT_ADDRS="$OPT_ADDRS" -e SUB_PORT="$SUB_PORT" -e SUB_PATH="$SUB_PATH" \
+      -e ENABLE_DIRECT="$ENABLE_DIRECT" -e DIRECT_DOMAIN="$DIRECT_DOMAIN" \
+      -e DIRECT_XRAY_TLS="$DIRECT_XRAY_TLS" -e DIRECT_XRAY_TLS_PORT="$DIRECT_XRAY_TLS_PORT" \
+      -e DIRECT_XRAY_QUIC="$DIRECT_XRAY_QUIC" -e DIRECT_XRAY_QUIC_PORT="$DIRECT_XRAY_QUIC_PORT" \
+      -e DIRECT_SB_TLS="$DIRECT_SB_TLS" -e DIRECT_SB_TLS_PORT="$DIRECT_SB_TLS_PORT" \
+      -v "$WORKDIR/web/sub-server.py:/app/sub-server.py:ro" \
+      -v "$WORKDIR/web/sub-generator.html:/app/sub-generator.html:ro" \
+      "$PYTHON_IMAGE" python3 /app/sub-server.py
+  else
+    log "WARNING: web/sub-server.py missing — skipping nexus-sub, panel-local subscription still works"
+  fi
+else
+  log "SUB_DOMAIN empty — skipping nexus-sub (subscription only via panel localhost)"
+fi
 
 # ---- health check: docker inspect .State.Running, last 20 log lines on failure ----
 fail=0
-for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel; do
+for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel nexus-sub; do
   # skip disabled cores / missing token
   case "$c" in
-    nexus-xray) is_true "$ENABLE_XRAY" || continue;;
-    nexus-singbox) is_true "$ENABLE_SINGBOX" || continue;;
+    nexus-xray) [ -f "$WORKDIR/xray/config.json" ] || continue;;
+    nexus-singbox) [ -f "$WORKDIR/singbox/config.json" ] || continue;;
     nexus-sb-dispatch) is_true "$ENABLE_SINGBOX" || continue;;
     nexus-argo) [ -n "$ARGO_TOKEN" ] || continue;;
     nexus-web-panel) docker inspect "$c" >/dev/null 2>&1 || continue;;
+    nexus-sub) [ -n "$SUB_DOMAIN" ] && docker inspect "$c" >/dev/null 2>&1 || continue;;
   esac
   sleep 2
   running="$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null || echo false)"
@@ -384,6 +631,60 @@ for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel; 
     log "$c running"
   fi
 done
+# v3.1: a running container is not proof the subscription works — with a
+# wrong/missing root, nginx starts fine and answers 404 to every
+# /sub/* URL (found 2026-11-19 by live test: the nginx:alpine image's
+# compiled-in default root is /etc/nginx/html, files live in
+# /usr/share/nginx/html). Prove the endpoint serves real data before
+# printing public links. Same check for the panel (it serves / and
+# /sub/* from the same mount).
+if command -v curl >/dev/null 2>&1; then
+  if [ -n "$SUB_DOMAIN" ] && docker inspect nexus-sub >/dev/null 2>&1; then
+    _sub_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_PATH/raw/$NODE_UUID" 2>/dev/null || true)"
+    if [ -z "$_sub_body" ] || ! printf '%s' "$_sub_body" | base64 -d 2>/dev/null | grep -q '^vless://'; then
+      echo "[nexus-argo] ERROR: nexus-sub is running but /$SUB_PATH/raw/<uuid> did not return subscription data — check: docker logs nexus-sub"
+      fail=1
+    else
+      log "nexus-sub serves /$SUB_PATH/raw/<uuid> OK"
+    fi
+    # v3.2: prove live fission works — ?addrs= with 2 addresses must
+    # return exactly 2x the tunnel-native link count, plus the direct
+    # links unchanged (direct nodes are never fissioned). A server that
+    # only served static files would return the deploy-time count instead.
+    if [ "$fail" = "0" ]; then
+      _native_n=$(grep -c . "$WORKDIR/sub/raw.txt" 2>/dev/null || true); _native_n="${_native_n:-0}"
+      _direct_n=$(grep -c '丨直连丨' "$WORKDIR/sub/raw.txt" 2>/dev/null || true); _direct_n="${_direct_n:-0}"
+      _want=$(( (_native_n - _direct_n) * 2 + _direct_n ))
+      _merged_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_PATH/merged/$NODE_UUID?addrs=cf.xreak.top,cf.3666888.xyz" 2>/dev/null || true)"
+      _merged_n=$(printf '%s' "$_merged_body" | base64 -d 2>/dev/null | grep -c '^vless://' || true)
+      if [ "$_merged_n" != "$_want" ]; then
+        echo "[nexus-argo] ERROR: nexus-sub ?addrs= fission check failed — expected $_want links for 2 addrs, got ${_merged_n:-0} — check: docker logs nexus-sub"
+        fail=1
+      else
+        log "nexus-sub ?addrs= live fission OK ($_merged_n links for 2 addrs)"
+      fi
+    fi
+    # 生成器面板: / 要返回 sub-generator.html, 不是纯文本说明
+    if [ "$fail" = "0" ]; then
+      if curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/" 2>/dev/null | grep -q '订阅生成器'; then
+        log "nexus-sub generator panel OK"
+      else
+        echo "[nexus-argo] ERROR: nexus-sub / did not return the generator panel — check web/sub-generator.html is present"
+        fail=1
+      fi
+    fi
+  fi
+  if docker inspect nexus-web-panel >/dev/null 2>&1; then
+    if ! curl -fsS --max-time 10 -o /dev/null "http://127.0.0.1:8080/" 2>/dev/null; then
+      echo "[nexus-argo] ERROR: nexus-web-panel is running but / did not return 200 — check: docker logs nexus-web-panel"
+      fail=1
+    else
+      log "nexus-web-panel serves / OK"
+    fi
+  fi
+else
+  log "WARNING: curl not found — skipping HTTP smoke check for nexus-sub / panel"
+fi
 [ "$fail" = "0" ] || die "health check failed — see logs above"
 
 # ---- subscription summary: print the links so the deployer can see/copy them ----
@@ -391,8 +692,14 @@ done
 # Dynamic links are in $WORKDIR/sub/merged.txt (native x preferred addresses).
 # The panel serves them locally at /sub/raw/<uuid> and /sub/merged/<uuid>
 # (panel is bound to 127.0.0.1:8080 only — access via ssh -L 8080:127.0.0.1:8080).
-# If WORKER_DOMAIN is set (e.g. argowork1.deathma.workers.dev), the public
-# Worker subscription URLs are printed too — that is the link to put in the client.
+# v3.2: the public link is the subscription-only service — no Worker
+# needed. Put this URL straight into the client; it serves base64,
+# same as the Worker used to. Changing preferred addresses NO LONGER
+# needs a redeploy: just edit ?addrs= in the URL — the server on the
+# VPS fissions live from the same deploy-command variables.
+# (v3.0's static nginx files had no ?addrs=; v3.2's Python server
+# restores it. The panel's local 8080 subscription is still static
+# files, so ?addrs= only works on the public sub-domain URL.)
 _native_n=0; _merged_n=0
 [ -f "$WORKDIR/sub/raw.txt" ] && _native_n=$(grep -c . "$WORKDIR/sub/raw.txt" || true)
 [ -f "$WORKDIR/sub/merged.txt" ] && _merged_n=$(grep -c . "$WORKDIR/sub/merged.txt" || true)
@@ -400,17 +707,25 @@ echo ""
 echo "================ 订阅 =================="
 echo "原生订阅文件: $WORKDIR/sub/raw.txt ($_native_n 条节点)"
 echo "动态订阅文件: $WORKDIR/sub/merged.txt ($_merged_n 条节点)"
-echo "面板本地订阅 (需 SSH 端口转发 ssh -L 8080:127.0.0.1:8080):"
+echo "面板本地订阅 (需 SSH 端口转发 ssh -L 8080:127.0.0.1:8080, 本地路径固定是 /sub/):"
 echo "  原生: http://127.0.0.1:8080/sub/raw/$NODE_UUID"
 echo "  动态: http://127.0.0.1:8080/sub/merged/$NODE_UUID"
-if [ -n "${WORKER_DOMAIN:-}" ]; then
-  _addrs=$(echo "${OPT_ADDRS:-cloudflare.com}" | tr ',' ',')
-  echo "Worker 订阅 (公网, 直接加到客户端):"
-  echo "  原生: https://$WORKER_DOMAIN/sub/raw/$NODE_UUID"
-  echo "  动态: https://$WORKER_DOMAIN/sub/merged/$NODE_UUID?addrs=$_addrs"
+if [ -n "${SUB_DOMAIN:-}" ]; then
+  echo "订阅生成器面板 (打开就是, 上面原生订阅、下面优选IP裂变):"
+  echo "  https://$SUB_DOMAIN/"
+  echo "订阅 (公网, 直接加到客户端, 不用 Worker):"
+  echo "  原生: https://$SUB_DOMAIN/$SUB_PATH/raw/$NODE_UUID"
+  echo "  动态: https://$SUB_DOMAIN/$SUB_PATH/merged/$NODE_UUID"
+  echo "  换优选地址不用重部署, 直接改 URL: https://$SUB_DOMAIN/$SUB_PATH/merged/$NODE_UUID?addrs=cf.xreak.top,cf.3666888.xyz"
+  echo "  (Zero Trust 里要有一条路由: $SUB_DOMAIN -> http://127.0.0.1:$SUB_PORT, 见 $WORKDIR/ROUTES.md)"
 else
-  echo "Worker 订阅: 未设置 WORKER_DOMAIN, 如需显示请重新部署时加上 WORKER_DOMAIN=<你的 Worker 域名>"
-  echo "  例如: WORKER_DOMAIN=argowork1.deathma.workers.dev"
+  echo "订阅 (公网): 未设置 SUB_DOMAIN, 只有面板本地订阅可用"
+  echo "  如需公网订阅, 重新部署时加上 SUB_DOMAIN=<订阅子域名> SUB_PORT=18080"
+  echo "  例如: SUB_DOMAIN=sub.ahstshu.eu.cc"
+fi
+if is_true "$ENABLE_DIRECT"; then
+  echo "直连节点 (自签名证书, 客户端需 allowInsecure=1, 仅作备用):"
+  grep '丨直连丨' "$WORKDIR/sub/raw.txt" 2>/dev/null || true
 fi
 echo "原生节点 (可直接复制到客户端):"
 [ -f "$WORKDIR/sub/raw.txt" ] && cat "$WORKDIR/sub/raw.txt"
