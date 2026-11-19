@@ -98,13 +98,64 @@ nexus-sub 重启）—— 需 SHU 在 VPS 上跑一次。
 
 ## 第 2 步：全协议（2026-11-19）
 
-部署页按流程分步排：①部署方式 → ②协议选择（Argo 组 / 直连组，可折叠，带已选计数）→ ③域名与端口 → ④证书配置 → ⑤节点与订阅 → ⑥开始部署。只显示当前模式相关的区（不选隧道收起隧道区，不选直连收起直连区和证书区）；证书区只在直连勾选了需要证书的协议时才出现。
+### 部署页新布局（2026-11-19，已实现）
+
+部署页按功能分块重排为 5 步：①部署方式 → ②协议选择 → ③配置参数（直连在前、Argo 在后）→ ④节点与订阅 → ⑤开始部署。协议行里不放额外参数，参数统一挪到③；③里只显示已选协议需要的参数，直连在前、Argo 在后，部署时直接调取。只显示当前模式相关的区（不选隧道收起隧道区，不选直连收起直连区和证书区）；证书区只在直连勾选了需要证书的协议时才出现；Reality SNI 参数设置只在勾选 Reality 协议时才显示（见 Reality 一节）。
+
+实施状态（以 panel.html / panel-server.py / install.sh / web/sub-server.py 实际代码为准）：
+- ①部署方式：已实现（Argo 隧道 / 直连节点，可多选，默认 Argo）。
+- ②协议选择：已实现——隧道协议与直连协议在同一处，Argo 组 / 直连组左右并排（宽屏两栏、窄屏上下，`.proto-wrap` flex，≤900px 上下堆叠），可折叠、带已选计数，只勾一种方式时另一组整个隐藏；每条协议行只留勾选 + 协议名 + 端口。
+- ③配置参数：已实现——只显示已选协议需要的参数，直连配置在前、隧道配置在后，部署时直接调取；直连区含直连域名、直连节点前缀、证书配置、Reality 配置，隧道区含 Token、隧道节点前缀、Xray / Sing-box 子域名与回源端口、订阅子域名与端口；两块用不同样式区分（直连绿框、隧道蓝紫框）。
+- ④节点与订阅：已实现——单个 UUID + 订阅路径 + 优选地址；节点名称前缀已移到③里按隧道 / 直连分别设置。
+- ⑤开始部署：已实现——按钮与部署日志、检查结果；按钮顺序见下。
 
 ### 部署页后续调整（2026-11-19，用户反馈）
-- **③ 域名与端口的顺序**：两个方式都选时，直连配置在前、隧道配置在后。两块用不同样式区分：直连区是绿框（绿色左框线、绿色标题），隧道区是蓝紫框（蓝紫左框线、蓝紫标题），一眼能分开。
+- **③ 配置参数里直连在前、隧道在后**：两个方式都选时，直连配置在前、隧道配置在后。两块用不同样式区分：直连区是绿框（绿色左框线、绿色标题），隧道区是蓝紫框（蓝紫左框线、蓝紫标题），一眼能分开。
 - **② 协议选择是同一处**：隧道协议与直连协议放在同一个协议选择区里，各自有 Argo 组 / 直连组小标题（可折叠、带已选计数），每条协议后面都有自己的端口设置。只勾一种方式时，另一组的协议整个隐藏，不显示；两组都选时，一处勾完所有协议。
-- **UUID 只有一个**：不给每个方式各设一个 UUID。同一个 UUID 就是 Xray、Sing-box、隧道和直连全部协议的客户端身份，订阅地址也只用这一个 UUID（`/sub/raw/<uuid>`）；分开设会把订阅拆成两份、多一倍管理，UUID 本身是标识不是密码，分开也没有安全收益。步骤 ⑤ 保留单个 UUID 字段 + 安全生成按钮，下方有说明文字。
+- **UUID 只有一个**：不给每个方式各设一个 UUID。同一个 UUID 就是 Xray、Sing-box、隧道和直连全部协议的客户端身份，订阅地址也只用这一个 UUID（`/sub/raw/<uuid>`）；分开设会把订阅拆成两份、多一倍管理，UUID 本身是标识不是密码，分开也没有安全收益。步骤 ④ 保留单个 UUID 字段 + 安全生成按钮，下方有说明文字。
 - **总览 Argo 隧道状态修复**：之前总览只查节点隧道容器 `nexus-argo`，面板自身的隧道容器叫 `nexus-panel-argo`，所以用户明明已通过隧道进面板，总览仍显示灰色。修复：后端 `_argo_tunnel_state()` 取两者任一在跑即运行中（`nexus-argo` 或 `nexus-panel-argo`），总览的 Argo 隧道卡片用这个合并值；服务列表里两者都列出。总览登录时自动刷新一次（`showApp` 调用 `loadStatus`），15 秒轮询一次，刷新状态按钮已加粗显示并带“上次刷新”时间；前端按服务单独取值，某项缺失不让整个总览变空白。
+
+### 节点名称前缀（已实现）
+
+Argo 配置与直连配置里各一个前缀：隧道节点前缀默认 `Argo`（`argo_prefix` / `NODE_PREFIX_ARGO`），直连节点前缀默认 `直连`（`direct_prefix` / `NODE_PREFIX_DIRECT`），都可自己改。节点名格式：隧道“前缀丨核心丨协议”（如 `Argo丨Xray丨xhttp_h2`），直连“前缀丨直连丨名称”（如 `直连丨Xray-TLS`）。旧配置兼容：只有单个 `node_prefix` 时把它当隧道前缀读入，直连前缀用默认值；新配置以 `argo_prefix` 为准，`node_prefix` 跟着它走。部署渲染（install.sh）与订阅服务（web/sub-server.py）都按隧道 / 直连分别取前缀。
+
+### Reality 额外参数（已实现）
+
+Reality 配置在③配置参数的直连区里（`realityCard`），只在勾选 Reality 协议时显示；地址 = 自己的域名（直连域名），SNI = 大厂域名。
+
+- 目标域名（大厂域名）：必填；另有“常用域名”下拉（www.microsoft.com / www.apple.com / www.google.com / www.amazon.com / www.cloudflare.com / www.bing.com / dl.google.com）与“扫描大厂域名”（POST `/api/reality-scan`，测上述 7 个域名的延迟，返回按延迟排序，最低延迟一键填入目标域名与 SNI）。
+- SNI：选填，留空默认与目标域名相同，也可填自己的域名。
+- 指纹：下拉选 chrome / firefox / safari，默认 chrome。
+- flow：默认 `xtls-rprx-vision`，填 `none` 表示不带 flow。
+- 加密方式：默认 `mlkem768x25519plus.native`（另接受 `.xorpub` / `.random` 后缀，其他值警告后回退 native）；填 `none` 表示不启用 VLESS 加密层。启用时 install.sh 用 openssl 生成 VLESS 加密密钥对，拼成客户端加密串（`REALITY_ENC_CLIENT`）。
+- spiderX：默认 `/`，不是 `/` 时才带进订阅链接。
+- publicKey 与 shortId 自动生成，全部参数（密钥、指纹、flow、加密方式、spiderX、VLESS 加密密钥）一起存 `$WORKDIR/direct/reality.json`，环境变量优先、缺失复用，重部署不变。
+- 订阅链接（install.sh 部署渲染与 web/sub-server.py 同一套规则，改一处要改另一处）：`encryption=<客户端加密串>`、`security=reality`、`pbk` / `sid` / `sni`、`fp=<指纹>`，flow 非 none 时带 `&flow=`，spiderX 非 `/` 时带 `&spiderX=`。服务端 realitySettings 为 network tcp、security reality，dest 为“目标域名:443”，serverNames 为 SNI；transport 固定 raw / none，不用填。
+
+### 端口占用冲突校验（前后端都已实现）
+
+前端实时检查与后端 `validate_config` 用同一套规则，只校验已启用的端口。前端在输入 / 开关一变时就重新检查（`checkPortConflicts`，注册在全局 input / change 监听上），有冲突就标红字段并在③配置参数底部（`portConflictOut`）显示提示，不等点部署；后端在保存配置与开始部署时再校验一遍，报错点名具体字段。
+
+不能冲突的：面板端口（前端从 `/api/status` 取当前面板端口，默认 2053；另写死 8080）、订阅端口、Xray / Sing-box 回源端口及 Sing-box 分发器回源+1/+2/+3、直连 TCP 协议端口之间及与上述端口之间、系统端口 22 / 80。
+
+可以重复、不算冲突的：同一核心的隧道协议共用端口（Xray h1 / h2 / h3 同 443、Sing-box ws / httpupgrade / grpc 同 8443）、TCP 与 UDP 同号（如 TCP 443 与 QUIC UDP 443）。
+
+已实现的校验细节（panel.html `computePortConflicts` / panel-server.py `validate_config`；install.sh 另有 `check_port` 做范围 1–65535 与部署前复核）：
+- Xray 回源端口与 Sing-box 回源端口必须不同，且都不能是 8080；Sing-box 回源端口 ≤ 65532；Sing-box 分发器内部端口（回源+1/+2/+3）不能撞上 Xray 回源端口、8080、订阅端口。
+- 订阅端口不能是 8080，也不能与回源端口相同；也不能是面板端口、22、80。
+- 直连 TCP 协议端口之间不能重复，也不能撞上 8080 / 面板端口 / 22 / 80 / 回源端口 / 订阅端口 / Sing-box 分发器内部端口；只校验已勾选的协议，未勾选的协议端口不拦保存。
+- QUIC 与 Hysteria2 走 UDP，只校验 1–65535 范围，不参与 TCP 冲突检查。
+### 按钮顺序（已实现）
+
+⑤开始部署的按钮从左到右：只保存配置 / 开始部署 / 清除部署（清除部署靠右，`margin-left:auto`）。清除部署旁备注：只删除本次部署的节点容器和生成的配置文件，面板本身和已保存的部署配置保留，改完可一键重新部署；连面板一起彻底清理用 VPS 上的 cleanup.sh。
+
+### 安装完成显示与安装内容汇总（panel-install.sh，2026-11-19）
+
+安装完成后先打居中完成提示块，再打安装内容与卸载方式汇总框。提示逻辑本身未改：隧道绑定 y/n 必须明确选择、Token / 域名 / 端口二次确认（回车默认 y）、改端口后重启面板容器。
+
+- 居中完成提示块：`====` 分隔线 + ★ 标题 + 面板地址 / 隧道地址（选了隧道才显示）/ 账号 + 密码三项居中显示；密码只显示这一次（黄色加粗，标“只显示这一次，请立即保存”，另存于 `/opt/nexus-argo/panel/password.txt`，权限 600）。居中规则：终端宽度取 `tput cols` → `stty size`（/dev/tty）→ `$COLUMNS`，宽度 < 60 列或拿不到时退回左对齐；颜色只在接终端时生效（`[ -t 1 ]`，`NO_COLOR=1` 可关），管道输出为纯文本、无颜色码；显示代码不读 stdin，`bash <(curl ...)` 下可用。
+- 安装内容与卸载方式汇总框（`====` 分隔）：列出本次装好的内容——管理面板容器 nexus-panel、面板隧道容器 nexus-panel-argo（仅选了隧道时）、面板镜像 nexus-panel、面板文件 `/opt/nexus-argo/panel/`（panel-server.py / panel.html / Dockerfile / auth.json / password.txt；部署配置 panel/config.json 由面板保存时生成）、部署脚本与订阅服务 `/opt/nexus-argo/install.sh`、`/opt/nexus-argo/web/sub-server.py`（web/sub-generator.html 为可选文件）；并说明本次只装了面板、节点尚未部署，节点在面板里部署。
+- 卸载命令（三条，均真实存在，均不动 Cloudflare 隧道 / Token / 域名 / Zero Trust 路由）：只拆面板用 `bash panel-install.sh uninstall`（等价于 `docker rm -f nexus-panel nexus-panel-argo; docker rmi nexus-panel; rm -rf /opt/nexus-argo/panel`）；只清节点用 `bash /opt/nexus-argo/install.sh uninstall`（保留面板，或在面板里点「清除部署」）；全部清掉用 cleanup.sh 一键清理（`bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/cleanup.sh)`，清完可直接重跑 panel-install.sh）。
 
 ### 协议清单（全部可单独勾选，只装选中的，只进订阅选中的）
 - **[Argo] 隧道**（6 个，不变；优选地址裂变只对这 6 个生效）：Xray xhttp_h1 / h2 / h3，Sing-box ws / httpupgrade / grpc。
@@ -116,14 +167,14 @@ nexus-sub 重启）—— 需 SHU 在 VPS 上跑一次。
 ### 证书（直连）
 - 三种模式：自签名（默认，openssl 10 年证书，无需续期，客户端需 allowInsecure）、上传自己的证书（面板贴 cert_pem / key_pem，点部署时才写到 $WORKDIR/direct/cert.pem / key.pem，install.sh 永不覆盖已上传的证书）、ACME（域名须解析到 VPS、端口 80 放行，Let's Encrypt 90 天，到期前 30 天自动续期，续完重载核心；申请失败自动回退自签名，部署不中断）。
 - 面板总览与证书区显示证书状态（GET /api/cert）：类型、CN、到期日、剩余天数、自动续期状态。
-- Reality 不需要大厂域名的证书：面板“扫描大厂域名”（POST /api/reality-scan，测 www.microsoft.com / apple / google / amazon / cloudflare / bing / dl.google.com 的延迟，返回排序与最低延迟）选出目标域名后，自动填 SNI 与目标地址；install.sh 生成 X25519 密钥对与 shortId，存 $WORKDIR/direct/reality.json（private_key / public_key / short_id / dest），重部署复用。
+- Reality 不需要大厂域名的证书：面板“扫描大厂域名”（POST /api/reality-scan，测 www.microsoft.com / apple / google / amazon / cloudflare / bing / dl.google.com 的延迟，返回排序与最低延迟）选出目标域名后，自动填 SNI 与目标地址；install.sh 生成 X25519 密钥对与 shortId，存 $WORKDIR/direct/reality.json（private_key / public_key / short_id / dest，另有 fingerprint / flow / encryption / spiderx / VLESS 加密密钥对），重部署复用。
 
 ### 订阅路径
 - SUB_PATH 只改中间一段（后缀 / 文件名）：https://&lt;订阅域名&gt;/&lt;SUB_PATH&gt;/raw/&lt;uuid&gt;，域名与后面的 /raw/&lt;uuid&gt; 固定。面板以模板形式显示，只允许编辑中间段，正则 ^[A-Za-z0-9._-]{1,32}$，保留 api / config.json / help.txt，不可带 /。
 
 ### 必填与选填
-- 必填（红 *）：隧道模式下 Argo Token、节点 UUID、已启用核心的子域名 + 回源端口、每个已启用核心至少勾一个协议；直连模式下至少勾一个直连协议、Reality 勾选时的大厂域名、ACME 模式下的域名。直连域名标注“必填（可留空自动检测公网 IP）”，留空不拦截（ACME 模式除外）。
-- 选填：节点名称前缀、优选地址、订阅路径（默认 sub）、隧道传输（auto）。
+- 必填（红 *）：隧道模式下 Argo Token、节点 UUID、已启用核心的子域名 + 回源端口、每个已启用核心至少勾一个协议；直连模式下至少勾一个直连协议、Reality 勾选时的大厂域名、ACME 模式下的域名。直连域名标注“选填”（直连域名（SNI / 证书域名），留空用 VPS 公网 IP），留空不拦截（ACME 模式除外，ACME 模式下域名必填）。
+- 选填：节点名称前缀（隧道 / 直连各一个）、优选地址、订阅路径（默认 sub）、隧道传输（auto）。
 - 点“开始部署”前前端先校验，缺的字段标红并定位到第一个；后端 validate_config 的报错指到具体字段。
 
 ### 未做 / 已知限制

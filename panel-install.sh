@@ -33,6 +33,48 @@ step() { echo ""; echo "${C_BLUE}▶ $*${C_RESET}"; }
 ok()   { echo "${C_GREEN}✔ $*${C_RESET}"; }
 warn() { echo "${C_YELLOW}⚠ $*${C_RESET}"; }
 
+# ---- 居中显示: 只用于最后的完成提示块 ----
+# 宽度来源: tput cols (stdout 接终端) → stty size </dev/tty (stdout 被管道
+# 但还有控制终端时, 只读终端尺寸、不读输入) → $COLUMNS → 拿不到就 0。
+# 宽度 < 60 列或拿不到时退回左对齐, 不报错。颜色沿用上面的 [ -t 1 ]
+# 规则 (管道输出时 C_* 本来就是空的, 所以管道下既无颜色码、也不会乱码)。
+term_width() {
+  local w=""
+  w="$(tput cols 2>/dev/null || true)"
+  if [ -z "$w" ] || ! [[ "$w" =~ ^[0-9]+$ ]]; then
+    if [ -e /dev/tty ]; then
+      # 2>/dev/null 写在整组外面: /dev/tty 打不开时的报错也压得住,
+      # 不会每行往终端 / 日志里刷 "No such device"。
+      w="$( { stty size </dev/tty || true; } 2>/dev/null | awk '{print $2}')"
+    fi
+  fi
+  if [ -z "$w" ] || ! [[ "$w" =~ ^[0-9]+$ ]]; then w="${COLUMNS:-}"; fi
+  if [ -z "$w" ] || ! [[ "$w" =~ ^[0-9]+$ ]]; then w=0; fi
+  printf '%s' "$w"
+}
+# display_width <纯文本>: 按终端列数算宽度, 与 locale 无关
+# (中文 / ★ 这类多字节字符按 2 列算, ASCII 按 1 列算;
+#  只按字节数算, 不依赖 ${#} 在不同 locale 下是字符还是字节)。
+display_width() {
+  local text="$1" bytes nonascii mb
+  bytes="$(printf '%s' "$text" | wc -c)"
+  nonascii="$(printf '%s' "$text" | LC_ALL=C tr -d '\000-\177' | wc -c)"
+  mb="$(printf '%s' "$text" | LC_ALL=C grep -o $'[\xc2-\xf4]' | wc -l || true)"
+  printf '%s' $(( bytes - nonascii + 2 * mb ))
+}
+# center_line <整行文本, 可带颜色码>: 先去掉 ANSI 颜色码再算宽度,
+# 左边补空格居中; 宽度 < 60 时原样左对齐输出。
+center_line() {
+  local line="$1" plain wide pad=0 w
+  plain="$(printf '%s' "$line" | sed 's/\x1b\[[0-9;]*m//g')"
+  w="$(term_width)"
+  if [ "$w" -ge 60 ]; then
+    wide="$(display_width "$plain")"
+    [ "$wide" -lt "$w" ] && pad=$(( (w - wide) / 2 ))
+  fi
+  printf '%*s%s\n' "$pad" '' "$line"
+}
+
 PANEL_PORT="${PANEL_PORT:-2053}"
 RAW_BASE="${RAW_BASE:-https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main}"
 WORKDIR="/opt/nexus-argo"
@@ -315,19 +357,41 @@ else
 fi
 
 echo ""
-sep
-echo "${C_GREEN}${C_BOLD}  ★ 面板已安装完成, 请保存下面这几行 ★${C_RESET}"
-sep
-echo "${C_BOLD}面板地址:${C_RESET}  ${C_GREEN}$PANEL_URL${C_RESET}"
-[ -n "$TUNNEL_URL" ] && echo "${C_BOLD}隧道地址:${C_RESET}  ${C_GREEN}$TUNNEL_URL${C_RESET}  (加完上面那条路由后可用)"
-echo "${C_BOLD}账号:${C_RESET}  admin"
+center_line "=================================================================="
+center_line "${C_GREEN}${C_BOLD}  ★ 面板已安装完成, 请保存下面这几行 ★${C_RESET}"
+center_line "=================================================================="
+center_line "${C_BOLD}面板地址:${C_RESET}  ${C_GREEN}$PANEL_URL${C_RESET}"
+[ -n "$TUNNEL_URL" ] && center_line "${C_BOLD}隧道地址:${C_RESET}  ${C_GREEN}$TUNNEL_URL${C_RESET}  (加完上面那条路由后可用)"
+center_line "${C_BOLD}账号:${C_RESET}  admin"
 if [ -n "$PASS" ]; then
-  echo "${C_BOLD}密码:${C_RESET}  ${C_YELLOW}${C_BOLD}$PASS${C_RESET}  ${C_RED}← 只显示这一次, 请立即保存${C_RESET}"
-  echo "       也存在 $PANEL_DIR/password.txt (权限 600)"
+  center_line "${C_BOLD}密码:${C_RESET}  ${C_YELLOW}${C_BOLD}$PASS${C_RESET}  ${C_RED}← 只显示这一次, 请立即保存${C_RESET}"
+  center_line "密码也存在 $PANEL_DIR/password.txt (权限 600)"
 else
-  echo "${C_BOLD}密码:${C_RESET}  不变 (存在 $PANEL_DIR/password.txt)"
+  center_line "${C_BOLD}密码:${C_RESET}  不变 (存在 $PANEL_DIR/password.txt)"
 fi
-sep
+center_line "=================================================================="
 echo "接下来: 打开面板 -> 填设置 -> 点「开始部署」, 部署日志和检查在面板里看。"
 echo "只用直连协议: 不用绑隧道, 直接用面板装直连协议就行。"
+
+echo ""
+sep
+echo "${C_CYAN}${C_BOLD}  本次安装内容与卸载方式${C_RESET}"
+sep
+echo "已安装 (本次只装了管理面板, 节点尚未部署, 请在面板里填设置点「开始部署」):"
+echo "  管理面板容器: nexus-panel (端口 $PANEL_PORT, $PANEL_URL)"
+[ -n "$TUNNEL_URL" ] && echo "  面板隧道容器: nexus-panel-argo (cloudflared, 域名 $PANEL_DOMAIN, $TUNNEL_URL)"
+echo "  面板镜像: nexus-panel (本地构建)"
+echo "  面板文件: /opt/nexus-argo/panel/ (panel-server.py / panel.html / Dockerfile / auth.json / password.txt, 全新安装时生成账号文件; 部署配置 panel/config.json 由面板保存时生成)"
+echo "  部署脚本与订阅服务: /opt/nexus-argo/install.sh、/opt/nexus-argo/web/sub-server.py (web/sub-generator.html 为可选文件, 缺失不影响安装)"
+echo ""
+echo "卸载方式 (以下三种都不动 Cloudflare 隧道 / Token / 域名 / Zero Trust 路由, 云端配置重装时直接复用):"
+echo "  只拆面板 (节点部署不动):"
+echo "    bash panel-install.sh uninstall"
+echo "    (等价于: docker rm -f nexus-panel nexus-panel-argo; docker rmi nexus-panel; rm -rf /opt/nexus-argo/panel)"
+echo "  只清节点 (保留面板, 面板账号与部署配置都在):"
+echo "    bash /opt/nexus-argo/install.sh uninstall"
+echo "    (或在面板里点「清除部署」)"
+echo "  全部清掉, 从零重来 (面板 + 节点 + /opt/nexus-argo 整个目录):"
+echo "    bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/cleanup.sh)"
+echo "    清完可直接重跑 panel-install.sh 重新安装面板。"
 sep
