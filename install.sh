@@ -612,6 +612,14 @@ if [ -n "$SUB_DOMAIN" ]; then
   # 打开 https://$SUB_DOMAIN/ 就是生成器, 上面原生订阅、中间优选域名
   # 获取+测速、下面裂变出动态订阅, 不用 Worker、不用另外部署。
   if [ -f "$WORKDIR/web/sub-server.py" ]; then
+    # 生成器是可选的: 文件不存在就不挂载 (直接挂一个不存在的文件,
+    # Docker 会在宿主上自动建一个同名目录, 反而把事搞坏)。
+    _gen_vol=()
+    if [ -f "$WORKDIR/web/sub-generator.html" ]; then
+      _gen_vol=(-v "$WORKDIR/web/sub-generator.html:/app/sub-generator.html:ro")
+    else
+      log "WARNING: web/sub-generator.html 缺失 — 生成器面板不可用, 订阅本身不受影响"
+    fi
     docker run -d --name nexus-sub --restart unless-stopped \
       -p 127.0.0.1:"$SUB_PORT":"$SUB_PORT" \
       -e NODE_UUID="$NODE_UUID" -e NODE_PREFIX="$NODE_PREFIX" \
@@ -624,7 +632,7 @@ if [ -n "$SUB_DOMAIN" ]; then
       -e DIRECT_XRAY_QUIC="$DIRECT_XRAY_QUIC" -e DIRECT_XRAY_QUIC_PORT="$DIRECT_XRAY_QUIC_PORT" \
       -e DIRECT_SB_TLS="$DIRECT_SB_TLS" -e DIRECT_SB_TLS_PORT="$DIRECT_SB_TLS_PORT" \
       -v "$WORKDIR/web/sub-server.py:/app/sub-server.py:ro" \
-      -v "$WORKDIR/web/sub-generator.html:/app/sub-generator.html:ro" \
+      "${_gen_vol[@]}" \
       "$PYTHON_IMAGE" python3 /app/sub-server.py
   else
     log "WARNING: web/sub-server.py missing — skipping nexus-sub, panel-local subscription still works"
@@ -689,9 +697,12 @@ if command -v curl >/dev/null 2>&1; then
         log "nexus-sub ?addrs= live fission OK ($_merged_n links for 2 addrs)"
       fi
     fi
-    # 生成器面板: / 要返回 sub-generator.html, 不是纯文本说明
+    # 生成器面板: 只有文件在时才要求 / 返回生成器; 文件缺失是
+    # 可选功能未装, 只警告、不让健康检查失败 (2026-11-19 教训)。
     if [ "$fail" = "0" ]; then
-      if curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/" 2>/dev/null | grep -q '订阅生成器'; then
+      if [ ! -f "$WORKDIR/web/sub-generator.html" ]; then
+        log "WARNING: sub-generator.html 缺失 — 跳过生成器面板检查, 订阅不受影响"
+      elif curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/" 2>/dev/null | grep -q '订阅生成器'; then
         log "nexus-sub generator panel OK"
       else
         echo "[nexus-argo] ERROR: nexus-sub / did not return the generator panel — check web/sub-generator.html is present"

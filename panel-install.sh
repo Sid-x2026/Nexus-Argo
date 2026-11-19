@@ -67,10 +67,31 @@ docker info >/dev/null 2>&1 || die "docker 装好了但没跑起来, 先检查 s
 # ---- 下文件: 面板 + 部署脚本 + 订阅服务 ----
 step "步骤 2/5  下载面板文件"
 mkdir -p "$PANEL_DIR" "$WORKDIR/web"
+# 必需文件: 下载失败重试 3 次, 仍失败才中断 (并删掉下载一半的残文件)。
 dl() { # dl <repo路径> <本地路径>
-  if ! curl -fsSL "$RAW_BASE/$1" -o "$2"; then
-    die "下载失败: $RAW_BASE/$1 (检查网络 / 仓库路径)"
+  local i
+  for i in 1 2 3; do
+    rm -f "$2"
+    if curl -fsSL --max-time 30 "$RAW_BASE/$1" -o "$2"; then
+      return 0
+    fi
+    sleep 1
+  done
+  rm -f "$2"
+  die "下载失败 (已重试 3 次): $RAW_BASE/$1 (检查网络 / 仓库里有没有这个文件)"
+}
+# 可选文件: 失败只警告、继续安装, 绝不中断。
+# (之前这里的 bug: dl() 内部直接 die, 后面那个 || log 根本跑不到,
+#  所以一个可选文件 404 就把整个安装炸了。2026-11-19 实测: 仓库
+#  web/ 里没有 sub-generator.html, 安装在步骤 2/5 退出。)
+dl_optional() { # dl_optional <repo路径> <本地路径> <拿不到时的影响>
+  rm -f "$2"
+  if curl -fsSL --max-time 30 "$RAW_BASE/$1" -o "$2"; then
+    return 0
   fi
+  rm -f "$2"
+  warn "可选文件没拿到: $1 —— $3"
+  return 0
 }
 dl "panel/panel-server.py" "$PANEL_DIR/panel-server.py"
 dl "panel/panel.html" "$PANEL_DIR/panel.html"
@@ -78,7 +99,14 @@ dl "panel/Dockerfile" "$PANEL_DIR/Dockerfile"
 dl "install.sh" "$WORKDIR/install.sh"
 chmod +x "$WORKDIR/install.sh"
 dl "web/sub-server.py" "$WORKDIR/web/sub-server.py"
-dl "web/sub-generator.html" "$WORKDIR/web/sub-generator.html" || log "WARNING: sub-generator.html 没拿到, 订阅生成器面板不可用 (不影响部署)"
+dl_optional "web/sub-generator.html" "$WORKDIR/web/sub-generator.html" "订阅生成器面板暂时不可用, 不影响面板安装和节点部署; 把 web/sub-generator.html 传到仓库后重跑一次安装即可补上"
+# 下载完当场核对一遍, 缺什么立刻说清楚, 不留到后面才报错。
+ok "必需文件已下载: panel-server.py / panel.html / Dockerfile / install.sh / sub-server.py"
+if [ -f "$WORKDIR/web/sub-generator.html" ]; then
+  ok "可选文件已下载: sub-generator.html"
+else
+  warn "sub-generator.html 未下载 (见上面警告), 继续安装"
+fi
 
 # ---- 账号: 已有就保留, 没有就随机生成一个 ----
 step "步骤 3/5  生成面板账号"
