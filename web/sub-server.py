@@ -18,6 +18,21 @@
 #     ENABLE_DIRECT, DIRECT_DOMAIN, DIRECT_XRAY_TLS,
 #     DIRECT_XRAY_TLS_PORT, DIRECT_XRAY_QUIC, DIRECT_XRAY_QUIC_PORT,
 #     DIRECT_SB_TLS, DIRECT_SB_TLS_PORT (直连节点, 原样进订阅, 不裂变)
+#     直连新协议 (与 install.sh 同一套变量、同一套链接规则, 改一处
+#     要改另一处; 只有开启的协议才渲染、才进订阅):
+#       DIRECT_VLESS_TCP / _PORT (默认 8082, 明文 TCP),
+#       DIRECT_VLESS_REALITY / _PORT (默认 9447, Reality),
+#       DIRECT_VLESS_WS / _PORT (默认 8083, 明文 ws, path /ws),
+#       DIRECT_VLESS_GRPC / _PORT (默认 8084, gRPC+TLS),
+#       DIRECT_TROJAN / _PORT (默认 9443, 密码 = NODE_UUID),
+#       DIRECT_VMESS_WS / _PORT (默认 9444, ws+TLS, alterId 0),
+#       DIRECT_SB_TROJAN / _PORT (默认 9445),
+#       DIRECT_SS / _PORT (默认 8388, aes-256-gcm, 密码 = NODE_UUID),
+#       DIRECT_HY2 / _PORT (默认 9446, UDP, 密码 = NODE_UUID, alpn h3)
+#     CERT_MODE (selfsigned|upload|acme): TLS 直连链接带 allowInsecure=1,
+#     acme 有效证书时不带。Reality 公钥/shortId/dest 由 install.sh
+#     以 REALITY_PUBLIC_KEY / REALITY_SHORT_ID / REALITY_DEST /
+#     REALITY_EFF_SNI 环境变量传进来 (nexus-sub 容器不挂载 reality.json)。
 #   容器内监听 0.0.0.0 (Docker 端口映射进来的流量到的是容器网卡,
 #   不是 loopback), 主机侧 docker 只绑 127.0.0.1:$SUB_PORT,
 #   公网入口只有 Cloudflare Zero Trust 的一条路由:
@@ -33,8 +48,10 @@
 #       动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上;
 #       不带 addrs 就用部署时的 OPT_ADDRS
 #       &format=singbox: 只去掉 xhttp 节点 (Sing-box 没有 xhttp
-#       传输), 仍是 base64; &format=clash: Mihomo YAML (QUIC 除外,
-#       Mihomo 不支持 QUIC)
+#       传输, 其余都留着: trojan/vmess/ss/hysteria2/vless 含
+#       quic/reality 都支持), 仍是 base64; &format=clash: Mihomo YAML
+#       (QUIC 除外, Mihomo 不支持 QUIC; 支持 trojan/vmess/ss/
+#       hysteria2/vless-reality)
 #   GET /<SUB_PATH>/merged?url=<外部订阅地址>&addrs=a,b
 #       外部订阅裂变 (Worker v2 就有这个路由, v3 静态文件做不到),
 #       同样支持 &format=singbox / clash
@@ -76,12 +93,38 @@ if not re.match(r"^[A-Za-z0-9._-]+$", SUB_PATH):
 # 直连节点: 地址就是 VPS 自己, 原样进订阅, 不参与优选地址裂变
 ENABLE_DIRECT = os.environ.get("ENABLE_DIRECT", "false").lower() in ("true", "1", "yes")
 DIRECT_DOMAIN = os.environ.get("DIRECT_DOMAIN", "").strip()
-DIRECT_XRAY_TLS = os.environ.get("DIRECT_XRAY_TLS", "true").lower() in ("true", "1", "yes")
-DIRECT_XRAY_TLS_PORT = int(os.environ.get("DIRECT_XRAY_TLS_PORT", "443") or 443)
-DIRECT_XRAY_QUIC = os.environ.get("DIRECT_XRAY_QUIC", "false").lower() in ("true", "1", "yes")
-DIRECT_XRAY_QUIC_PORT = int(os.environ.get("DIRECT_XRAY_QUIC_PORT", "443") or 443)
+# 新名 DIRECT_VLESS_TLS/QUIC 与旧名 DIRECT_XRAY_TLS/QUIC 是同一协议的
+# 两个名字 (install.sh 与 panel 两边都传, 以新名为准); 只传其一时也要认。
+DIRECT_XRAY_TLS = (os.environ.get("DIRECT_VLESS_TLS", os.environ.get("DIRECT_XRAY_TLS", "true")) or "true").lower() in ("true", "1", "yes")
+DIRECT_XRAY_TLS_PORT = int(os.environ.get("DIRECT_VLESS_TLS_PORT", os.environ.get("DIRECT_XRAY_TLS_PORT", "443")) or 443)
+DIRECT_XRAY_QUIC = (os.environ.get("DIRECT_VLESS_QUIC", os.environ.get("DIRECT_XRAY_QUIC", "false")) or "false").lower() in ("true", "1", "yes")
+DIRECT_XRAY_QUIC_PORT = int(os.environ.get("DIRECT_VLESS_QUIC_PORT", os.environ.get("DIRECT_XRAY_QUIC_PORT", "443")) or 443)
 DIRECT_SB_TLS = os.environ.get("DIRECT_SB_TLS", "true").lower() in ("true", "1", "yes")
 DIRECT_SB_TLS_PORT = int(os.environ.get("DIRECT_SB_TLS_PORT", "8443") or 8443)
+DIRECT_VLESS_TCP = os.environ.get("DIRECT_VLESS_TCP", "false").lower() in ("true", "1", "yes")
+DIRECT_VLESS_TCP_PORT = int(os.environ.get("DIRECT_VLESS_TCP_PORT", "8082") or 8082)
+DIRECT_VLESS_REALITY = os.environ.get("DIRECT_VLESS_REALITY", "false").lower() in ("true", "1", "yes")
+DIRECT_VLESS_REALITY_PORT = int(os.environ.get("DIRECT_VLESS_REALITY_PORT", "9447") or 9447)
+DIRECT_VLESS_WS = os.environ.get("DIRECT_VLESS_WS", "false").lower() in ("true", "1", "yes")
+DIRECT_VLESS_WS_PORT = int(os.environ.get("DIRECT_VLESS_WS_PORT", "8083") or 8083)
+DIRECT_VLESS_GRPC = os.environ.get("DIRECT_VLESS_GRPC", "false").lower() in ("true", "1", "yes")
+DIRECT_VLESS_GRPC_PORT = int(os.environ.get("DIRECT_VLESS_GRPC_PORT", "8084") or 8084)
+DIRECT_TROJAN = os.environ.get("DIRECT_TROJAN", "false").lower() in ("true", "1", "yes")
+DIRECT_TROJAN_PORT = int(os.environ.get("DIRECT_TROJAN_PORT", "9443") or 9443)
+DIRECT_VMESS_WS = os.environ.get("DIRECT_VMESS_WS", "false").lower() in ("true", "1", "yes")
+DIRECT_VMESS_WS_PORT = int(os.environ.get("DIRECT_VMESS_WS_PORT", "9444") or 9444)
+DIRECT_SB_TROJAN = os.environ.get("DIRECT_SB_TROJAN", "false").lower() in ("true", "1", "yes")
+DIRECT_SB_TROJAN_PORT = int(os.environ.get("DIRECT_SB_TROJAN_PORT", "9445") or 9445)
+DIRECT_SS = os.environ.get("DIRECT_SS", "false").lower() in ("true", "1", "yes")
+DIRECT_SS_PORT = int(os.environ.get("DIRECT_SS_PORT", "8388") or 8388)
+DIRECT_HY2 = os.environ.get("DIRECT_HY2", "false").lower() in ("true", "1", "yes")
+DIRECT_HY2_PORT = int(os.environ.get("DIRECT_HY2_PORT", "9446") or 9446)
+CERT_MODE = os.environ.get("CERT_MODE", "selfsigned").strip().lower() or "selfsigned"
+REALITY_DEST = os.environ.get("REALITY_DEST", "").strip()
+REALITY_SNI = os.environ.get("REALITY_SNI", "").strip()
+REALITY_EFF_SNI = os.environ.get("REALITY_EFF_SNI", "").strip() or REALITY_SNI or REALITY_DEST
+REALITY_PUBLIC_KEY = os.environ.get("REALITY_PUBLIC_KEY", "").strip()
+REALITY_SHORT_ID = os.environ.get("REALITY_SHORT_ID", "").strip()
 
 HELP = (
     "Nexus-Argo 动态订阅\n\n"
@@ -91,9 +134,14 @@ HELP = (
     "    动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上\n"
     "    不带 addrs: 用部署时的优选地址\n\n"
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=singbox\n"
-    "    Sing-box 订阅: 去掉 xhttp 节点 (base64, Sing-box 没有 xhttp 传输)\n\n"
+    "    Sing-box 订阅: 只去掉 xhttp 节点 (base64, Sing-box 没有 xhttp 传输;\n"
+    "    trojan/vmess/ss/hysteria2/vless 含 quic/reality 都保留)\n\n"
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=clash\n"
-    "    Clash 订阅: Mihomo YAML (xhttp 需 Mihomo 1.19+, QUIC 除外)\n\n"
+    "    Clash 订阅: Mihomo YAML (xhttp 需 Mihomo 1.19+, QUIC 除外; 支持\n"
+    "    trojan/vmess/ss/hysteria2/vless-reality)\n\n"
+    "直连协议: Xray VLESS 明文 TCP / TLS / Reality / 明文 WS / gRPC+TLS /\n"
+    "QUIC、Trojan+TLS、VMess+WS+TLS; Sing-box VLESS+TLS、Trojan+TLS、\n"
+    "Shadowsocks (aes-256-gcm)、Hysteria2。直连节点原样进订阅, 不裂变。\n\n"
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=auto\n"
     "    通用订阅: 按客户端 User-Agent 自适应 (Clash 系返回 YAML,\n"
     "    Sing-box 系返回去掉 xhttp 后的 base64, 其余返回 base64)\n\n"
@@ -149,24 +197,73 @@ def tunnel_links():
     return links
 
 
+def _ai():
+    # TLS 直连链接的 allowInsecure 后缀 (acme 有效证书时不带)。
+    return "" if CERT_MODE == "acme" else "&allowInsecure=1"
+
+
+def _vmess_link():
+    cfg = {"v": "2", "ps": f"{PREFIX}丨直连丨Xray-VMess-WS", "add": DIRECT_DOMAIN,
+           "port": str(DIRECT_VMESS_WS_PORT), "id": UUID, "aid": "0", "net": "ws",
+           "type": "none", "host": DIRECT_DOMAIN, "path": "/ws", "tls": "tls",
+           "sni": DIRECT_DOMAIN}
+    return "vmess://" + base64.b64encode(json.dumps(cfg, ensure_ascii=False).encode()).decode()
+
+
+def _ss_link():
+    raw = f"aes-256-gcm:{UUID}@{DIRECT_DOMAIN}:{DIRECT_SS_PORT}".encode()
+    return ("ss://" + base64.urlsafe_b64encode(raw).decode().rstrip("=")
+            + f"#{PREFIX}丨直连丨Singbox-SS")
+
+
 def direct_links():
     # 直连节点原样进订阅, 不参与优选地址裂变 (地址就是 VPS 自己)。
-    # 自签名证书, 客户端需 allowInsecure=1, 仅作备用。
+    # 与 install.sh 里的 direct 列表同一套规则, 改一处要改另一处。
+    # TLS 直连链接带 allowInsecure=1 (acme 有效证书时除外); 明文
+    # TCP / 明文 WS 不带; 直连是备用, 不是主路径。
     links = []
     if not ENABLE_DIRECT or not DIRECT_DOMAIN:
         return links
+    dd = DIRECT_DOMAIN
     if DIRECT_XRAY_TLS:
-        links.append(f"vless://{UUID}@{DIRECT_DOMAIN}:{DIRECT_XRAY_TLS_PORT}/?encryption=none&security=tls"
-                     f"&sni={DIRECT_DOMAIN}&type=tcp&allowInsecure=1"
+        links.append(f"vless://{UUID}@{dd}:{DIRECT_XRAY_TLS_PORT}/?encryption=none&security=tls"
+                     f"&sni={dd}&type=tcp{_ai()}"
                      f"#{PREFIX}丨直连丨Xray-TLS")
+    if DIRECT_VLESS_TCP:
+        links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_TCP_PORT}/?encryption=none&type=tcp"
+                     f"#{PREFIX}丨直连丨Xray-TCP")
+    if DIRECT_VLESS_REALITY:
+        links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_REALITY_PORT}/?encryption=none&security=reality"
+                     f"&pbk={REALITY_PUBLIC_KEY}&sid={REALITY_SHORT_ID}&sni={REALITY_EFF_SNI}&fp=chrome&type=tcp"
+                     f"#{PREFIX}丨直连丨Xray-Reality")
+    if DIRECT_VLESS_WS:
+        links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_WS_PORT}/?encryption=none&type=ws&path=%2Fws"
+                     f"#{PREFIX}丨直连丨Xray-WS")
+    if DIRECT_VLESS_GRPC:
+        links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_GRPC_PORT}/?encryption=none&security=tls"
+                     f"&sni={dd}&type=grpc&serviceName=grpc{_ai()}"
+                     f"#{PREFIX}丨直连丨Xray-gRPC")
     if DIRECT_XRAY_QUIC:
-        links.append(f"vless://{UUID}@{DIRECT_DOMAIN}:{DIRECT_XRAY_QUIC_PORT}/?encryption=none&security=tls"
-                     f"&sni={DIRECT_DOMAIN}&type=quic&quicSecurity=none&headerType=none&allowInsecure=1"
+        links.append(f"vless://{UUID}@{dd}:{DIRECT_XRAY_QUIC_PORT}/?encryption=none&security=tls"
+                     f"&sni={dd}&type=quic&quicSecurity=none&headerType=none{_ai()}"
                      f"#{PREFIX}丨直连丨Xray-QUIC")
+    if DIRECT_TROJAN:
+        links.append(f"trojan://{UUID}@{dd}:{DIRECT_TROJAN_PORT}?security=tls&sni={dd}{_ai()}"
+                     f"#{PREFIX}丨直连丨Xray-Trojan")
+    if DIRECT_VMESS_WS:
+        links.append(_vmess_link())
     if DIRECT_SB_TLS:
-        links.append(f"vless://{UUID}@{DIRECT_DOMAIN}:{DIRECT_SB_TLS_PORT}/?encryption=none&security=tls"
-                     f"&sni={DIRECT_DOMAIN}&type=tcp&allowInsecure=1"
+        links.append(f"vless://{UUID}@{dd}:{DIRECT_SB_TLS_PORT}/?encryption=none&security=tls"
+                     f"&sni={dd}&type=tcp{_ai()}"
                      f"#{PREFIX}丨直连丨Singbox-TLS")
+    if DIRECT_SB_TROJAN:
+        links.append(f"trojan://{UUID}@{dd}:{DIRECT_SB_TROJAN_PORT}?security=tls&sni={dd}{_ai()}"
+                     f"#{PREFIX}丨直连丨Singbox-Trojan")
+    if DIRECT_SS:
+        links.append(_ss_link())
+    if DIRECT_HY2:
+        links.append(f"hysteria2://{UUID}@{dd}:{DIRECT_HY2_PORT}?insecure=1&sni={dd}"
+                     f"#{PREFIX}丨直连丨Singbox-Hysteria2")
     return links
 
 
@@ -209,15 +306,23 @@ def _vless_parts(link):
         q = urllib.parse.parse_qs(u.query)
         get = lambda k, d="": (q.get(k, [d]) or [d])[0]
         return {
+            "scheme": "vless",
             "uuid": u.username or "",
+            "password": u.username or "",
             "addr": u.hostname,
             "port": u.port,
             "type": get("type", ""),
+            "security": get("security", ""),
             "sni": get("sni", ""),
             "path": get("path", "/"),
             "mode": get("mode", "auto"),
             "svc": get("serviceName", ""),
             "alpn": get("alpn", ""),
+            "allow_insecure": get("allowInsecure", "") == "1",
+            "pbk": get("pbk", ""),
+            "sid": get("sid", ""),
+            "fp": get("fp", ""),
+            "cipher": "",
             "remark": urllib.parse.unquote(u.fragment or ""),
         }
     except Exception:
@@ -229,23 +334,119 @@ def _vless_type(link):
     return p["type"] if p else ""
 
 
+def _b64decode(s):
+    std = (s or "").replace("-", "+").replace("_", "/")
+    return base64.b64decode(std + "=" * ((4 - len(std) % 4) % 4))
+
+
+def _parse_link(link):
+    # 通用链接解析 (供格式转换用): 返回统一的 dict, 未知/非法返回 None。
+    #   scheme, uuid/password, addr, port, type, security, sni, path,
+    #   svc, alpn, remark, allow_insecure, pbk/sid (reality), cipher。
+    # 支持 vless://、trojan://、vmess:// (base64 JSON)、ss://
+    # (base64 method:password@host:port, 或 SIP002 形式)、hysteria2://。
+    if not link or "://" not in link:
+        return None
+    scheme = link.split("://", 1)[0].lower()
+    if scheme == "vless":
+        return _vless_parts(link)
+    try:
+        if scheme == "trojan":
+            u = urllib.parse.urlparse(link)
+            if not u.username or not u.hostname or not u.port:
+                return None
+            q = urllib.parse.parse_qs(u.query)
+            get = lambda k, d="": (q.get(k, [d]) or [d])[0]
+            return {"scheme": "trojan", "uuid": u.username, "password": u.username,
+                    "addr": u.hostname, "port": u.port, "type": "tcp",
+                    "security": get("security", "tls"), "sni": get("sni", ""),
+                    "path": "/", "svc": "", "alpn": get("alpn", ""),
+                    "allow_insecure": get("allowInsecure", "") == "1",
+                    "pbk": "", "sid": "", "fp": "", "cipher": "",
+                    "remark": urllib.parse.unquote(u.fragment or "")}
+        if scheme == "vmess":
+            body = link[len("vmess://"):].split("#", 1)[0]
+            frag = urllib.parse.unquote(link.split("#", 1)[1]) if "#" in link else ""
+            cfg = json.loads(_b64decode(body).decode("utf-8"))
+            return {"scheme": "vmess", "uuid": cfg.get("id", ""), "password": cfg.get("id", ""),
+                    "addr": cfg.get("add", ""), "port": int(cfg.get("port", 0) or 0),
+                    "type": cfg.get("net", "ws"), "security": "tls" if cfg.get("tls") == "tls" else "none",
+                    "sni": cfg.get("sni", "") or cfg.get("host", ""),
+                    "path": cfg.get("path", "/ws"), "svc": "", "alpn": "",
+                    "allow_insecure": False, "pbk": "", "sid": "", "fp": "",
+                    "cipher": "auto", "remark": frag or cfg.get("ps", "")}
+        if scheme == "ss":
+            body = link[len("ss://"):].split("#", 1)[0]
+            frag = urllib.parse.unquote(link.split("#", 1)[1]) if "#" in link else ""
+            if "@" in body and not body.startswith(("eyJ",)):
+                # SIP002 形式: ss://base64(method:password)@host:port
+                userinfo, _, hostport = body.rpartition("@")
+                try:
+                    method, _, password = _b64decode(userinfo).decode("utf-8").partition(":")
+                except Exception:
+                    return None
+                host, _, port = hostport.partition(":")
+                return {"scheme": "ss", "uuid": password, "password": password,
+                        "addr": host, "port": int(port or 0), "type": "ss",
+                        "security": "none", "sni": "", "path": "/", "svc": "",
+                        "alpn": "", "allow_insecure": False, "pbk": "", "sid": "",
+                        "fp": "", "cipher": method,
+                        "remark": frag}
+            decoded = _b64decode(body).decode("utf-8")
+            method, _, rest = decoded.partition(":")
+            password, _, hostport = rest.partition("@")
+            host, _, port = hostport.partition(":")
+            if not method or not password or not host or not port:
+                return None
+            return {"scheme": "ss", "uuid": password, "password": password,
+                    "addr": host, "port": int(port), "type": "ss",
+                    "security": "none", "sni": "", "path": "/", "svc": "",
+                    "alpn": "", "allow_insecure": False, "pbk": "", "sid": "",
+                    "fp": "", "cipher": method, "remark": frag}
+        if scheme == "hysteria2":
+            u = urllib.parse.urlparse(link)
+            if not u.username or not u.hostname or not u.port:
+                return None
+            q = urllib.parse.parse_qs(u.query)
+            get = lambda k, d="": (q.get(k, [d]) or [d])[0]
+            return {"scheme": "hysteria2", "uuid": u.username, "password": u.username,
+                    "addr": u.hostname, "port": u.port, "type": "hysteria2",
+                    "security": "tls", "sni": get("sni", ""),
+                    "path": "/", "svc": "", "alpn": get("alpn", ""),
+                    "allow_insecure": get("insecure", "") in ("1", "true"),
+                    "pbk": "", "sid": "", "fp": "", "cipher": "",
+                    "remark": urllib.parse.unquote(u.fragment or "")}
+    except Exception:
+        return None
+    return None
+
+
 def _yq(s):
     return '"' + str(s).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-# vless 链接 -> Mihomo (Clash Meta) YAML。只用标准库手写, 不引新依赖。
-# 传输映射 (Mihomo 1.19+ 才支持 xhttp; 原版 Clash 不支持 VLESS):
-#   xhttp       -> network: xhttp + xhttp-opts {path, mode}
-#   ws          -> network: ws + ws-opts {path, headers Host}
-#   httpupgrade -> network: ws + ws-opts + v2ray-http-upgrade: true
-#   grpc        -> network: grpc + grpc-opts {grpc-service-name}
-# Sing-box 没有 xhttp 传输, 所以 ?format=singbox 只留 ws/httpupgrade/grpc。
 def clash_yaml(links):
+    # 链接 -> Mihomo (Clash Meta) YAML。只用标准库手写, 不引新依赖。
+    # 传输映射 (Mihomo 1.19+ 才支持 xhttp; 原版 Clash 不支持 VLESS):
+    #   vless xhttp       -> network: xhttp + xhttp-opts {path, mode}
+    #   vless ws          -> network: ws + ws-opts {path, headers Host}
+    #   vless httpupgrade -> network: ws + ws-opts + v2ray-http-upgrade: true
+    #   vless grpc        -> network: grpc + grpc-opts {grpc-service-name}
+    #   vless tcp (TLS)   -> 明文 TCP, tls 由 security 决定; 明文 TCP 不带 tls
+    #   vless reality     -> network: tcp + reality-opts {public-key, short-id}
+    #   trojan            -> type: trojan, password, sni, alpn
+    #   vmess             -> type: vmess, uuid, alterId 0, cipher auto, ws, tls
+    #   ss                -> type: ss, cipher, password
+    #   hysteria2         -> type: hysteria2, password, sni, alpn [h3]
+    # quic 跳过: Mihomo 不支持 QUIC。
     proxies = []
     for link in links:
-        p = _vless_parts(link)
-        # quic 跳过: Mihomo 不支持 QUIC; tcp (直连 TLS) 是明文 TCP, 支持
-        if not p or not p["uuid"] or p["type"] not in ("xhttp", "ws", "httpupgrade", "grpc", "tcp"):
+        p = _parse_link(link)
+        if not p or not p["uuid"] or not p["addr"] or not p["port"]:
+            continue
+        if p["scheme"] == "vless" and p["type"] not in ("xhttp", "ws", "httpupgrade", "grpc", "tcp"):
+            continue
+        if p["scheme"] not in ("vless", "trojan", "vmess", "ss", "hysteria2"):
             continue
         proxies.append(p)
     if not proxies:
@@ -255,19 +456,76 @@ def clash_yaml(links):
     names = []
     for p in proxies:
         parts = (p["remark"] or "").split("丨")
-        name = f"{parts[1]}-{parts[2]} @ {p['addr']}" if len(parts) >= 3 else f"vless @ {p['addr']}"
+        name = f"{parts[1]}-{parts[2]} @ {p['addr']}" if len(parts) >= 3 else f"{p['scheme']} @ {p['addr']}"
         names.append(name)
         out.append(f"  - name: {_yq(name)}")
+        if p["scheme"] == "trojan":
+            out.append("    type: trojan")
+            out.append(f"    server: {_yq(p['addr'])}")
+            out.append(f"    port: {p['port']}")
+            out.append(f"    password: {_yq(p['password'])}")
+            if p["sni"]:
+                out.append(f"    sni: {_yq(p['sni'])}")
+            if p["alpn"]:
+                out.append("    alpn:")
+                out.append(f"      - {_yq(p['alpn'])}")
+            if p["allow_insecure"]:
+                out.append("    skip-cert-verify: true")
+            out.append("    udp: true")
+            continue
+        if p["scheme"] == "vmess":
+            out.append("    type: vmess")
+            out.append(f"    server: {_yq(p['addr'])}")
+            out.append(f"    port: {p['port']}")
+            out.append(f"    uuid: {_yq(p['uuid'])}")
+            out.append("    alterId: 0")
+            out.append("    cipher: auto")
+            out.append(f"    tls: {'true' if p['security'] == 'tls' else 'false'}")
+            if p["sni"]:
+                out.append(f"    servername: {_yq(p['sni'])}")
+            if p["type"] == "ws":
+                out.append("    network: ws")
+                out.append("    ws-opts:")
+                out.append(f"      path: {_yq(p['path'])}")
+                out.append("      headers:")
+                out.append(f"        Host: {_yq(p['sni'] or p['addr'])}")
+            out.append("    udp: true")
+            continue
+        if p["scheme"] == "ss":
+            out.append("    type: ss")
+            out.append(f"    server: {_yq(p['addr'])}")
+            out.append(f"    port: {p['port']}")
+            out.append(f"    cipher: {_yq(p['cipher'] or 'aes-256-gcm')}")
+            out.append(f"    password: {_yq(p['password'])}")
+            out.append("    udp: true")
+            continue
+        if p["scheme"] == "hysteria2":
+            out.append("    type: hysteria2")
+            out.append(f"    server: {_yq(p['addr'])}")
+            out.append(f"    port: {p['port']}")
+            out.append(f"    password: {_yq(p['password'])}")
+            if p["sni"]:
+                out.append(f"    sni: {_yq(p['sni'])}")
+            out.append("    alpn:")
+            for a in (p["alpn"].split(",") if p["alpn"] else ["h3"]):
+                out.append(f"      - {_yq(a.strip())}")
+            if p["allow_insecure"]:
+                out.append("    skip-cert-verify: true")
+            continue
+        # vless
         out.append("    type: vless")
         out.append(f"    server: {_yq(p['addr'])}")
         out.append(f"    port: {p['port']}")
         out.append(f"    uuid: {_yq(p['uuid'])}")
-        out.append("    tls: true")
+        tls = p["security"] in ("tls", "reality")
+        out.append(f"    tls: {'true' if tls else 'false'}")
         if p["sni"]:
             out.append(f"    servername: {_yq(p['sni'])}")
         if p["alpn"]:
             out.append("    alpn:")
             out.append(f"      - {_yq(p['alpn'])}")
+        if p["allow_insecure"]:
+            out.append("    skip-cert-verify: true")
         t = p["type"]
         if t == "xhttp":
             out.append("    network: xhttp")
@@ -292,7 +550,12 @@ def clash_yaml(links):
             out.append("    grpc-opts:")
             out.append(f"      grpc-service-name: {_yq(p['svc'] or 'grpc')}")
         elif t == "tcp":
-            pass  # 直连 TLS, 明文 TCP, Mihomo 默认就是 TCP, 不用写 network
+            if p["security"] == "reality":
+                out.append("    network: tcp")
+                out.append("    reality-opts:")
+                out.append(f"      public-key: {_yq(p['pbk'])}")
+                out.append(f"      short-id: {_yq(p['sid'])}")
+            # 直连 TLS / 明文 TCP: Mihomo 默认就是 TCP, 不用写 network
         out.append("    udp: true")
     out.append("proxy-groups:")
     out.append(f"  - name: {_yq(PREFIX + '-Argo')}")
@@ -448,7 +711,7 @@ class Handler(BaseHTTPRequestHandler):
                 if "clash" in ua or "mihomo" in ua:
                     yaml = clash_yaml(merged)
                     if not yaml:
-                        self._send("订阅为空: 没有可转换的 VLESS 节点", 502)
+                        self._send("订阅为空: 没有可转换的节点", 502)
                         return
                     self._send(yaml, ctype="text/yaml; charset=utf-8")
                 elif any(k in ua for k in ("sing-box", "singbox", "nekobox", "hiddify", "sfi")):
@@ -469,7 +732,7 @@ class Handler(BaseHTTPRequestHandler):
             elif fmt == "clash":
                 yaml = clash_yaml(merged)
                 if not yaml:
-                    self._send("订阅为空: 没有可转换的 VLESS 节点", 502)
+                    self._send("订阅为空: 没有可转换的节点", 502)
                     return
                 self._send(yaml, ctype="text/yaml; charset=utf-8")
             elif fmt:
