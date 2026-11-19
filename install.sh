@@ -84,6 +84,26 @@ DIRECT_SB_TLS_PORT="${DIRECT_SB_TLS_PORT:-8443}"
 log() { echo "[nexus-argo] $*"; }
 die() { echo "[nexus-argo] ERROR: $*" >&2; exit 1; }
 
+# ---- 终端显示: LOGO 横幅 + 分隔线 + 颜色 ----
+# 只在终端里生效; 面板里跑部署时输出是管道, 自动退回纯文本,
+# 所以面板部署日志里不会出现乱码。NO_COLOR=1 可强制关掉颜色。
+if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ]; then
+  C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'; C_GREEN=$'\033[1;32m'
+  C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_CYAN=$'\033[1;36m'; C_BLUE=$'\033[1;34m'
+else
+  C_RESET=''; C_BOLD=''; C_GREEN=''; C_YELLOW=''; C_RED=''; C_CYAN=''; C_BLUE=''
+fi
+sep() { echo "=================================================================="; }
+banner() {
+  sep
+  echo "${C_CYAN}${C_BOLD}  Nexus-Argo  节点部署${C_RESET}"
+  echo "  Argo 隧道 + Xray / Sing-box  |  一次部署, 订阅自动生成"
+  sep
+}
+step() { echo ""; echo "${C_BLUE}▶ $*${C_RESET}"; }
+ok()   { echo "${C_GREEN}✔ $*${C_RESET}"; }
+warn() { echo "${C_YELLOW}⚠ $*${C_RESET}"; }
+
 is_true() { case "${1,,}" in true|1|yes|y) return 0;; *) return 1;; esac; }
 
 check_port() {
@@ -119,6 +139,8 @@ uninstall() {
 
 [ "${1:-install}" = "uninstall" ] && uninstall
 
+banner
+step "步骤 1/5  检查配置"
 # ---- validation (mirrors the frontend's validatePort, plus the checks it lacks) ----
 [ "$(id -u)" = "0" ] || die "run as root"
 command -v docker >/dev/null 2>&1 || die "docker not found — install Docker first (see README)"
@@ -223,6 +245,7 @@ for _f in index.html nginx.conf sub-server.py sub-generator.html; do
   fi
 done
 
+step "步骤 2/5  渲染配置"
 # ---- render configs with Python (never sed on JSON) ----
 export NODE_UUID XRAY_PORT XRAY_DOMAIN XRAY_CONFIGS SINGBOX_PORT SINGBOX_DOMAIN SINGBOX_CONFIGS
 export ENABLE_XRAY ENABLE_SINGBOX WORKDIR NODE_PREFIX OPT_ADDRS
@@ -527,6 +550,7 @@ if is_true "$ENABLE_SINGBOX"; then
   log "Sing-box dispatcher config written ($WORKDIR/sb-dispatch/nginx.conf)"
 fi
 
+step "步骤 3/5  启动容器"
 # ---- (re)start containers — host network so 127.0.0.1 origins work ----
 docker rm -f nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel nexus-sub >/dev/null 2>&1 || true
 
@@ -609,6 +633,7 @@ else
   log "SUB_DOMAIN empty — skipping nexus-sub (subscription only via panel localhost)"
 fi
 
+step "步骤 4/5  健康检查"
 # ---- health check: docker inspect .State.Running, last 20 log lines on failure ----
 fail=0
 for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel nexus-sub; do
@@ -628,7 +653,7 @@ for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel n
     docker logs --tail 20 "$c" 2>&1 || true
     fail=1
   else
-    log "$c running"
+    ok "$c 运行中"
   fi
 done
 # v3.1: a running container is not proof the subscription works — with a
@@ -700,35 +725,43 @@ fi
 # (v3.0's static nginx files had no ?addrs=; v3.2's Python server
 # restores it. The panel's local 8080 subscription is still static
 # files, so ?addrs= only works on the public sub-domain URL.)
+step "步骤 5/5  订阅汇总"
 _native_n=0; _merged_n=0
 [ -f "$WORKDIR/sub/raw.txt" ] && _native_n=$(grep -c . "$WORKDIR/sub/raw.txt" || true)
 [ -f "$WORKDIR/sub/merged.txt" ] && _merged_n=$(grep -c . "$WORKDIR/sub/merged.txt" || true)
 echo ""
-echo "================ 订阅 =================="
+sep
+echo "${C_GREEN}${C_BOLD}  ★ 部署完成, 请保存下面的订阅地址 ★${C_RESET}"
+sep
 echo "原生订阅文件: $WORKDIR/sub/raw.txt ($_native_n 条节点)"
 echo "动态订阅文件: $WORKDIR/sub/merged.txt ($_merged_n 条节点)"
-echo "面板本地订阅 (需 SSH 端口转发 ssh -L 8080:127.0.0.1:8080, 本地路径固定是 /sub/):"
+echo ""
+echo "${C_BOLD}面板本地订阅${C_RESET} (需 SSH 端口转发 ssh -L 8080:127.0.0.1:8080, 本地路径固定是 /sub/):"
 echo "  原生: http://127.0.0.1:8080/sub/raw/$NODE_UUID"
 echo "  动态: http://127.0.0.1:8080/sub/merged/$NODE_UUID"
 if [ -n "${SUB_DOMAIN:-}" ]; then
-  echo "订阅生成器面板 (打开就是, 上面原生订阅、下面优选IP裂变):"
-  echo "  https://$SUB_DOMAIN/"
-  echo "订阅 (公网, 直接加到客户端, 不用 Worker):"
-  echo "  原生: https://$SUB_DOMAIN/$SUB_PATH/raw/$NODE_UUID"
-  echo "  动态: https://$SUB_DOMAIN/$SUB_PATH/merged/$NODE_UUID"
+  echo ""
+  echo "${C_BOLD}订阅生成器面板${C_RESET} (打开就是, 上面原生订阅、下面优选IP裂变):"
+  echo "  ${C_GREEN}https://$SUB_DOMAIN/${C_RESET}"
+  echo "${C_BOLD}订阅 (公网, 直接加到客户端, 不用 Worker):${C_RESET}"
+  echo "  原生: ${C_GREEN}https://$SUB_DOMAIN/$SUB_PATH/raw/$NODE_UUID${C_RESET}"
+  echo "  动态: ${C_GREEN}https://$SUB_DOMAIN/$SUB_PATH/merged/$NODE_UUID${C_RESET}"
   echo "  换优选地址不用重部署, 直接改 URL: https://$SUB_DOMAIN/$SUB_PATH/merged/$NODE_UUID?addrs=cf.xreak.top,cf.3666888.xyz"
-  echo "  (Zero Trust 里要有一条路由: $SUB_DOMAIN -> http://127.0.0.1:$SUB_PORT, 见 $WORKDIR/ROUTES.md)"
+  echo "  ${C_YELLOW}⚠ Zero Trust 里要有一条路由: $SUB_DOMAIN -> http://127.0.0.1:$SUB_PORT, 见 $WORKDIR/ROUTES.md${C_RESET}"
 else
-  echo "订阅 (公网): 未设置 SUB_DOMAIN, 只有面板本地订阅可用"
+  echo ""
+  echo "${C_YELLOW}⚠ 订阅 (公网): 未设置 SUB_DOMAIN, 只有面板本地订阅可用${C_RESET}"
   echo "  如需公网订阅, 重新部署时加上 SUB_DOMAIN=<订阅子域名> SUB_PORT=18080"
   echo "  例如: SUB_DOMAIN=sub.ahstshu.eu.cc"
 fi
 if is_true "$ENABLE_DIRECT"; then
-  echo "直连节点 (自签名证书, 客户端需 allowInsecure=1, 仅作备用):"
+  echo ""
+  echo "${C_YELLOW}⚠ 直连节点 (自签名证书, 客户端需 allowInsecure=1, 仅作备用):${C_RESET}"
   grep '丨直连丨' "$WORKDIR/sub/raw.txt" 2>/dev/null || true
 fi
+echo ""
 echo "原生节点 (可直接复制到客户端):"
 [ -f "$WORKDIR/sub/raw.txt" ] && cat "$WORKDIR/sub/raw.txt"
-echo "=========================================="
+sep
 echo ""
-log "Done. Panel: http://127.0.0.1:8080 (via ssh -L 8080:127.0.0.1:8080)  Xray: $XRAY_DOMAIN:$XRAY_PORT  Sing-box: $SINGBOX_DOMAIN:$SINGBOX_PORT"
+ok "部署完成. 面板: http://127.0.0.1:8080 (via ssh -L 8080:127.0.0.1:8080)  Xray: $XRAY_DOMAIN:$XRAY_PORT  Sing-box: $SINGBOX_DOMAIN:$SINGBOX_PORT"

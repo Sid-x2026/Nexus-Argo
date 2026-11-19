@@ -13,6 +13,26 @@
 # 安装顺序只有一种: 都是先装面板, 区别只在面板怎么连 (绑定隧道 vs IP 直连)。
 set -euo pipefail
 
+# ---- 终端显示: LOGO 横幅 + 分隔线 + 颜色 ----
+# 只在终端里生效 (接终端才有颜色); 输出被管道/重定向时自动退回纯文本,
+# 所以面板日志、文件记录里不会出现乱码。NO_COLOR=1 可强制关掉颜色。
+if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ]; then
+  C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'; C_GREEN=$'\033[1;32m'
+  C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_CYAN=$'\033[1;36m'; C_BLUE=$'\033[1;34m'
+else
+  C_RESET=''; C_BOLD=''; C_GREEN=''; C_YELLOW=''; C_RED=''; C_CYAN=''; C_BLUE=''
+fi
+sep() { echo "=================================================================="; }
+banner() {
+  sep
+  echo "${C_CYAN}${C_BOLD}  Nexus-Argo  管理面板 · 一键安装${C_RESET}"
+  echo "  Nexus-Argo Panel Installer  |  先装面板, 再在面板里部署节点"
+  sep
+}
+step() { echo ""; echo "${C_BLUE}▶ $*${C_RESET}"; }
+ok()   { echo "${C_GREEN}✔ $*${C_RESET}"; }
+warn() { echo "${C_YELLOW}⚠ $*${C_RESET}"; }
+
 PANEL_PORT="${PANEL_PORT:-2053}"
 RAW_BASE="${RAW_BASE:-https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main}"
 WORKDIR="/opt/nexus-argo"
@@ -31,6 +51,8 @@ if [ "${1:-install}" = "uninstall" ]; then
 fi
 
 [ "$(id -u)" = "0" ] || die "run as root"
+banner
+step "步骤 1/5  检查环境"
 command -v curl >/dev/null 2>&1 || { log "curl 缺失, 正在安装 ..."; apt-get update -qq && apt-get install -y -qq curl openssl; }
 command -v openssl >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq openssl; }
 
@@ -43,6 +65,7 @@ fi
 docker info >/dev/null 2>&1 || die "docker 装好了但没跑起来, 先检查 systemctl status docker"
 
 # ---- 下文件: 面板 + 部署脚本 + 订阅服务 ----
+step "步骤 2/5  下载面板文件"
 mkdir -p "$PANEL_DIR" "$WORKDIR/web"
 dl() { # dl <repo路径> <本地路径>
   if ! curl -fsSL "$RAW_BASE/$1" -o "$2"; then
@@ -58,6 +81,7 @@ dl "web/sub-server.py" "$WORKDIR/web/sub-server.py"
 dl "web/sub-generator.html" "$WORKDIR/web/sub-generator.html" || log "WARNING: sub-generator.html 没拿到, 订阅生成器面板不可用 (不影响部署)"
 
 # ---- 账号: 已有就保留, 没有就随机生成一个 ----
+step "步骤 3/5  生成面板账号"
 if [ -f "$PANEL_DIR/auth.json" ]; then
   log "已有面板账号, 保留不变 (忘记密码可删 $PANEL_DIR/auth.json 后重跑安装)"
   PASS=""
@@ -72,6 +96,7 @@ fi
 
 # ---- 起面板容器: host 网络 (面板端口直接是宿主端口, 部署时的
 # 127.0.0.1 健康检查也能通), 挂 docker.sock 管宿主 Docker ----
+step "步骤 4/5  启动面板容器"
 docker build -q -t nexus-panel "$PANEL_DIR" || die "面板镜像构建失败"
 docker rm -f nexus-panel >/dev/null 2>&1 || true
 docker run -d --name nexus-panel --restart unless-stopped --network host \
@@ -95,6 +120,7 @@ PANEL_URL="http://$PUB_IP:$PANEL_PORT"
 TUNNEL_URL=""
 
 # ---- 选装隧道版: 交互式问一句 (非交互执行时跳过, 以后在面板里绑) ----
+step "步骤 5/5  绑定隧道 (可选)"
 if [ -t 0 ]; then
   echo ""
   read -r -p "是否绑定隧道 (把面板绑到 Argo 隧道, 之后可关闭 SSH)? [y/N] " _bind
@@ -110,23 +136,28 @@ if [ -t 0 ]; then
       || die "cloudflared 启动失败"
     TUNNEL_URL="https://$PANEL_DOMAIN/"
     echo ""
-    log "隧道容器已起, 还差一步: 去 Cloudflare Zero Trust 里加一条路由:"
-    log "  $PANEL_DOMAIN -> http://127.0.0.1:$PANEL_PORT_BIND"
-    log "加完立刻生效, 之后用 $TUNNEL_URL 进面板。"
+    sep
+    echo "${C_YELLOW}${C_BOLD}  ⚠ 还差一步: 去 Cloudflare Zero Trust 里加一条路由${C_RESET}"
+    echo "  ${C_BOLD}$PANEL_DOMAIN -> http://127.0.0.1:$PANEL_PORT_BIND${C_RESET}"
+    echo "  加完立刻生效, 之后用 $TUNNEL_URL 进面板。"
+    sep
   fi
 fi
 
 echo ""
-echo "================ 面板已安装 ================"
-echo "面板地址: $PANEL_URL"
-[ -n "$TUNNEL_URL" ] && echo "隧道地址: $TUNNEL_URL (加完上面那条路由后可用)"
-echo "账号: admin"
+sep
+echo "${C_GREEN}${C_BOLD}  ★ 面板已安装完成, 请保存下面这几行 ★${C_RESET}"
+sep
+echo "${C_BOLD}面板地址:${C_RESET}  ${C_GREEN}$PANEL_URL${C_RESET}"
+[ -n "$TUNNEL_URL" ] && echo "${C_BOLD}隧道地址:${C_RESET}  ${C_GREEN}$TUNNEL_URL${C_RESET}  (加完上面那条路由后可用)"
+echo "${C_BOLD}账号:${C_RESET}  admin"
 if [ -n "$PASS" ]; then
-  echo "密码: $PASS   (只显示这一次, 也存在 $PANEL_DIR/password.txt)"
+  echo "${C_BOLD}密码:${C_RESET}  ${C_YELLOW}${C_BOLD}$PASS${C_RESET}  ${C_RED}← 只显示这一次, 请立即保存${C_RESET}"
+  echo "       也存在 $PANEL_DIR/password.txt (权限 600)"
 else
-  echo "密码: 不变 (存在 $PANEL_DIR/password.txt)"
+  echo "${C_BOLD}密码:${C_RESET}  不变 (存在 $PANEL_DIR/password.txt)"
 fi
-echo ""
+sep
 echo "接下来: 打开面板 -> 填设置 -> 点「开始部署」, 部署日志和检查在面板里看。"
 echo "只用直连协议: 不用绑隧道, 直接用面板装直连协议就行。"
-echo "=============================================="
+sep
