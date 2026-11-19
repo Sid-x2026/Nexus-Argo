@@ -154,18 +154,24 @@ TUNNEL_URL=""
 # stdin 被占用 / 读到 EOF 也不会直接跳过。
 # ask_tty <变量> <提示> [hide]: 先从 /dev/tty 读, 打不开就退回 stdin。
 # 两边都读到 EOF 时设 ASK_EOF=1, 调用方停在原地等 1 秒再问, 不自动跳过。
+# 2026-11-19 实测 bug: 原来用 read -p + 2>/dev/null </dev/tty, -p 的提示
+# 是打到 stderr 上的, 被 2>/dev/null 一起吃掉了, 所以输 Token 时上面
+# 什么都不显示。现在提示先由 printf 单独打到终端, read 不再带 -p。
 ASK_EOF=0
 ask_tty() {
   local _var="$1" _prompt="$2" _hide="${3:-}" _line="" _ok=0
   ASK_EOF=0
+  # 重定向顺序: 2>/dev/null 必须写在 > /dev/tty 前面, 否则打不开 /dev/tty
+  # 的报错压不住, 反而提示本身会被吃掉。
+  if [ -e /dev/tty ]; then printf '%s' "$_prompt" 2>/dev/null > /dev/tty || printf '%s' "$_prompt" >&2
+  else printf '%s' "$_prompt" >&2; fi
   if [ -e /dev/tty ]; then
-    # 2>/dev/null 要写在 </dev/tty 前面, 否则打不开 /dev/tty 的报错压不住。
-    if [ -n "$_hide" ]; then read -r -s -p "$_prompt" _line 2>/dev/null </dev/tty && _ok=1; echo "" >&2
-    else read -r -p "$_prompt" _line 2>/dev/null </dev/tty && _ok=1; fi
+    if [ -n "$_hide" ]; then { read -r -s _line </dev/tty; } 2>/dev/null && _ok=1; printf '\n' 2>/dev/null > /dev/tty || echo ""
+    else { read -r _line </dev/tty; } 2>/dev/null && _ok=1; fi
   fi
   if [ "$_ok" = "0" ]; then
-    if [ -n "$_hide" ]; then read -r -s -p "$_prompt" _line 2>/dev/null && _ok=1; echo ""
-    else read -r -p "$_prompt" _line 2>/dev/null && _ok=1; fi
+    if [ -n "$_hide" ]; then read -r -s _line 2>/dev/null && _ok=1; echo ""
+    else read -r _line 2>/dev/null && _ok=1; fi
   fi
   [ "$_ok" = "0" ] && ASK_EOF=1
   printf -v "$_var" '%s' "$_line"
@@ -197,10 +203,33 @@ if [ -t 0 ]; then
   done
   if [ "$_bind" = "y" ] || [ "$_bind" = "Y" ]; then
     ARGO_TOKEN=""; PANEL_DOMAIN=""
-    while [ -z "$ARGO_TOKEN" ]; do
-      ask_tty ARGO_TOKEN "Argo Tunnel Token: " hide
-      if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入 Token。"; sleep 1; continue; fi
-      [ -n "$ARGO_TOKEN" ] || echo "Token 不能为空, 请重新输入。"
+    echo ""
+    echo "请输入 Argo Tunnel Token:"
+    # SHU 2026-11-19 20:21 CST: Token 要明文显示, 不然没法确认输的对不对;
+    # 20:21 CST: 不对要能改 — 输完先回显、问一句对不对, 错了就重新输入,
+    # 对了才往下走, 没选就停在这里等。
+    while true; do
+      ARGO_TOKEN=""
+      while [ -z "$ARGO_TOKEN" ]; do
+        ask_tty ARGO_TOKEN "token: "
+        if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入 Token。"; sleep 1; continue; fi
+        [ -n "$ARGO_TOKEN" ] || echo "Token 不能为空, 请重新输入。"
+      done
+      echo "已输入 Token: $ARGO_TOKEN"
+      _tok_ok=""
+      while true; do
+        ask_tty _tok_ok "这个 Token 对吗? (y 确认继续 / n 重新输入): "
+        if [ "$ASK_EOF" = "1" ]; then echo "未收到输入, 请重新输入 y 或 n。"; sleep 1; continue; fi
+        case "$_tok_ok" in
+          y|Y) break;;
+          n|N) echo "重新输入 Token:"; break;;
+          *) echo "请重新输入 y 或 n (直接回车不会跳过)。";;
+        esac
+      done
+      case "$_tok_ok" in
+        y|Y) break;;
+        *) continue;;
+      esac
     done
     while [ -z "$PANEL_DOMAIN" ]; do
       ask_tty PANEL_DOMAIN "面板域名 (例如 panel.ahstshu.eu.cc): "
