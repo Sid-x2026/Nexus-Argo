@@ -18,6 +18,9 @@
   .card { background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(15, 23, 42, .06); padding: 18px 20px; margin-top: 16px; }
   .card h2 { margin: 0 0 4px; font-size: 16px; }
   .card h3 { margin: 0 0 10px; font-size: 14px; color: #4f46e5; }
+  .card h3.step-h { color: #1e293b; font-size: 15px; margin: 20px 0 8px; padding-top: 14px; border-top: 1px solid #eef0fb; }
+  .card h3.step-h:first-of-type { border-top: none; padding-top: 0; }
+  .card h4 { margin: 14px 0 4px; font-size: 13px; color: #475569; }
   .hint { color: #64748b; font-size: 12.5px; margin: 0 0 12px; line-height: 1.6; }
   .tabs { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
   .tabs button { border: 1px solid #e2e8f0; background: #fff; color: #334155; border-radius: 20px; padding: 8px 18px; font-size: 13.5px; cursor: pointer; }
@@ -30,9 +33,13 @@
   .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
   .dot.ok { background: #22c55e; } .dot.bad { background: #ef4444; } .dot.off { background: #94a3b8; } .dot.run { background: #f59e0b; }
   label.f { display: block; font-size: 12.5px; color: #475569; margin: 12px 0 5px; font-weight: 600; }
+  .req { color: #dc2626; font-weight: 700; }
+  .opt { color: #94a3b8; font-weight: 400; font-size: 11.5px; }
   input[type=text], input[type=password], input[type=number], textarea, select { width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; font-size: 13.5px; background: #fff; color: #1e293b; outline: none; }
   input:focus, textarea:focus, select:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, .12); }
   input[type=number] { font-family: monospace; }
+  .field-err { border-color: #dc2626 !important; box-shadow: 0 0 0 3px rgba(220, 38, 38, .15) !important; }
+  details.field-err { border-color: #dc2626 !important; }
   .mono { font-family: monospace; }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
@@ -41,12 +48,29 @@
   .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e2e8f0; border-radius: 20px; padding: 7px 14px; cursor: pointer; font-size: 13px; background: #fff; user-select: none; }
   .pill:has(input:checked) { background: #eef2ff; border-color: #4f46e5; color: #4f46e5; font-weight: 600; }
   .pill input { accent-color: #4f46e5; }
+  .mode-box { border-radius: 14px; padding: 14px; margin-top: 10px; border: 1px solid #e2e8f0; border-left: 5px solid; }
+  .mode-box.direct { background: #f0fdf4; border-left-color: #16a34a; }
+  .mode-box.direct h4 { color: #15803d; margin: 0 0 8px; font-size: 14px; }
+  .mode-box.tunnel { background: #eef2ff; border-left-color: #4f46e5; }
+  .mode-box.tunnel h4 { color: #4f46e5; margin: 0 0 8px; font-size: 14px; }
   .proto { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #eef0fb; background: #fafaff; border-radius: 12px; padding: 9px 12px; margin-top: 8px; }
   .proto label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
   .proto input[type=checkbox] { accent-color: #4f46e5; width: 16px; height: 16px; }
   .proto .port { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 12px; }
   .proto .port input { width: 76px; padding: 6px 8px; }
   .proto.off { opacity: .45; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; font-weight: 600; }
+  .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
+  details.proto-group { border: 1px solid #eef0fb; border-radius: 12px; padding: 10px 12px; margin-top: 8px; background: #fafaff; }
+  details.proto-group summary { cursor: pointer; font-weight: 700; font-size: 13.5px; list-style: none; }
+  details.proto-group summary::-webkit-details-marker { display: none; }
+  details.proto-group summary::before { content: "▸ "; color: #4f46e5; }
+  details.proto-group[open ] summary::before { content: "▾ "; }
+  .subfields { margin: 4px 0 4px 28px; padding: 10px 12px; border: 1px dashed #c7d2fe; border-radius: 10px; background: #fff; }
+  .subtpl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .subtpl .static { font-size: 13px; color: #334155; white-space: nowrap; }
+  .subtpl input { width: 150px; flex: none; }
+  .sticky-deploy { position: sticky; bottom: 0; background: #fff; padding: 12px 0 4px; border-top: 1px solid #eef0fb; margin-top: 8px; z-index: 5; }
   button { border: none; border-radius: 10px; padding: 10px 20px; font-size: 14px; cursor: pointer; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; font-weight: 600; }
   button:hover { filter: brightness(1.08); }
   button:disabled { opacity: .5; cursor: not-allowed; }
@@ -125,10 +149,11 @@
           <div><div class="muted">动态节点（原生 × 优选地址）</div><div class="num" id="nMerged">—</div></div>
           <div><div class="muted">部署状态</div><div class="num" id="nDeploy" style="font-size:16px;">—</div></div>
         </div>
+        <div style="margin-top:12px;"><span class="muted">证书：</span><span id="certOverview">—</span></div>
         <div class="btnrow">
           <button class="sm" id="btnGoDeploy">去部署</button>
           <button class="sm ghost" id="btnGoSub">订阅地址</button>
-          <button class="sm ghost" id="btnRefresh">刷新状态</button>
+          <button class="sm" id="btnRefresh">刷新状态</button><span id="lastRefresh" class="muted" style="margin-left:8px;"></span>
         </div>
       </div>
       <div class="card">
@@ -141,99 +166,151 @@
     <div id="tab-deploy" class="hidden">
       <div class="card">
         <h2>部署安装</h2>
-        <p class="hint">填好设置，点「开始部署」，面板在 VPS 上自动完成部署。部署日志和检查结果在下方查看。</p>
+        <p class="hint">填好设置，点「开始部署」，面板在 VPS 上自动完成部署。部署日志和检查结果在下方查看。带 <span class="req">* 必填</span> 的是必填项，带 <span class="opt">选填</span> 的可留空。</p>
 
-        <h3>部署方式</h3>
+        <h3 class="step-h">① 部署方式</h3>
         <div class="pills">
           <label class="pill"><input type="checkbox" id="modeTunnel" checked> Argo 隧道</label>
           <label class="pill"><input type="checkbox" id="modeDirect"> 直连节点</label>
         </div>
-        <p class="hint" style="margin-top:8px;">Argo 为默认；直连会暴露 VPS 真实 IP，仅作备用。两种可以一起装。</p>
+        <p class="hint" style="margin-top:8px;">Argo 为默认；直连会暴露 VPS 真实 IP，仅作备用。两种可以一起装。隧道节点和直连节点共用一个域名会同时暴露两种入口，请使用不同的子域名。</p>
 
-        <div id="tunnelBox">
-          <h3>隧道协议（各自勾选）</h3>
+        <h3 class="step-h">② 协议选择</h3>
+        <p class="hint">隧道协议与直连协议在同一处勾选，只部署选中的协议；每条协议后面都有自己的端口设置。只勾一种方式时，只显示那种方式的协议。</p>
+        <details id="argoGroup" class="proto-group" open>
+          <summary><span id="argoCount">Argo 组 · 已选 6</span><span class="muted">（隧道协议，启用核心后至少勾选一个）</span></summary>
           <div class="row2">
             <div>
-              <label class="pill" style="margin-bottom:4px;"><input type="checkbox" id="enableXray" checked> Xray-core</label>
+              <label class="pill" style="margin-top:8px;"><input type="checkbox" id="enableXray" checked> Xray-core</label>
               <div id="xrayProtos">
-                <div class="proto" data-proto="xhttp_h1"><label><input type="checkbox" class="xp" value="xhttp_h1" checked> xhttp_h1</label><span class="port">端口 <input type="number" id="port_xhttp_h1" value="443" min="1" max="65535"></span></div>
-                <div class="proto" data-proto="xhttp_h2"><label><input type="checkbox" class="xp" value="xhttp_h2" checked> xhttp_h2</label><span class="port">端口 <input type="number" id="port_xhttp_h2" value="443" min="1" max="65535"></span></div>
-                <div class="proto" data-proto="xhttp_h3"><label><input type="checkbox" class="xp" value="xhttp_h3" checked> xhttp_h3</label><span class="port">端口 <input type="number" id="port_xhttp_h3" value="443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="xhttp_h1"><label><input type="checkbox" class="xp" value="xhttp_h1" checked> <span class="tag">Argo</span> xhttp_h1</label><span class="port">端口 <input type="number" id="port_xhttp_h1" value="443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="xhttp_h2"><label><input type="checkbox" class="xp" value="xhttp_h2" checked> <span class="tag">Argo</span> xhttp_h2</label><span class="port">端口 <input type="number" id="port_xhttp_h2" value="443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="xhttp_h3"><label><input type="checkbox" class="xp" value="xhttp_h3" checked> <span class="tag">Argo</span> xhttp_h3</label><span class="port">端口 <input type="number" id="port_xhttp_h3" value="443" min="1" max="65535"></span></div>
               </div>
             </div>
             <div>
-              <label class="pill" style="margin-bottom:4px;"><input type="checkbox" id="enableSb" checked> Sing-box</label>
+              <label class="pill" style="margin-top:8px;"><input type="checkbox" id="enableSb" checked> Sing-box</label>
               <div id="sbProtos">
-                <div class="proto" data-proto="ws"><label><input type="checkbox" class="sp" value="ws" checked> ws</label><span class="port">端口 <input type="number" id="port_ws" value="8443" min="1" max="65535"></span></div>
-                <div class="proto" data-proto="httpupgrade"><label><input type="checkbox" class="sp" value="httpupgrade" checked> httpupgrade</label><span class="port">端口 <input type="number" id="port_httpupgrade" value="8443" min="1" max="65535"></span></div>
-                <div class="proto" data-proto="grpc"><label><input type="checkbox" class="sp" value="grpc" checked> grpc</label><span class="port">端口 <input type="number" id="port_grpc" value="8443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="ws"><label><input type="checkbox" class="sp" value="ws" checked> <span class="tag">Argo</span> ws</label><span class="port">端口 <input type="number" id="port_ws" value="8443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="httpupgrade"><label><input type="checkbox" class="sp" value="httpupgrade" checked> <span class="tag">Argo</span> httpupgrade</label><span class="port">端口 <input type="number" id="port_httpupgrade" value="8443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="grpc"><label><input type="checkbox" class="sp" value="grpc" checked> <span class="tag">Argo</span> grpc</label><span class="port">端口 <input type="number" id="port_grpc" value="8443" min="1" max="65535"></span></div>
               </div>
             </div>
           </div>
+        </details>
 
-          <h3 style="margin-top:16px;">Argo 隧道与域名</h3>
-          <label class="f">Argo Tunnel Token（直连模式可留空）</label>
+        <details id="directGroup" class="proto-group">
+          <summary><span id="directCount">直连组 · 已选 0</span><span class="muted">（直连协议，启用直连后至少勾选一个）</span></summary>
+          <h4>VLESS 组</h4>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_tcp"> <span class="tag direct">直连</span> VLESS + TCP</label><span class="port">端口 <input type="number" id="direct_vless_tcp_port" value="8082" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_tls" checked> <span class="tag direct">直连</span> VLESS + TLS</label><span class="port">端口 <input type="number" id="direct_vless_tls_port" value="443" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_reality"> <span class="tag direct">直连</span> VLESS + Reality</label><span class="port">端口 <input type="number" id="direct_vless_reality_port" value="9447" min="1" max="65535"></span></div>
+          <div id="realityFields" class="subfields hidden">
+            <label class="f" style="margin-top:0;">大厂域名（Reality 目标域名） <span class="req">* 必填</span></label>
+            <input type="text" id="reality_dest" class="mono" placeholder="例如 www.microsoft.com">
+            <label class="f">SNI <span class="opt">选填</span></label>
+            <input type="text" id="reality_sni" class="mono" placeholder="默认与大厂域名相同">
+            <div class="btnrow" style="margin-top:10px;"><button type="button" class="sm ghost" id="btnRealityScan">扫描大厂域名</button><button type="button" class="sm ghost hidden" id="btnPickBest">选择最低延迟</button></div>
+            <div id="realityScanOut" class="status info"></div>
+          </div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_ws"> <span class="tag direct">直连</span> VLESS + WS</label><span class="port">端口 <input type="number" id="direct_vless_ws_port" value="8083" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_grpc"> <span class="tag direct">直连</span> VLESS + gRPC</label><span class="port">端口 <input type="number" id="direct_vless_grpc_port" value="8084" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_quic"> <span class="tag direct">直连</span> VLESS + QUIC</label><span class="port">端口 <input type="number" id="direct_vless_quic_port" value="443" min="1" max="65535"></span></div>
+          <h4>Trojan / VMess 组</h4>
+          <div class="proto"><label><input type="checkbox" id="direct_trojan"> <span class="tag direct">直连</span> Trojan + TLS</label><span class="port">端口 <input type="number" id="direct_trojan_port" value="9443" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vmess_ws"> <span class="tag direct">直连</span> VMess + WS</label><span class="port">端口 <input type="number" id="direct_vmess_ws_port" value="9444" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_sb_trojan" checked> <span class="tag direct">直连</span> Trojan + TLS（Sing-box）</label><span class="port">端口 <input type="number" id="direct_sb_trojan_port" value="9445" min="1" max="65535"></span></div>
+          <h4>Shadowsocks / Hysteria2 组</h4>
+          <div class="proto"><label><input type="checkbox" id="direct_ss"> <span class="tag direct">直连</span> Shadowsocks</label><span class="port">端口 <input type="number" id="direct_ss_port" value="8388" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_hy2"> <span class="tag direct">直连</span> Hysteria2</label><span class="port">端口 <input type="number" id="direct_hy2_port" value="9446" min="1" max="65535"></span></div>
+        </details>
+
+        <h3 class="step-h">③ 域名与端口</h3>
+        <div id="directFields" class="mode-box direct hidden">
+          <h4>直连配置</h4>
+          <div class="warn">直连会暴露 VPS 真实 IP，仅作备用；请使用与隧道节点不同的子域名。</div>
+          <label class="f">直连域名 <span class="req">* 必填</span> <span class="muted">（可留空自动检测公网 IP）</span></label>
+          <input type="text" id="directDomain" class="mono" placeholder="例如 direct.ahstshu.eu.cc，或留空用 VPS 公网 IP">
+        </div>
+        <div id="tunnelFields" class="mode-box tunnel">
+          <h4>隧道配置</h4>
+          <label class="f">Argo Tunnel Token <span class="req">* 必填</span></label>
           <input type="text" id="argoToken" class="mono" placeholder="粘贴 Argo Tunnel Token" autocomplete="off">
           <div class="row2">
             <div>
-              <label class="f">Xray 子域名</label>
+              <label class="f">Xray 子域名 <span class="req">* 必填</span></label>
               <input type="text" id="xrayDomain" value="xr.ahstshu.eu.cc" class="mono">
-              <label class="f">Xray 回源端口</label>
+              <label class="f">Xray 回源端口 <span class="req">* 必填</span></label>
               <input type="number" id="xrayPort" value="8001" min="1" max="65535">
             </div>
             <div>
-              <label class="f">Sing-box 子域名</label>
+              <label class="f">Sing-box 子域名 <span class="req">* 必填</span></label>
               <input type="text" id="sbDomain" value="sb.ahstshu.eu.cc" class="mono">
-              <label class="f">Sing-box 回源端口</label>
+              <label class="f">Sing-box 回源端口 <span class="req">* 必填</span></label>
               <input type="number" id="sbPort" value="8002" min="1" max="65535">
             </div>
           </div>
           <div class="row2">
             <div>
-              <label class="f">订阅子域名</label>
+              <label class="f">订阅子域名 <span class="opt">选填</span></label>
               <input type="text" id="subDomain" value="sub.ahstshu.eu.cc" class="mono">
             </div>
             <div>
-              <label class="f">订阅服务端口</label>
+              <label class="f">订阅服务端口 <span class="opt">选填</span></label>
               <input type="number" id="subPort" value="18080" min="1" max="65535">
             </div>
           </div>
           <p class="hint">Zero Trust 里要加路由：Xray 域名 → 127.0.0.1:Xray 回源端口；Sing-box 域名 → 127.0.0.1:Sing-box 回源端口；订阅域名 → 127.0.0.1:订阅端口。</p>
         </div>
 
-        <div id="directBox" class="hidden">
-          <h3 style="margin-top:16px;">直连节点</h3>
-          <div class="warn">直连使用自签名证书，客户端需允许不安全证书；直连会暴露 VPS 真实 IP，仅作备用。</div>
-          <label class="f">直连域名或 VPS 公网 IP（留空自动检测公网 IP）</label>
-          <input type="text" id="directDomain" class="mono" placeholder="例如 1.2.3.4 或直连域名">
-          <div class="proto" data-proto="d-tls"><label><input type="checkbox" id="directXrayTls" checked> VLESS + TLS（Xray）</label><span class="port">端口 <input type="number" id="directXrayTlsPort" value="443" min="1" max="65535"></span></div>
-          <div class="proto" data-proto="d-quic"><label><input type="checkbox" id="directXrayQuic"> QUIC（Xray，UDP，可与 TLS 同端口）</label><span class="port">端口 <input type="number" id="directXrayQuicPort" value="443" min="1" max="65535"></span></div>
-          <div class="proto" data-proto="d-sb"><label><input type="checkbox" id="directSbTls" checked> VLESS + TLS（Sing-box）</label><span class="port">端口 <input type="number" id="directSbTlsPort" value="8443" min="1" max="65535"></span></div>
+        <h3 class="step-h">④ 证书配置</h3>
+        <div id="certCard" class="hidden">
+          <p class="hint">当前选中的直连协议需要证书（Reality、VLESS + TCP、Shadowsocks 不需要证书）。</p>
+          <div class="pills">
+            <label class="pill"><input type="radio" name="certMode" value="selfsigned" checked> 自签名（默认，10 年，无需续期）</label>
+            <label class="pill"><input type="radio" name="certMode" value="upload"> 上传自己的证书</label>
+            <label class="pill"><input type="radio" name="certMode" value="acme"> ACME 自动申请（90 天自动续期）</label>
+          </div>
+          <div id="certUploadBox" class="hidden">
+            <label class="f">证书内容（cert_pem） <span class="req">* 必填</span></label>
+            <textarea id="cert_pem" rows="4" class="mono" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+            <label class="f">私钥内容（cert_key） <span class="req">* 必填</span></label>
+            <textarea id="cert_key" rows="4" class="mono" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+          </div>
+          <div id="certAcmeNote" class="warn hidden">ACME 自动申请：域名须解析到 VPS，端口 80 须放行；申请失败自动回退自签名。</div>
+          <div id="certStatusLine" class="status info">证书状态：加载中…</div>
         </div>
+        <p id="certNotNeeded" class="hint">当前选中的协议不需要证书，无需配置。</p>
 
-        <h3 style="margin-top:16px;">节点与订阅</h3>
+        <h3 class="step-h">⑤ 节点与订阅</h3>
         <div class="row2">
           <div>
-            <label class="f">节点 UUID</label>
+            <label class="f">节点 UUID <span class="req">* 必填</span></label>
             <div style="display:flex; gap:8px;"><input type="text" id="nodeUuid" class="mono" placeholder="点右侧生成"><button class="ghost sm" id="btnGenUuid" type="button">安全生成</button></div>
+            <p class="hint" style="margin-top:6px;">一个 UUID 通用于隧道和直连全部协议，订阅地址也只用这一个 UUID；不需要每个方式各设一个。</p>
           </div>
           <div>
-            <label class="f">节点名称前缀</label>
+            <label class="f">节点名称前缀 <span class="opt">选填</span></label>
             <input type="text" id="nodePrefix" value="Nexus">
           </div>
         </div>
-        <label class="f">订阅路径（自定义订阅地址，默认 sub）</label>
-        <input type="text" id="subPath" value="sub" class="mono">
-        <p class="hint">订阅地址形如 https://订阅域名/订阅路径/raw/UUID。改这里，下次部署生效；已部署的可在「订阅地址」页直接改。</p>
-        <label class="f">客户端优选地址（每行一个，用于动态订阅裂变；留空用默认）</label>
+        <label class="f">订阅路径 <span class="opt">选填</span>（默认 sub；只改中间一段）</label>
+        <div class="subtpl">
+          <span class="static" id="subTplPrefix">https://订阅域名/</span><input type="text" id="subPath" value="sub" class="mono"><span class="static" id="subTplSuffix">/raw/UUID</span>
+        </div>
+        <p class="hint">订阅地址形如 https://订阅域名/订阅路径/raw/UUID。改这里，下次部署生效；已部署的可在「订阅地址」页直接改。订阅路径只能是字母 / 数字 / . _ -（1–32 个字符），不能是 api / config.json / help.txt。</p>
+        <label class="f">客户端优选地址（仅隧道节点裂变用，每行一个；留空用默认） <span class="opt">选填</span></label>
         <textarea id="optAddress" rows="3" class="mono" placeholder="例如：&#10;cf.xreak.top&#10;cf.3666888.xyz"></textarea>
 
-        <div class="btnrow">
-          <button id="btnDeploy">开始部署</button>
-          <button id="btnSaveCfg" class="ghost">只保存配置</button>
-          <button id="btnClear" class="red">清除部署</button>
+        <h3 class="step-h">⑥ 开始部署</h3>
+        <div class="sticky-deploy">
+          <div class="btnrow" style="margin-top:0;">
+            <button id="btnDeploy">开始部署</button>
+            <button id="btnSaveCfg" class="ghost">只保存配置</button>
+            <button id="btnClear" class="red">清除部署</button>
+          </div>
+          <div id="deployOut" class="status info"></div>
         </div>
-        <div id="deployOut" class="status info"></div>
         <div id="logWrap" class="hidden">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">
             <span style="font-weight:700;">安装日志</span><span id="deployState" class="muted"></span>
@@ -255,7 +332,7 @@
         <div class="addr-label">订阅生成器面板</div>
         <div class="addr-row"><div class="addr empty" id="subGen" data-hint="未设置订阅域名">未设置订阅域名</div><button class="sm" id="btnCopyGen">复制</button></div>
         <h3 style="margin-top:20px;">自定义订阅地址</h3>
-        <p class="hint">改订阅路径（后缀），所有订阅地址实时更新。订阅服务正在运行时直接重启生效，不用重新部署。</p>
+        <p class="hint">改订阅路径（后缀），所有订阅地址实时更新。订阅服务正在运行时直接重启生效，不用重新部署。订阅路径只能是字母 / 数字 / . _ -（1–32 个字符），不能是 api / config.json / help.txt。</p>
         <div style="display:flex; gap:8px; max-width:420px;"><input type="text" id="subPathEdit" class="mono" value="sub"><button class="green sm" id="btnSaveSubPath">保存并生效</button></div>
         <div id="subOut" class="status info"></div>
       </div>
@@ -267,6 +344,16 @@
 <script>
 const $ = id => document.getElementById(id);
 let authed = false, logTimer = null, statusTimer = null, logOffset = 0;
+
+// 直连协议字段: [复选框 id, 默认端口]
+const DIRECT_IDS = ["direct_vless_tcp", "direct_vless_tls", "direct_vless_reality", "direct_vless_ws", "direct_vless_grpc", "direct_vless_quic", "direct_trojan", "direct_vmess_ws", "direct_sb_trojan", "direct_ss", "direct_hy2"];
+const DIRECT_PORTS = {direct_vless_tcp: 8082, direct_vless_tls: 443, direct_vless_reality: 9447, direct_vless_ws: 8083, direct_vless_grpc: 8084, direct_vless_quic: 443, direct_trojan: 9443, direct_vmess_ws: 9444, direct_sb_trojan: 9445, direct_ss: 8388, direct_hy2: 9446};
+// 需要证书的直连协议 (Reality 不需要证书; VLESS+TCP、Shadowsocks 不需要)
+const CERT_NEED_IDS = ["direct_vless_tls", "direct_vless_grpc", "direct_trojan", "direct_vmess_ws", "direct_sb_trojan", "direct_hy2"];
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const SUB_PATH_RE = /^[A-Za-z0-9._-]{1,32}$/;
+const RESERVED_SUB_PATH = ["api", "config.json", "help.txt"];
+let realityBest = null;
 
 async function api(path, opts) {
   const r = await fetch(path, Object.assign({headers: {"Content-Type": "application/json"}}, opts || {}));
@@ -285,7 +372,7 @@ function showApp() {
   authed = true;
   $("loginView").classList.add("hidden");
   $("appView").classList.remove("hidden");
-  loadStatus(); loadConfig(); loadSubscription();
+  loadStatus(); loadConfig(); loadSubscription(); loadCert();
   statusTimer = setInterval(() => { if (authed) loadStatus(); }, 15000);
 }
 function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) clearInterval(statusTimer); logTimer = statusTimer = null; }
@@ -320,20 +407,88 @@ function statHtml(state) {
 async function loadStatus() {
   try {
     const s = await api("/api/status");
-    $("stArgo").innerHTML = statHtml(s.services.find(x => x.name === "nexus-argo").state);
-    $("stXray").innerHTML = statHtml(s.services.find(x => x.name === "nexus-xray").state);
-    $("stSb").innerHTML = statHtml(s.services.find(x => x.name === "nexus-singbox").state);
-    $("stSub").innerHTML = statHtml(s.services.find(x => x.name === "nexus-sub").state);
-    $("nNative").textContent = s.nodes.native;
-    $("nMerged").textContent = s.nodes.dynamic;
+    // 每项单独取值: 后端少报某一项也不会让整个总览变空白。
+    // Argo 隧道 = 节点隧道 nexus-argo 与面板隧道 nexus-panel-argo 任一在跑即运行中
+    // (后端已合并, 这里再兜底一次)。
+    const svc = (name) => { const f = (s.services || []).find(x => x.name === name); return f ? f.state : "not_installed"; };
+    const argo = svc("nexus-argo");
+    const panelArgo = svc("nexus-panel-argo");
+    $("stArgo").innerHTML = statHtml(argo === "running" || panelArgo === "running" ? "running" : argo);
+    $("stXray").innerHTML = statHtml(svc("nexus-xray"));
+    $("stSb").innerHTML = statHtml(svc("nexus-singbox"));
+    $("stSub").innerHTML = statHtml(svc("nexus-sub"));
+    if (s.nodes) { $("nNative").textContent = s.nodes.native; $("nMerged").textContent = s.nodes.dynamic; }
     const ds = {idle: "未部署", running: "部署中…", ok: "已部署", failed: "部署失败"}[s.deploy_state] || s.deploy_state;
     $("nDeploy").textContent = ds;
+    $("lastRefresh").textContent = "上次刷新 " + new Date().toLocaleTimeString();
   } catch (e) {}
+}
+
+async function loadCert() {
+  const line = c => {
+    if (!c || c.installed === false) return "未安装证书";
+    const parts = ["已安装"];
+    if (c.mode) parts.push(c.mode);
+    if (c.subject) parts.push(c.subject);
+    if (c.expiry) parts.push("到期 " + c.expiry);
+    if (c.days_left != null) parts.push("剩余 " + c.days_left + " 天");
+    if (c.auto_renew) parts.push("自动续期");
+    if (c.renew_note) parts.push(c.renew_note);
+    return parts.join(" · ");
+  };
+  try {
+    const c = await api("/api/cert");
+    $("certStatusLine").textContent = "证书状态：" + line(c);
+    $("certOverview").textContent = line(c);
+  } catch (e) {
+    $("certStatusLine").textContent = "证书状态：暂不可用（后端未提供 /api/cert）";
+    $("certOverview").textContent = "暂不可用";
+  }
+}
+
+function certMode() {
+  const r = document.querySelector('input[name="certMode"]:checked');
+  return r ? r.value : "selfsigned";
+}
+function updateCertModeBox() {
+  const m = certMode();
+  $("certUploadBox").classList.toggle("hidden", m !== "upload");
+  $("certAcmeNote").classList.toggle("hidden", m !== "acme");
+}
+document.querySelectorAll('input[name="certMode"]').forEach(r => r.addEventListener("change", updateCertModeBox));
+
+function certNeeded() {
+  return $("modeDirect").checked && CERT_NEED_IDS.some(id => $(id).checked);
+}
+function updateCertCard() {
+  const need = certNeeded();
+  $("certCard").classList.toggle("hidden", !need);
+  $("certNotNeeded").classList.toggle("hidden", need);
+  if (need) updateCertModeBox();
+}
+function updateGroupCounts() {
+  const argoN = document.querySelectorAll(".xp:checked").length + document.querySelectorAll(".sp:checked").length;
+  $("argoCount").textContent = "Argo 组 · 已选 " + argoN;
+  const directN = DIRECT_IDS.filter(id => $(id).checked).length;
+  $("directCount").textContent = "直连组 · 已选 " + directN;
+  if ($("enableXray").checked && document.querySelectorAll(".xp:checked").length) $("argoGroup").classList.remove("field-err");
+  if ($("enableSb").checked && document.querySelectorAll(".sp:checked").length) $("argoGroup").classList.remove("field-err");
+  if (directN) $("directGroup").classList.remove("field-err");
+}
+function updateRealityFields() {
+  $("realityFields").classList.toggle("hidden", !$("direct_vless_reality").checked);
+}
+function updateSubTpl() {
+  const dom = $("subDomain").value.trim() || "订阅域名";
+  const uuid = $("nodeUuid").value.trim() || "UUID";
+  $("subTplPrefix").textContent = "https://" + dom + "/";
+  $("subTplSuffix").textContent = "/raw/" + uuid;
 }
 
 function collectConfig() {
   const protos = (cls) => { const o = {}; document.querySelectorAll("." + cls).forEach(el => { if (el.checked) o[el.value] = parseInt($("port_" + el.value).value, 10) || 443; }); return o; };
-  return {
+  const dport = (id) => parseInt($(id + "_port").value, 10) || DIRECT_PORTS[id];
+  const cfg = {
     node_uuid: $("nodeUuid").value.trim(),
     node_prefix: $("nodePrefix").value.trim() || "Nexus",
     argo_token: $("argoToken").value.trim(),
@@ -352,13 +507,27 @@ function collectConfig() {
     sub_path: $("subPath").value.trim() || "sub",
     enable_direct: $("modeDirect").checked,
     direct_domain: $("directDomain").value.trim(),
-    direct_xray_tls: $("directXrayTls").checked,
-    direct_xray_tls_port: parseInt($("directXrayTlsPort").value, 10) || 443,
-    direct_xray_quic: $("directXrayQuic").checked,
-    direct_xray_quic_port: parseInt($("directXrayQuicPort").value, 10) || 443,
-    direct_sb_tls: $("directSbTls").checked,
-    direct_sb_tls_port: parseInt($("directSbTlsPort").value, 10) || 8443,
+    cert_mode: certMode(),
+    cert_pem: $("cert_pem").value,
+    cert_key: $("cert_key").value,
   };
+  // 直连协议: 新字段名 + 短端口别名 (tcp_port / ws_port / reality_port 等)
+  const shortPort = {direct_vless_tcp: "tcp_port", direct_vless_tls: "tls_port", direct_vless_reality: "reality_port", direct_vless_ws: "ws_port", direct_vless_grpc: "grpc_port", direct_vless_quic: "quic_port", direct_trojan: "trojan_port", direct_vmess_ws: "vmess_port", direct_sb_trojan: "sb_trojan_port", direct_ss: "ss_port", direct_hy2: "hy2_port"};
+  DIRECT_IDS.forEach(id => {
+    cfg[id] = $(id).checked;
+    cfg[id + "_port"] = dport(id);
+    cfg[shortPort[id]] = dport(id);
+  });
+  cfg.reality_dest = $("reality_dest").value.trim();
+  cfg.reality_sni = $("reality_sni").value.trim() || $("reality_dest").value.trim();
+  // 旧字段名兼容 (direct_xray_tls / direct_xray_quic / direct_sb_tls)
+  cfg.direct_xray_tls = cfg.direct_vless_tls;
+  cfg.direct_xray_tls_port = cfg.direct_vless_tls_port;
+  cfg.direct_xray_quic = cfg.direct_vless_quic;
+  cfg.direct_xray_quic_port = cfg.direct_vless_quic_port;
+  cfg.direct_sb_tls = cfg.direct_sb_trojan;
+  cfg.direct_sb_tls_port = cfg.direct_sb_trojan_port;
+  return cfg;
 }
 function fillConfig(c) {
   $("nodeUuid").value = c.node_uuid || "";
@@ -379,13 +548,34 @@ function fillConfig(c) {
   $("subPath").value = c.sub_path || "sub";
   $("modeDirect").checked = !!c.enable_direct;
   $("directDomain").value = c.direct_domain || "";
-  $("directXrayTls").checked = !!c.direct_xray_tls;
-  $("directXrayTlsPort").value = c.direct_xray_tls_port || 443;
-  $("directXrayQuic").checked = !!c.direct_xray_quic;
-  $("directXrayQuicPort").value = c.direct_xray_quic_port || 443;
-  $("directSbTls").checked = !!c.direct_sb_tls;
-  $("directSbTlsPort").value = c.direct_sb_tls_port || 8443;
+  // 直连协议: 新字段优先, 旧字段兜底
+  const pick = (id, legacy) => {
+    if (c[id] != null) return !!c[id];
+    if (legacy && c[legacy] != null) return !!c[legacy];
+    return false;
+  };
+  const pickPort = (id, legacyPort, shortPort) => {
+    if (c[id + "_port"] != null) return c[id + "_port"];
+    if (shortPort && c[shortPort] != null) return c[shortPort];
+    if (legacyPort && c[legacyPort] != null) return c[legacyPort];
+    return DIRECT_PORTS[id];
+  };
+  DIRECT_IDS.forEach(id => {
+    const legacy = {direct_vless_tls: "direct_xray_tls", direct_vless_quic: "direct_xray_quic", direct_sb_trojan: "direct_sb_tls"}[id];
+    const legacyPort = {direct_vless_tls: "direct_xray_tls_port", direct_vless_quic: "direct_xray_quic_port", direct_sb_trojan: "direct_sb_tls_port"}[id];
+    const shortPort = {direct_vless_tcp: "tcp_port", direct_vless_tls: "tls_port", direct_vless_reality: "reality_port", direct_vless_ws: "ws_port", direct_vless_grpc: "grpc_port", direct_vless_quic: "quic_port", direct_trojan: "trojan_port", direct_vmess_ws: "vmess_port", direct_sb_trojan: "sb_trojan_port", direct_ss: "ss_port", direct_hy2: "hy2_port"}[id];
+    $(id).checked = pick(id, legacy);
+    $(id + "_port").value = pickPort(id, legacyPort, shortPort);
+  });
+  $("reality_dest").value = c.reality_dest || "";
+  $("reality_sni").value = c.reality_sni || "";
+  const cm = c.cert_mode || "selfsigned";
+  const radio = document.querySelector('input[name="certMode"][value="' + cm + '"]');
+  if (radio) radio.checked = true;
+  $("cert_pem").value = c.cert_pem || "";
+  $("cert_key").value = c.cert_key || "";
   toggleMode();
+  updateSubTpl();
 }
 async function loadConfig() {
   try { fillConfig(await api("/api/config")); } catch (e) {}
@@ -393,19 +583,83 @@ async function loadConfig() {
 function toggleMode() {
   const tunnel = $("modeTunnel").checked;
   const direct = $("modeDirect").checked;
-  $("tunnelBox").classList.toggle("hidden", !tunnel);
-  $("directBox").classList.toggle("hidden", !direct);
+  $("tunnelFields").classList.toggle("hidden", !tunnel);
+  $("directFields").classList.toggle("hidden", !direct);
   $("enableXray").disabled = !tunnel; $("enableSb").disabled = !tunnel;
+  $("argoGroup").classList.toggle("hidden", !tunnel);
+  $("directGroup").classList.toggle("hidden", !direct);
+  $("argoGroup").open = tunnel;
+  $("directGroup").open = direct;
+  updateCertCard(); updateGroupCounts(); updateRealityFields();
 }
 $("modeTunnel").onchange = toggleMode;
 $("modeDirect").onchange = toggleMode;
-$("enableXray").onchange = () => { document.querySelectorAll("#xrayProtos .proto").forEach(p => p.classList.toggle("off", !$("enableXray").checked)); };
-$("enableSb").onchange = () => { document.querySelectorAll("#sbProtos .proto").forEach(p => p.classList.toggle("off", !$("enableSb").checked)); };
+$("enableXray").onchange = () => { document.querySelectorAll("#xrayProtos .proto").forEach(p => p.classList.toggle("off", !$("enableXray").checked)); updateGroupCounts(); };
+$("enableSb").onchange = () => { document.querySelectorAll("#sbProtos .proto").forEach(p => p.classList.toggle("off", !$("enableSb").checked)); updateGroupCounts(); };
+document.querySelectorAll(".xp, .sp").forEach(el => el.addEventListener("change", updateGroupCounts));
+DIRECT_IDS.forEach(id => $(id).addEventListener("change", () => { updateGroupCounts(); updateCertCard(); if (id === "direct_vless_reality") updateRealityFields(); }));
 $("btnGenUuid").onclick = () => {
   const u = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16); });
   $("nodeUuid").value = u;
+  $("nodeUuid").classList.remove("field-err");
+  updateSubTpl();
 };
+$("nodeUuid").addEventListener("input", updateSubTpl);
+$("subDomain").addEventListener("input", updateSubTpl);
+// 输入变化即清除该字段的红框标记
+document.addEventListener("input", e => { if (e.target && e.target.classList) e.target.classList.remove("field-err"); });
+document.addEventListener("change", e => { if (e.target && e.target.classList) e.target.classList.remove("field-err"); });
 function setOut(el, msg, cls) { el.textContent = msg; el.className = "status " + (cls || "info"); }
+
+function portOk(el) {
+  const v = parseInt(el.value, 10);
+  return v >= 1 && v <= 65535;
+}
+function validateDeploy() {
+  const errs = [];
+  const mark = (el, name) => { if (el && el.classList) el.classList.add("field-err"); errs.push({el: el, name: name}); };
+  const tunnel = $("modeTunnel").checked, direct = $("modeDirect").checked;
+  if (!tunnel && !direct) errs.push({el: $("modeTunnel"), name: "部署方式（至少选择一种）"});
+  if (!UUID_RE.test($("nodeUuid").value.trim())) mark($("nodeUuid"), "节点 UUID");
+  if (tunnel) {
+    if (!$("argoToken").value.trim()) mark($("argoToken"), "Argo Token");
+    if ($("enableXray").checked) {
+      if (!$("xrayDomain").value.trim()) mark($("xrayDomain"), "Xray 子域名");
+      if (!portOk($("xrayPort"))) mark($("xrayPort"), "Xray 回源端口");
+      if (!document.querySelectorAll(".xp:checked").length) errs.push({el: $("argoGroup"), name: "Xray 协议（至少勾选一个）"});
+    }
+    if ($("enableSb").checked) {
+      if (!$("sbDomain").value.trim()) mark($("sbDomain"), "Sing-box 子域名");
+      if (!portOk($("sbPort"))) mark($("sbPort"), "Sing-box 回源端口");
+      if (!document.querySelectorAll(".sp:checked").length) errs.push({el: $("argoGroup"), name: "Sing-box 协议（至少勾选一个）"});
+    }
+    if (!$("enableXray").checked && !$("enableSb").checked) errs.push({el: $("argoGroup"), name: "隧道核心（至少启用 Xray 或 Sing-box）"});
+  }
+  if (direct) {
+    if (!DIRECT_IDS.some(id => $(id).checked)) errs.push({el: $("directGroup"), name: "直连协议（至少勾选一个）"});
+    DIRECT_IDS.forEach(id => {
+      if ($(id).checked) {
+        const p = $(id + "_port");
+        if (p && !portOk(p)) mark(p, $(id).closest(".proto").querySelector("label").textContent.trim() + " 端口");
+      }
+    });
+    if ($("direct_vless_reality").checked && !$("reality_dest").value.trim()) mark($("reality_dest"), "大厂域名（Reality）");
+    if (certNeeded()) {
+      const m = certMode();
+      if (m === "upload") {
+        if (!$("cert_pem").value.trim()) mark($("cert_pem"), "证书内容（cert_pem）");
+        if (!$("cert_key").value.trim()) mark($("cert_key"), "私钥内容（cert_key）");
+      }
+      if (m === "acme") {
+        const dom = $("directDomain").value.trim();
+        if (!dom || /^\d+\.\d+\.\d+\.\d+$/.test(dom) || dom.indexOf(".") < 0) mark($("directDomain"), "直连域名（ACME 需要域名，不能是 IP 或留空）");
+      }
+    }
+  }
+  const sp = $("subPath").value.trim();
+  if (!SUB_PATH_RE.test(sp) || RESERVED_SUB_PATH.indexOf(sp) >= 0) mark($("subPath"), "订阅路径");
+  return errs;
+}
 
 $("btnSaveCfg").onclick = async () => {
   try {
@@ -414,6 +668,16 @@ $("btnSaveCfg").onclick = async () => {
   } catch (e) { setOut($("deployOut"), e.message, "err"); }
 };
 $("btnDeploy").onclick = async () => {
+  const errs = validateDeploy();
+  if (errs.length) {
+    setOut($("deployOut"), "请补全以下必填项：" + errs.map(e => e.name).join("、"), "err");
+    const first = errs[0].el;
+    if (first) {
+      first.scrollIntoView({block: "center", behavior: "smooth"});
+      if (first.focus) { try { first.focus({preventScroll: true}); } catch (e) { first.focus(); } }
+    }
+    return;
+  }
   setOut($("deployOut"), "正在启动部署…", "info");
   $("btnDeploy").disabled = true;
   $("logWrap").classList.remove("hidden");
@@ -441,7 +705,7 @@ async function pollDeploy() {
       clearInterval(logTimer); logTimer = null;
       $("btnDeploy").disabled = false;
       setOut($("deployOut"), s.message || (s.state === "ok" ? "部署完成" : "部署失败"), s.state === "ok" ? "ok" : "err");
-      loadStatus(); loadSubscription();
+      loadStatus(); loadSubscription(); loadCert();
     }
   } catch (e) { /* 隧道重启导致短暂断开时, 下次轮询自动恢复 */ }
 }
@@ -452,6 +716,38 @@ $("btnClear").onclick = async () => {
     setOut($("deployOut"), r.message, "ok");
     loadStatus(); loadSubscription();
   } catch (e) { setOut($("deployOut"), e.message, "err"); }
+};
+
+$("btnRealityScan").onclick = async () => {
+  const out = $("realityScanOut");
+  out.textContent = "正在扫描大厂域名…";
+  out.className = "status info";
+  $("btnRealityScan").disabled = true;
+  $("btnPickBest").classList.add("hidden");
+  realityBest = null;
+  try {
+    const r = await api("/api/reality-scan", {method: "POST"});
+    const list = (r.results || []).slice().sort((a, b) => (a.latency_ms == null ? 99999 : a.latency_ms) - (b.latency_ms == null ? 99999 : b.latency_ms));
+    if (!list.length) throw new Error("未返回可用域名");
+    realityBest = list[0].domain;
+    out.textContent = "延迟由低到高：" + list.map(x => x.domain + " " + x.latency_ms + "ms").join("、");
+    out.className = "status ok";
+    $("btnPickBest").classList.remove("hidden");
+  } catch (e) {
+    out.textContent = e.message || "扫描失败";
+    out.className = "status err";
+  } finally {
+    $("btnRealityScan").disabled = false;
+  }
+};
+$("btnPickBest").onclick = () => {
+  if (!realityBest) return;
+  $("reality_dest").value = realityBest;
+  $("reality_sni").value = realityBest;
+  $("reality_dest").classList.remove("field-err");
+  const out = $("realityScanOut");
+  out.textContent = "已选择最低延迟域名：" + realityBest;
+  out.className = "status ok";
 };
 
 function setAddr(id, url, hint) {
@@ -482,8 +778,14 @@ async function loadSubscription() {
   } catch (e) {}
 }
 $("btnSaveSubPath").onclick = async () => {
+  const sp = $("subPathEdit").value.trim();
+  if (!SUB_PATH_RE.test(sp) || RESERVED_SUB_PATH.indexOf(sp) >= 0) {
+    $("subPathEdit").classList.add("field-err");
+    setOut($("subOut"), "订阅路径只能是字母/数字/._- (1-32 个字符), 不能是 api / config.json / help.txt", "err");
+    return;
+  }
   try {
-    const r = await api("/api/subscription", {method: "POST", body: JSON.stringify({sub_path: $("subPathEdit").value.trim()})});
+    const r = await api("/api/subscription", {method: "POST", body: JSON.stringify({sub_path: sp})});
     setOut($("subOut"), r.message, "ok");
     loadSubscription();
   } catch (e) { setOut($("subOut"), e.message, "err"); }

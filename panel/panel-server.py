@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-# Nexus-Argo 管理面板 v1 — 精简版 (2026-11-19)
+# Nexus-Argo 管理面板 v2 — 精简版 (2026-11-19)
 #
 # 只做两件事: 核心部署 + 自定义订阅地址。裂变/优选生成器不在面板里,
 # 手动用别的工具完成 (生成器方案保留在 web/sub-generator.html)。
+#
+# v2 新增: 直连协议扩展 (VLESS TCP/TLS/REALITY/WS/gRPC/QUIC、Trojan、
+# VMess WS、Sing-box Trojan、Shadowsocks、Hysteria2)、证书模式
+# (selfsigned / upload / acme) 与证书状态查询、REALITY 目标延迟探测。
+# 旧字段名 direct_xray_tls / direct_xray_quic 仍可用, 会映射到
+# direct_vless_tls / direct_vless_quic。
 #
 # 跑法 (panel-install.sh 起 nexus-panel 容器, python:3-alpine, 只有标准库):
 #   python3 /app/panel-server.py
@@ -25,6 +31,8 @@
 #   GET  /api/deploy/log?offset=N 部署日志增量 (按字节偏移)
 #   GET  /api/subscription        订阅地址 + 自定义路径
 #   POST /api/subscription        {sub_path} 改订阅路径, 重启 nexus-sub 生效
+#   GET  /api/cert               证书状态 (是否已部署 / 颁发给谁 / 到期时间 / 续期方式)
+#   POST /api/reality-scan       测几个常用域名的延迟, 挑 REALITY 目标域名
 #   POST /api/clear               清除本次部署 (节点容器 + 配置文件, 面板本身保留)
 #
 # 安全边界: 面板用账号密码登录 (默认 admin, 密码安装时随机生成,
@@ -32,11 +40,13 @@
 # 保留面板自身的隧道路由, cloudflared 重启导致页面短暂断开时
 # 前端自动重连。订阅地址本身就是凭证, 不要发给不该拿到节点的人。
 
+import datetime
 import hashlib
 import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import threading
 import time
@@ -60,9 +70,22 @@ UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 SUB_PATH_RE = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
 RESERVED_SUB_PATH = {"api", "config.json", "help.txt"}
 DOMAIN_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+IPV4_RE = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+
+
+def _is_ipv4(s):
+    """严格的 IPv4 判断 (每段 0-255), 避免把 999.1.1.1 当成地址。"""
+    if not s or not IPV4_RE.match(s):
+        return False
+    return all(0 <= int(p) <= 255 for p in s.split("."))
+
+
+def _is_domain(s):
+    """域名判断: 符合 DOMAIN_RE 且不是 IP 地址。"""
+    return bool(s) and bool(DOMAIN_RE.match(s)) and not _is_ipv4(s)
 
 # 部署过的服务容器 (健康检查用, 和 install.sh 里起的名字一致)
-SERVICES = ["nexus-argo", "nexus-xray", "nexus-singbox", "nexus-sb-dispatch", "nexus-sub", "nexus-web-panel"]
+SERVICES = ["nexus-argo", "nexus-panel-argo", "nexus-xray", "nexus-singbox", "nexus-sb-dispatch", "nexus-sub", "nexus-web-panel"]
 
 DEFAULT_CONFIG = {
     "node_uuid": "",
@@ -83,6 +106,38 @@ DEFAULT_CONFIG = {
     "sub_path": "sub",
     "enable_direct": False,
     "direct_domain": "",
+    # 直连 VLESS 系列 (TCP/TLS/REALITY/WS/gRPC/QUIC)
+    "direct_vless_tcp": False,
+    "direct_vless_tcp_port": 8082,
+    "direct_vless_tls": True,
+    "direct_vless_tls_port": 443,
+    "direct_vless_reality": False,
+    "direct_vless_reality_port": 9447,
+    "reality_dest": "",
+    "reality_sni": "",
+    "direct_vless_ws": False,
+    "direct_vless_ws_port": 8083,
+    "direct_vless_grpc": False,
+    "direct_vless_grpc_port": 8084,
+    "direct_vless_quic": False,
+    "direct_vless_quic_port": 443,
+    # 直连其它协议
+    "direct_trojan": False,
+    "direct_trojan_port": 9443,
+    "direct_vmess_ws": False,
+    "direct_vmess_ws_port": 9444,
+    "direct_sb_trojan": False,
+    "direct_sb_trojan_port": 9445,
+    "direct_ss": False,
+    "direct_ss_port": 8388,
+    "direct_hy2": False,
+    "direct_hy2_port": 9446,
+    # 证书: selfsigned 自签名 / upload 上传 / acme 自动签发
+    "cert_mode": "selfsigned",
+    "cert_pem": "",
+    "cert_key": "",
+    # 旧字段名 (兼容): direct_xray_tls -> direct_vless_tls,
+    # direct_xray_quic -> direct_vless_quic, direct_sb_tls 保持原义。
     "direct_xray_tls": True,
     "direct_xray_tls_port": 443,
     "direct_xray_quic": False,
@@ -90,6 +145,42 @@ DEFAULT_CONFIG = {
     "direct_sb_tls": True,
     "direct_sb_tls_port": 8443,
 }
+
+# 直连协议表: (开关字段, 端口字段, 正式名称, 是否走 TCP)
+# QUIC 与 Hysteria2 走 UDP, 端口只校验范围, 不参与 TCP 端口冲突检查。
+DIRECT_PROTOCOLS = [
+    ("direct_vless_tcp", "direct_vless_tcp_port", "直连 VLESS TCP", True),
+    ("direct_vless_tls", "direct_vless_tls_port", "直连 VLESS TLS", True),
+    ("direct_vless_reality", "direct_vless_reality_port", "直连 VLESS REALITY", True),
+    ("direct_vless_ws", "direct_vless_ws_port", "直连 VLESS WebSocket", True),
+    ("direct_vless_grpc", "direct_vless_grpc_port", "直连 VLESS gRPC", True),
+    ("direct_vless_quic", "direct_vless_quic_port", "直连 VLESS QUIC", False),
+    ("direct_trojan", "direct_trojan_port", "直连 Trojan", True),
+    ("direct_vmess_ws", "direct_vmess_ws_port", "直连 VMess WebSocket", True),
+    ("direct_sb_trojan", "direct_sb_trojan_port", "直连 Sing-box Trojan", True),
+    ("direct_ss", "direct_ss_port", "直连 Shadowsocks", True),
+    ("direct_hy2", "direct_hy2_port", "直连 Hysteria2", False),
+    ("direct_sb_tls", "direct_sb_tls_port", "直连 Sing-box TLS", True),
+]
+
+# 旧字段名 -> 新字段名 (只在新字段没出现时补, 新字段优先)
+_DIRECT_ALIASES = (
+    ("direct_vless_tls", "direct_xray_tls"),
+    ("direct_vless_tls_port", "direct_xray_tls_port"),
+    ("direct_vless_quic", "direct_xray_quic"),
+    ("direct_vless_quic_port", "direct_xray_quic_port"),
+)
+
+
+def _apply_direct_aliases(raw):
+    """把旧字段名映射到新字段名, 返回一份新字典 (不改原字典)。"""
+    if not isinstance(raw, dict):
+        return {}
+    raw = dict(raw)
+    for new, old in _DIRECT_ALIASES:
+        if new not in raw and old in raw:
+            raw[new] = raw[old]
+    return raw
 
 _sessions = {}  # token -> expiry (秒时间戳), 只放内存, 面板重启后重新登录
 _sessions_lock = threading.Lock()
@@ -118,9 +209,15 @@ def _save_json(path, data):
 def load_config():
     cfg = dict(DEFAULT_CONFIG)
     saved = _load_json(CONFIG_PATH, {})
+    saved = _apply_direct_aliases(saved)
     for k, v in saved.items():
         if k in cfg:
             cfg[k] = v
+    # 旧字段与新字段保持一致 (新字段为准, 旧配置里只有旧字段时已在上面映射过)
+    cfg["direct_xray_tls"] = cfg["direct_vless_tls"]
+    cfg["direct_xray_tls_port"] = cfg["direct_vless_tls_port"]
+    cfg["direct_xray_quic"] = cfg["direct_vless_quic"]
+    cfg["direct_xray_quic_port"] = cfg["direct_vless_quic_port"]
     return cfg
 
 
@@ -186,32 +283,45 @@ def _port_ok(v):
 
 
 def validate_config(raw):
-    """返回 (cleaned_config, [error, ...])。cleaned 是补全默认后的配置。"""
+    """返回 (cleaned_config, [error, ...])。cleaned 是补全默认后的配置。
+    报错都点名具体字段, 用正式中文, 不用笼统说法。
+    注意: /api/subscription 也调这里, 但只取含「订阅路径」的报错,
+    所以其它报错里不要出现「订阅路径」四个字。"""
     cfg = dict(DEFAULT_CONFIG)
     if isinstance(raw, dict):
+        raw = _apply_direct_aliases(raw)
         for k, v in raw.items():
             if k in cfg:
                 cfg[k] = v
     errors = []
 
+    cfg["enable_xray"] = _as_bool(cfg.get("enable_xray"), True)
+    cfg["enable_singbox"] = _as_bool(cfg.get("enable_singbox"), True)
+    tunnel_on = cfg["enable_xray"] or cfg["enable_singbox"]
+
     cfg["node_uuid"] = str(cfg.get("node_uuid") or "").strip()
-    if not UUID_RE.match(cfg["node_uuid"]):
+    cfg["argo_token"] = str(cfg.get("argo_token") or "").strip()
+    if tunnel_on:
+        if not cfg["argo_token"]:
+            errors.append("Argo Tunnel Token 未填写, 请填写 Cloudflare 隧道 Token")
+        if not UUID_RE.match(cfg["node_uuid"]):
+            errors.append("节点 UUID 格式不正确, 请点「安全生成」重新生成一个")
+    elif cfg["node_uuid"] and not UUID_RE.match(cfg["node_uuid"]):
         errors.append("节点 UUID 格式不正确, 请点「安全生成」重新生成一个")
 
     cfg["node_prefix"] = str(cfg.get("node_prefix") or "Nexus").strip() or "Nexus"
-    cfg["argo_token"] = str(cfg.get("argo_token") or "").strip()
     cfg["tunnel_protocol"] = str(cfg.get("tunnel_protocol") or "auto").strip().lower()
     if cfg["tunnel_protocol"] not in ("auto", "http2", "quic"):
         errors.append("隧道传输只能是 auto / http2 / quic")
 
-    cfg["enable_xray"] = _as_bool(cfg.get("enable_xray"), True)
-    cfg["enable_singbox"] = _as_bool(cfg.get("enable_singbox"), True)
     cfg["xray_port"] = _as_int(cfg.get("xray_port"), 8001)
     cfg["singbox_port"] = _as_int(cfg.get("singbox_port"), 8002)
     cfg["sub_port"] = _as_int(cfg.get("sub_port"), 18080)
-    for name in ("xray_port", "singbox_port", "sub_port"):
+    for name, label in (("xray_port", "Xray 回源端口"),
+                        ("singbox_port", "Sing-box 回源端口"),
+                        ("sub_port", "订阅端口")):
         if not _port_ok(cfg[name]):
-            errors.append(f"{name} 必须是 1-65535 的端口")
+            errors.append(f"{label}必须是 1-65535 的端口")
     if cfg["xray_port"] == cfg["singbox_port"]:
         errors.append("Xray 与 Sing-box 回源端口冲突, 请改成不一样的")
     if cfg["xray_port"] == 8080 or cfg["singbox_port"] == 8080:
@@ -262,45 +372,161 @@ def validate_config(raw):
     if not SUB_PATH_RE.match(cfg["sub_path"]) or cfg["sub_path"] in RESERVED_SUB_PATH:
         errors.append("订阅路径只能是字母/数字/._- (1-32 个字符), 不能是 api / config.json / help.txt")
 
+    # ---- 直连 ----
     cfg["enable_direct"] = _as_bool(cfg.get("enable_direct"), False)
     cfg["direct_domain"] = str(cfg.get("direct_domain") or "").strip()
-    cfg["direct_xray_tls"] = _as_bool(cfg.get("direct_xray_tls"), True)
-    cfg["direct_xray_tls_port"] = _as_int(cfg.get("direct_xray_tls_port"), 443)
-    cfg["direct_xray_quic"] = _as_bool(cfg.get("direct_xray_quic"), False)
-    cfg["direct_xray_quic_port"] = _as_int(cfg.get("direct_xray_quic_port"), 443)
-    cfg["direct_sb_tls"] = _as_bool(cfg.get("direct_sb_tls"), True)
-    cfg["direct_sb_tls_port"] = _as_int(cfg.get("direct_sb_tls_port"), 8443)
-    for name in ("direct_xray_tls_port", "direct_xray_quic_port", "direct_sb_tls_port"):
-        if not _port_ok(cfg[name]):
-            errors.append(f"{name} 必须是 1-65535 的端口")
+    # 直连域名可为空 (空 = 自动探测公网 IP); 填了就必须是域名或 IPv4
+    if cfg["direct_domain"] and not (DOMAIN_RE.match(cfg["direct_domain"]) or _is_ipv4(cfg["direct_domain"])):
+        errors.append("直连域名格式不正确, 请填写域名或 IPv4 地址")
+
+    for flag, port_key, _label, _is_tcp in DIRECT_PROTOCOLS:
+        default_on = flag in ("direct_vless_tls", "direct_sb_tls")
+        cfg[flag] = _as_bool(cfg.get(flag), default_on)
+    _direct_port_defaults = {
+        "direct_vless_tcp_port": 8082, "direct_vless_tls_port": 443,
+        "direct_vless_reality_port": 9447, "direct_vless_ws_port": 8083,
+        "direct_vless_grpc_port": 8084, "direct_vless_quic_port": 443,
+        "direct_trojan_port": 9443, "direct_vmess_ws_port": 9444,
+        "direct_sb_trojan_port": 9445, "direct_ss_port": 8388,
+        "direct_hy2_port": 9446, "direct_sb_tls_port": 8443,
+    }
+    for port_key, default in _direct_port_defaults.items():
+        cfg[port_key] = _as_int(cfg.get(port_key), default)
+    # 旧字段与新字段保持一致 (新字段为准)
+    cfg["direct_xray_tls"] = cfg["direct_vless_tls"]
+    cfg["direct_xray_tls_port"] = cfg["direct_vless_tls_port"]
+    cfg["direct_xray_quic"] = cfg["direct_vless_quic"]
+    cfg["direct_xray_quic_port"] = cfg["direct_vless_quic_port"]
+    # 直连端口范围 (全部协议, 含 UDP 的 QUIC / Hysteria2)
+    for _flag, port_key, label, _is_tcp in DIRECT_PROTOCOLS:
+        if not _port_ok(cfg[port_key]):
+            errors.append(f"{label}端口必须是 1-65535 的端口")
+
+    cfg["reality_dest"] = str(cfg.get("reality_dest") or "").strip()
+    cfg["reality_sni"] = str(cfg.get("reality_sni") or "").strip()
+    cfg["cert_mode"] = str(cfg.get("cert_mode") or "selfsigned").strip().lower()
+    cfg["cert_pem"] = str(cfg.get("cert_pem") or "")
+    cfg["cert_key"] = str(cfg.get("cert_key") or "")
+
     if cfg["enable_direct"]:
-        if not (cfg["direct_xray_tls"] or cfg["direct_xray_quic"] or cfg["direct_sb_tls"]):
+        enabled_direct = [(label, cfg[port_key])
+                          for flag, port_key, label, _is_tcp in DIRECT_PROTOCOLS
+                          if cfg[flag]]
+        if not enabled_direct:
             errors.append("启用直连时至少勾选一个直连协议")
-        if cfg["direct_xray_tls"] and cfg["direct_xray_tls_port"] in (8080, cfg["xray_port"], cfg["singbox_port"], cfg["sub_port"]):
-            errors.append("直连 Xray TLS 端口与其它端口冲突")
-        if cfg["direct_sb_tls"] and cfg["direct_sb_tls_port"] in (8080, cfg["xray_port"], cfg["singbox_port"], cfg["sub_port"], cfg["direct_xray_tls_port"]):
-            errors.append("直连 Sing-box TLS 端口与其它端口冲突")
-        # QUIC 走 UDP, 端口号可以和 TCP 端口相同, 只校验范围
+        # TCP 直连端口之间不能冲突, 也不能和 8080 / 回源端口 / 订阅端口冲突;
+        # QUIC 与 Hysteria2 走 UDP, 不参与 TCP 冲突检查。
+        # 只检查已勾选的协议 —— 没勾选的协议端口不拦保存, 勾选时再校验。
+        tcp_ports = [(label, cfg[port_key])
+                     for flag, port_key, label, is_tcp in DIRECT_PROTOCOLS
+                     if is_tcp and cfg[flag]]
+        seen = {}
+        for label, port in tcp_ports:
+            if port in seen:
+                errors.append(f"{label}端口与{seen[port]}端口冲突, 请更换")
+            else:
+                seen[port] = label
+        reserved = ((8080, "面板端口 8080"), (cfg["xray_port"], "Xray 回源端口"),
+                    (cfg["singbox_port"], "Sing-box 回源端口"), (cfg["sub_port"], "订阅端口"))
+        for label, port in tcp_ports:
+            for rport, rlabel in reserved:
+                if port == rport:
+                    errors.append(f"{label}端口与{rlabel}冲突, 请更换")
+                    break
+
+    # REALITY 开了就必须配目标域名 (域名, 不能是 IP); 直连没开时不校验,
+    # 否则只保存隧道配置也会被直连的残留设置拦住。
+    if cfg["enable_direct"] and cfg["direct_vless_reality"]:
+        if not cfg["reality_dest"]:
+            errors.append("REALITY 目标域名未填写, 请填写一个常用网站域名 (如 www.microsoft.com)")
+        elif not _is_domain(cfg["reality_dest"]):
+            errors.append("REALITY 目标域名格式不正确, 请填写域名 (不能是 IP 地址)")
+        if cfg["reality_sni"] and not _is_domain(cfg["reality_sni"]):
+            errors.append("REALITY SNI 格式不正确, 请填写域名 (不能是 IP 地址)")
+
+    # 证书模式: 只在直连开启时校验; 直连没开时证书设置不拦保存。
+    if cfg["enable_direct"] and cfg["cert_mode"] not in ("selfsigned", "upload", "acme"):
+        errors.append("证书模式不正确, 只能选择自签名 / 上传 / ACME")
+    elif cfg["enable_direct"] and cfg["cert_mode"] == "upload":
+        if not cfg["cert_pem"].strip():
+            errors.append("证书内容未填写, 上传证书模式下请填写证书内容 (PEM)")
+        elif "BEGIN CERTIFICATE" not in cfg["cert_pem"]:
+            errors.append("证书内容格式不正确, 应为 PEM 格式证书 (包含 BEGIN CERTIFICATE)")
+        if not cfg["cert_key"].strip():
+            errors.append("私钥内容未填写, 上传证书模式下请填写私钥内容 (PEM)")
+        elif "BEGIN PRIVATE KEY" not in cfg["cert_key"] and "BEGIN RSA PRIVATE KEY" not in cfg["cert_key"]:
+            errors.append("私钥内容格式不正确, 应为 PEM 格式私钥 (包含 BEGIN PRIVATE KEY)")
+    elif cfg["enable_direct"] and cfg["cert_mode"] == "acme":
+        if not cfg["direct_domain"]:
+            errors.append("直连域名未填写, ACME 模式需要填写直连域名 (不能为空)")
+        elif not _is_domain(cfg["direct_domain"]):
+            errors.append("直连域名格式不正确, ACME 模式需要填写域名 (不能是 IP 地址)")
 
     if not cfg["enable_xray"] and not cfg["enable_singbox"] and not cfg["enable_direct"]:
         errors.append("至少启用一个核心或直连")
     return cfg, errors
 
 
+def _load_reality_keys():
+    """读 $WORKDIR/direct/reality.json (install.sh 生成的 REALITY 密钥)。
+    文件不存在返回空值, 不报错。键名兼容几种写法。"""
+    data = _load_json(os.path.join(WORKDIR, "direct", "reality.json"), {})
+
+    def _pick(*names):
+        for n in names:
+            v = data.get(n)
+            if isinstance(v, str) and v:
+                return v
+        return ""
+
+    return {
+        "private_key": _pick("private_key", "privateKey", "REALITY_PRIVATE_KEY"),
+        "public_key": _pick("public_key", "publicKey", "REALITY_PUBLIC_KEY"),
+        "short_id": _pick("short_id", "shortId", "REALITY_SHORT_ID"),
+    }
+
+
+def _write_upload_cert(cfg):
+    """cert_mode=upload 时, 把配置里的证书写到 $WORKDIR/direct/cert.pem /
+    key.pem (600)。只在部署时调, 不要在保存配置时写, 避免没部署的
+    配置覆盖线上正在用的证书。返回 (ok, error_message)。"""
+    if cfg.get("cert_mode") != "upload":
+        return True, ""
+    pem = cfg.get("cert_pem") or ""
+    key = cfg.get("cert_key") or ""
+    if not pem or not key:
+        return False, "上传证书模式下证书或私钥为空"
+    d = os.path.join(WORKDIR, "direct")
+    try:
+        os.makedirs(d, exist_ok=True)
+        for name, content in (("cert.pem", pem), ("key.pem", key)):
+            path = os.path.join(d, name)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content if content.endswith("\n") else content + "\n")
+            os.chmod(path, 0o600)
+    except OSError as e:
+        return False, f"写入证书文件失败: {e}"
+    return True, ""
+
+
 def config_to_env(cfg):
     """部署配置 -> install.sh 的环境变量。"""
     def _cfgs(m):
         return ",".join(f"{p}:{port}" for p, port in m.items())
+
+    def _b(v):
+        return "true" if v else "false"
+    reality = _load_reality_keys()
     env = {
         "NODE_UUID": cfg["node_uuid"],
         "NODE_PREFIX": cfg["node_prefix"],
         "ARGO_TOKEN": cfg["argo_token"],
         "TUNNEL_PROTOCOL": cfg["tunnel_protocol"],
-        "ENABLE_XRAY": "true" if cfg["enable_xray"] else "false",
+        "ENABLE_XRAY": _b(cfg["enable_xray"]),
         "XRAY_PORT": str(cfg["xray_port"]),
         "XRAY_DOMAIN": cfg["xray_domain"],
         "XRAY_CONFIGS": _cfgs(cfg["xray_protocols"]),
-        "ENABLE_SINGBOX": "true" if cfg["enable_singbox"] else "false",
+        "ENABLE_SINGBOX": _b(cfg["enable_singbox"]),
         "SINGBOX_PORT": str(cfg["singbox_port"]),
         "SINGBOX_DOMAIN": cfg["singbox_domain"],
         "SINGBOX_CONFIGS": _cfgs(cfg["singbox_protocols"]),
@@ -308,13 +534,42 @@ def config_to_env(cfg):
         "SUB_DOMAIN": cfg["sub_domain"],
         "SUB_PORT": str(cfg["sub_port"]),
         "SUB_PATH": cfg["sub_path"],
-        "ENABLE_DIRECT": "true" if cfg["enable_direct"] else "false",
+        "ENABLE_DIRECT": _b(cfg["enable_direct"]),
         "DIRECT_DOMAIN": cfg["direct_domain"],
-        "DIRECT_XRAY_TLS": "true" if cfg["direct_xray_tls"] else "false",
-        "DIRECT_XRAY_TLS_PORT": str(cfg["direct_xray_tls_port"]),
-        "DIRECT_XRAY_QUIC": "true" if cfg["direct_xray_quic"] else "false",
-        "DIRECT_XRAY_QUIC_PORT": str(cfg["direct_xray_quic_port"]),
-        "DIRECT_SB_TLS": "true" if cfg["direct_sb_tls"] else "false",
+        "DIRECT_VLESS_TCP": _b(cfg["direct_vless_tcp"]),
+        "DIRECT_VLESS_TCP_PORT": str(cfg["direct_vless_tcp_port"]),
+        "DIRECT_VLESS_TLS": _b(cfg["direct_vless_tls"]),
+        "DIRECT_VLESS_TLS_PORT": str(cfg["direct_vless_tls_port"]),
+        "DIRECT_VLESS_REALITY": _b(cfg["direct_vless_reality"]),
+        "DIRECT_VLESS_REALITY_PORT": str(cfg["direct_vless_reality_port"]),
+        "REALITY_DEST": cfg["reality_dest"],
+        "REALITY_SNI": cfg["reality_sni"],
+        "REALITY_PRIVATE_KEY": reality["private_key"],
+        "REALITY_PUBLIC_KEY": reality["public_key"],
+        "REALITY_SHORT_ID": reality["short_id"],
+        "DIRECT_VLESS_WS": _b(cfg["direct_vless_ws"]),
+        "DIRECT_VLESS_WS_PORT": str(cfg["direct_vless_ws_port"]),
+        "DIRECT_VLESS_GRPC": _b(cfg["direct_vless_grpc"]),
+        "DIRECT_VLESS_GRPC_PORT": str(cfg["direct_vless_grpc_port"]),
+        "DIRECT_VLESS_QUIC": _b(cfg["direct_vless_quic"]),
+        "DIRECT_VLESS_QUIC_PORT": str(cfg["direct_vless_quic_port"]),
+        "DIRECT_TROJAN": _b(cfg["direct_trojan"]),
+        "DIRECT_TROJAN_PORT": str(cfg["direct_trojan_port"]),
+        "DIRECT_VMESS_WS": _b(cfg["direct_vmess_ws"]),
+        "DIRECT_VMESS_WS_PORT": str(cfg["direct_vmess_ws_port"]),
+        "DIRECT_SB_TROJAN": _b(cfg["direct_sb_trojan"]),
+        "DIRECT_SB_TROJAN_PORT": str(cfg["direct_sb_trojan_port"]),
+        "DIRECT_SS": _b(cfg["direct_ss"]),
+        "DIRECT_SS_PORT": str(cfg["direct_ss_port"]),
+        "DIRECT_HY2": _b(cfg["direct_hy2"]),
+        "DIRECT_HY2_PORT": str(cfg["direct_hy2_port"]),
+        "CERT_MODE": cfg["cert_mode"],
+        # 旧变量名 (兼容): 和新变量同值
+        "DIRECT_XRAY_TLS": _b(cfg["direct_vless_tls"]),
+        "DIRECT_XRAY_TLS_PORT": str(cfg["direct_vless_tls_port"]),
+        "DIRECT_XRAY_QUIC": _b(cfg["direct_vless_quic"]),
+        "DIRECT_XRAY_QUIC_PORT": str(cfg["direct_vless_quic_port"]),
+        "DIRECT_SB_TLS": _b(cfg["direct_sb_tls"]),
         "DIRECT_SB_TLS_PORT": str(cfg["direct_sb_tls_port"]),
     }
     return env
@@ -344,6 +599,19 @@ def _docker_running(name):
     if code != 0:
         return "not_installed"
     return "running" if out.strip() == "true" else "stopped"
+
+
+def _argo_tunnel_state():
+    """Argo 隧道状态 = 节点隧道 nexus-argo 与面板隧道 nexus-panel-argo
+    任一在跑即运行中。只查 nexus-argo 会漏掉面板隧道, 导致用户明明
+    已通过隧道进面板, 总览却显示灰色 (2026-11-19 实测)。"""
+    a = _docker_running("nexus-argo")
+    b = _docker_running("nexus-panel-argo")
+    if "running" in (a, b):
+        return "running"
+    if "stopped" in (a, b):
+        return "stopped"
+    return "not_installed"
 
 
 def _count_lines(path):
@@ -439,12 +707,10 @@ def _restart_sub(cfg):
     cmds = [["docker", "rm", "-f", "nexus-sub"]]
     run = ["docker", "run", "-d", "--name", "nexus-sub", "--restart", "unless-stopped",
            "-p", f"127.0.0.1:{cfg['sub_port']}:{cfg['sub_port']}"]
-    for k in ("NODE_UUID", "NODE_PREFIX", "XRAY_DOMAIN", "XRAY_CONFIGS",
-              "SINGBOX_DOMAIN", "SINGBOX_CONFIGS", "ENABLE_XRAY", "ENABLE_SINGBOX",
-              "OPT_ADDRS", "SUB_PORT", "SUB_PATH", "ENABLE_DIRECT", "DIRECT_DOMAIN",
-              "DIRECT_XRAY_TLS", "DIRECT_XRAY_TLS_PORT", "DIRECT_XRAY_QUIC",
-              "DIRECT_XRAY_QUIC_PORT", "DIRECT_SB_TLS", "DIRECT_SB_TLS_PORT"):
-        run += ["-e", f"{k}={env[k]}"]
+    # 全部部署变量都传进去 (和 config_to_env 同一份, 含 DIRECT_* / REALITY_* / CERT_MODE),
+    # 这样订阅里直连节点的链接也能按最新配置生成
+    for k, v in env.items():
+        run += ["-e", f"{k}={v}"]
     run += ["-v", f"{sub_py}:/app/sub-server.py:ro"]
     if os.path.isfile(gen_html):
         run += ["-v", f"{gen_html}:/app/sub-generator.html:ro"]
@@ -458,6 +724,55 @@ def _restart_sub(cfg):
     if _docker_running("nexus-sub") != "running":
         return False, "nexus-sub 启动后不在运行, 看 docker logs nexus-sub"
     return True, "订阅服务已重启, 新订阅地址已生效"
+
+
+def _parse_openssl_date(s):
+    """openssl notAfter 如 "Nov 19 00:00:00 2036 GMT" -> date, 解析失败返回 None。"""
+    try:
+        return datetime.datetime.strptime(s.strip(), "%b %d %H:%M:%S %Y %Z").date()
+    except Exception:
+        return None
+
+
+def cert_info(cfg):
+    """证书状态。证书内容本身绝不返回, 只返回主题、到期日和续期方式。"""
+    mode = cfg.get("cert_mode") or "selfsigned"
+    cert_path = os.path.join(WORKDIR, "direct", "cert.pem")
+    if mode == "selfsigned":
+        renew_note = "无需续期 (10年)"
+    elif mode == "acme":
+        renew_note = "ACME 自动续期 (90天)"
+    else:
+        renew_note = "到期前请重新上传"
+    base = {"installed": False, "mode": mode, "message": "未部署"}
+    if not os.path.isfile(cert_path):
+        return base
+    base = {"installed": True, "mode": mode,
+            "auto_renew": mode == "acme", "renew_note": renew_note}
+    out, code = _run(["openssl", "x509", "-in", cert_path, "-noout",
+                      "-subject", "-enddate"], timeout=5)
+    if code != 0 or not out:
+        base.update({"subject": "", "expiry": "", "days_left": None,
+                     "message": "证书信息读取失败, 请检查证书文件"})
+        return base
+    subject = ""
+    expiry_raw = ""
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("subject="):
+            raw_subj = line[len("subject="):].strip()
+            m = re.search(r"CN\s*=\s*([^,/]+)", raw_subj)
+            subject = m.group(1).strip() if m else raw_subj
+        elif line.startswith("notAfter="):
+            expiry_raw = line[len("notAfter="):].strip()
+    exp_date = _parse_openssl_date(expiry_raw)
+    if exp_date is None:
+        base.update({"subject": subject, "expiry": "", "days_left": None,
+                     "message": "证书到期时间解析失败"})
+        return base
+    base.update({"subject": subject, "expiry": exp_date.isoformat(),
+                 "days_left": (exp_date - datetime.date.today()).days})
+    return base
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -531,6 +846,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             cfg = load_config()
             services = [{"name": n, "state": _docker_running(n)} for n in SERVICES]
+            # nexus-argo 那一项取合并后的隧道状态 (节点隧道或面板隧道任一在跑)
+            for svc in services:
+                if svc["name"] == "nexus-argo":
+                    svc["state"] = _argo_tunnel_state()
             st = deploy_status()
             sub = subscription_urls(cfg)
             self._send_json({
@@ -576,6 +895,11 @@ class Handler(BaseHTTPRequestHandler):
             if not self._need_auth():
                 return
             self._send_json(subscription_urls(load_config()))
+            return
+        if path == "/api/cert":
+            if not self._need_auth():
+                return
+            self._send_json(cert_info(load_config()))
             return
         self._send_json({"error": "未知路径"}, 404)
 
@@ -623,6 +947,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "；".join(errors)}, 400)
                 return
             _save_json(CONFIG_PATH, cfg)
+            # 上传证书模式: 部署开始前先把证书写到磁盘 (只在这里写,
+            # 保存配置时不写, 避免没部署的配置覆盖线上证书)
+            ok, msg = _write_upload_cert(cfg)
+            if not ok:
+                self._send_json({"error": msg}, 500)
+                return
             with _deploy_lock:
                 if _deploy_thread is not None and _deploy_thread.is_alive():
                     self._send_json({"error": "已有部署在跑, 请等它完成"}, 409)
@@ -654,6 +984,31 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "message": msg, "subscription": subscription_urls(cfg)})
             else:
                 self._send_json({"ok": True, "message": "已保存, 下次部署时生效", "subscription": subscription_urls(cfg)})
+            return
+
+        if path == "/api/reality-scan":
+            # 测几个常用域名到本机的延迟, 供 REALITY 目标域名挑选。
+            # 延迟是实测值, 失败记 null, 不伪造。
+            if shutil.which("curl") is None:
+                self._send_json({"error": "curl 不可用"}, 500)
+                return
+            domains = ["www.microsoft.com", "www.apple.com", "www.google.com",
+                       "www.amazon.com", "www.cloudflare.com", "www.bing.com",
+                       "dl.google.com"]
+            results = []
+            for d in domains:
+                out, code = _run(["curl", "-o", "/dev/null", "-s", "-w", "%{time_total}",
+                                  "--max-time", "5", f"https://{d}/"], timeout=6)
+                latency = None
+                if code == 0 and out:
+                    try:
+                        latency = int(round(float(out.strip()) * 1000))
+                    except Exception:
+                        latency = None
+                results.append({"domain": d, "latency_ms": latency})
+            results.sort(key=lambda r: (r["latency_ms"] is None, r["latency_ms"] or 0))
+            best = next((r["domain"] for r in results if r["latency_ms"] is not None), None)
+            self._send_json({"results": results, "best": best})
             return
 
         if path == "/api/clear":
