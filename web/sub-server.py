@@ -18,7 +18,7 @@
 #     SUB_PORT (监听端口, 默认 18080),
 #     SUB_PATH (订阅路径前缀, 默认 sub, 面板自定义订阅地址),
 #     ENABLE_DIRECT, DIRECT_DOMAIN, DIRECT_XRAY_TLS,
-#     DIRECT_XRAY_TLS_PORT, DIRECT_XRAY_QUIC, DIRECT_XRAY_QUIC_PORT,
+#     DIRECT_XRAY_TLS_PORT,
 #     DIRECT_SB_TLS, DIRECT_SB_TLS_PORT (直连节点, 原样进订阅, 不裂变)
 #     直连新协议 (与 install.sh 同一套变量、同一套链接规则, 改一处
 #     要改另一处; 只有开启的协议才渲染、才进订阅):
@@ -55,10 +55,10 @@
 #       不带 addrs 就用部署时的 OPT_ADDRS
 #       &format=singbox: 只去掉 xhttp 节点与带 VLESS 加密层的节点
 #       (Sing-box 没有 xhttp 传输, 也不支持 VLESS Encryption, 其余
-#       都留着: trojan/vmess/ss/hysteria2/vless 含 quic/reality 都
+#       都留着: trojan/vmess/ss/hysteria2/vless 含 reality 都
 #       支持, 开了加密层的 Reality 节点除外), 仍是 base64;
 #       &format=clash: Mihomo YAML
-#       (QUIC 与带 VLESS 加密层的节点除外, Mihomo 不支持 QUIC /
+#       (带 VLESS 加密层的节点除外, Mihomo 不支持 VLESS 加密 /
 #       VLESS Encryption; 支持 trojan/vmess/ss/
 #       hysteria2/vless-reality)
 #   GET /<SUB_PATH>/merged?url=<外部订阅地址>&addrs=a,b
@@ -107,12 +107,11 @@ if not re.match(r"^[A-Za-z0-9._-]+$", SUB_PATH):
 # 直连节点: 地址就是 VPS 自己, 原样进订阅, 不参与优选地址裂变
 ENABLE_DIRECT = os.environ.get("ENABLE_DIRECT", "false").lower() in ("true", "1", "yes")
 DIRECT_DOMAIN = os.environ.get("DIRECT_DOMAIN", "").strip()
-# 新名 DIRECT_VLESS_TLS/QUIC 与旧名 DIRECT_XRAY_TLS/QUIC 是同一协议的
-# 两个名字 (install.sh 与 panel 两边都传, 以新名为准); 只传其一时也要认。
+# 新名 DIRECT_VLESS_TLS 与旧名 DIRECT_XRAY_TLS 是同一协议的两
+# 个名字 (install.sh 与 panel 两边都传, 以新名为准); 只传其一时也要认。
+# 直连 VLESS+QUIC 已删除 (2026-11-19): Xray 26.11.9 移除了独立 QUIC 传输。
 DIRECT_XRAY_TLS = (os.environ.get("DIRECT_VLESS_TLS", os.environ.get("DIRECT_XRAY_TLS", "true")) or "true").lower() in ("true", "1", "yes")
 DIRECT_XRAY_TLS_PORT = int(os.environ.get("DIRECT_VLESS_TLS_PORT", os.environ.get("DIRECT_XRAY_TLS_PORT", "443")) or 443)
-DIRECT_XRAY_QUIC = (os.environ.get("DIRECT_VLESS_QUIC", os.environ.get("DIRECT_XRAY_QUIC", "false")) or "false").lower() in ("true", "1", "yes")
-DIRECT_XRAY_QUIC_PORT = int(os.environ.get("DIRECT_VLESS_QUIC_PORT", os.environ.get("DIRECT_XRAY_QUIC_PORT", "443")) or 443)
 DIRECT_SB_TLS = os.environ.get("DIRECT_SB_TLS", "true").lower() in ("true", "1", "yes")
 DIRECT_SB_TLS_PORT = int(os.environ.get("DIRECT_SB_TLS_PORT", "8443") or 8443)
 DIRECT_VLESS_TCP = os.environ.get("DIRECT_VLESS_TCP", "false").lower() in ("true", "1", "yes")
@@ -134,9 +133,10 @@ DIRECT_SS_PORT = int(os.environ.get("DIRECT_SS_PORT", "8388") or 8388)
 DIRECT_HY2 = os.environ.get("DIRECT_HY2", "false").lower() in ("true", "1", "yes")
 DIRECT_HY2_PORT = int(os.environ.get("DIRECT_HY2_PORT", "9446") or 9446)
 CERT_MODE = os.environ.get("CERT_MODE", "selfsigned").strip().lower() or "selfsigned"
-REALITY_DEST = os.environ.get("REALITY_DEST", "").strip()
-REALITY_SNI = os.environ.get("REALITY_SNI", "").strip()
-REALITY_EFF_SNI = os.environ.get("REALITY_EFF_SNI", "").strip() or REALITY_SNI or REALITY_DEST
+# 目标可带端口 (3X-UI 式, 如 www.microsoft.com:443): 端口剥掉再用。
+REALITY_DEST = os.environ.get("REALITY_DEST", "").strip().split(":")[0]
+REALITY_SNI = os.environ.get("REALITY_SNI", "").strip().split(":")[0]
+REALITY_EFF_SNI = os.environ.get("REALITY_EFF_SNI", "").strip().split(":")[0] or REALITY_SNI or REALITY_DEST
 REALITY_PUBLIC_KEY = os.environ.get("REALITY_PUBLIC_KEY", "").strip()
 REALITY_SHORT_ID = os.environ.get("REALITY_SHORT_ID", "").strip()
 # Reality 链接参数 (Part A/B 合同): 指纹 / flow / 加密方式 /
@@ -158,14 +158,14 @@ HELP = (
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=singbox\n"
     "    Sing-box 订阅: 只去掉 xhttp 节点与带 VLESS 加密层的节点\n"
     "    (base64, Sing-box 没有 xhttp 传输、也不支持 VLESS Encryption;\n"
-    "    trojan/vmess/ss/hysteria2/vless 含 quic/reality 都保留, 开了\n"
+    "    trojan/vmess/ss/hysteria2/vless 含 reality 都保留, 开了\n"
     "    加密层的 Reality 节点除外)\n\n"
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=clash\n"
-    "    Clash 订阅: Mihomo YAML (xhttp 需 Mihomo 1.19+, QUIC 与带\n"
+    "    Clash 订阅: Mihomo YAML (xhttp 需 Mihomo 1.19+, 带\n"
     "    VLESS 加密层的节点除外; 支持 trojan/vmess/ss/\n"
     "    hysteria2/vless-reality)\n\n"
     "直连协议: Xray VLESS 明文 TCP / TLS / Reality / 明文 WS / gRPC+TLS /\n"
-    "QUIC、Trojan+TLS、VMess+WS+TLS; Sing-box VLESS+TLS、Trojan+TLS、\n"
+    "Trojan+TLS、VMess+WS+TLS; Sing-box VLESS+TLS、Trojan+TLS、\n"
     "Shadowsocks (aes-256-gcm)、Hysteria2。直连节点原样进订阅, 不裂变。\n\n"
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=auto\n"
     "    通用订阅: 按客户端 User-Agent 自适应 (Clash 系返回 YAML,\n"
@@ -280,10 +280,6 @@ def direct_links():
         links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_GRPC_PORT}/?encryption=none&security=tls"
                      f"&sni={dd}&type=grpc&serviceName=grpc{_ai()}"
                      f"#{PREFIX_DIRECT}丨Xray-gRPC")
-    if DIRECT_XRAY_QUIC:
-        links.append(f"vless://{UUID}@{dd}:{DIRECT_XRAY_QUIC_PORT}/?encryption=none&security=tls"
-                     f"&sni={dd}&type=quic&quicSecurity=none&headerType=none{_ai()}"
-                     f"#{PREFIX_DIRECT}丨Xray-QUIC")
     if DIRECT_TROJAN:
         links.append(f"trojan://{UUID}@{dd}:{DIRECT_TROJAN_PORT}?security=tls&sni={dd}{_ai()}"
                      f"#{PREFIX_DIRECT}丨Xray-Trojan")
@@ -492,7 +488,6 @@ def clash_yaml(links):
     #   vmess             -> type: vmess, uuid, alterId 0, cipher auto, ws, tls
     #   ss                -> type: ss, cipher, password
     #   hysteria2         -> type: hysteria2, password, sni, alpn [h3]
-    # quic 跳过: Mihomo 不支持 QUIC。
     proxies = []
     for link in links:
         p = _parse_link(link)
