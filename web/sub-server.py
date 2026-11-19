@@ -49,8 +49,10 @@
 #   GET /                              订阅生成器面板 (sub-generator.html)
 #   GET /config.json                   部署时的 UUID / 默认优选地址, 供面板用
 #   GET /help.txt                      纯文本说明
-#   GET /<SUB_PATH>/raw/<uuid>         原生订阅, 1 协议 = 1 节点 (隧道 + 直连)
-#   GET /<SUB_PATH>/merged/<uuid>?addrs=a,b
+#   GET /<uuid>/<SUB_PATH>/raw         原生订阅, 1 协议 = 1 节点 (隧道 + 直连, UUID 在前)
+#   GET /<SUB_PATH>/raw/<uuid>         旧地址, 兼容保留
+#   GET /<uuid>/<SUB_PATH>/merged?addrs=a,b
+#   GET /<SUB_PATH>/merged/<uuid>?addrs=a,b   旧地址, 兼容保留
 #       动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上;
 #       不带 addrs 就用部署时的 OPT_ADDRS
 #       &format=singbox: 只去掉 xhttp 节点与带 VLESS 加密层的节点
@@ -150,9 +152,9 @@ REALITY_ENC_CLIENT = os.environ.get("REALITY_ENC_CLIENT", "").strip() or "none"
 
 HELP = (
     "Nexus-Argo 动态订阅\n\n"
-    f"GET /{SUB_PATH}/raw/<uuid>\n"
+    f"GET /<uuid>/{SUB_PATH}/raw\n"
     "    原生订阅 (隧道 + 直连)\n\n"
-    f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c\n"
+    f"GET /<uuid>/{SUB_PATH}/merged?addrs=a,b,c\n"
     "    动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上\n"
     "    不带 addrs: 用部署时的优选地址\n\n"
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=singbox\n"
@@ -724,6 +726,18 @@ class Handler(BaseHTTPRequestHandler):
             self._send("\n".join(fission(tunnel_links(), list(OPT_ADDRS)) + direct_links()) + "\n")
             return
 
+        raw_m = re.match(r"^/([^/]+)/" + re.escape(SUB_PATH) + r"/raw$", path)
+        if raw_m:
+            if raw_m.group(1) != UUID:
+                self._send("uuid 不匹配", 404)
+                return
+            links = native_links()
+            if not links:
+                self._send("未配置任何核心", 500)
+                return
+            self._sub(links)
+            return
+
         raw_m = re.match(r"^/" + re.escape(SUB_PATH) + r"/raw/(.+)$", path)
         if raw_m:
             if raw_m.group(1) != UUID:
@@ -734,6 +748,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._send("未配置任何核心", 500)
                 return
             self._sub(links)
+            return
+
+        merged_m = re.match(r"^/([^/]+)/" + re.escape(SUB_PATH) + r"/merged$", path)
+        if merged_m:
+            if merged_m.group(1) != UUID:
+                self._send(f"uuid 不匹配: /<uuid>/{SUB_PATH}/merged?addrs=a,b,c", 404)
+                return
+            addrs = parse_addrs(query)
+            merged = fission(tunnel_links(), addrs) + direct_links()
+            if not merged:
+                self._send("订阅为空", 502)
+                return
+            self._sub(merged)
             return
 
         merged_m = re.match(r"^/" + re.escape(SUB_PATH) + r"/merged(?:/(.+))?$", path)
