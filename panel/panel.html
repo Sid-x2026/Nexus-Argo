@@ -91,7 +91,7 @@
   .sec-card.direct h4 { color: #15803d; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 14.5px; padding: 7px 10px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 13.5px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 640px; } .card input[type=number] { max-width: 140px; text-align: center; } .card textarea { max-width: 640px; } .direct-cols h4 { min-height: 42px; line-height: 1.4; margin-bottom: 2px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 5px 0 3px; } #realityCard input, #realityCard select { padding: 6px 9px; } #realityCard .hint { margin: 0 0 5px; }
+  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; margin: 4px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 14.5px; padding: 6px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 13.5px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 640px; } .card input[type=number] { max-width: 140px; text-align: center; } .card textarea { max-width: 640px; } .direct-cols h4 { min-height: 42px; line-height: 1.4; margin-bottom: 2px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 4px 0 2px; } #realityCard input, #realityCard select { padding: 5px 8px; } #realityCard .hint { margin: 0 0 3px; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 10px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
   .scan-table th { color: #64748b; font-weight: 600; }
@@ -288,7 +288,7 @@
         <div class="cfg-grid">
         <div id="directFields" class="mode-box direct hidden">
           <h4>直连安全配置</h4>
-          <div class="warn">直连会暴露 VPS 真实 IP，仅作备用；请使用与隧道节点不同的子域名。</div>
+          <div class="warn">直连将暴露 VPS 真实 IP，仅作备用；须与隧道节点使用不同子域名。</div>
           <div class="proto-wrap">
             <div class="sec-card direct">
               <h4>直连域名与前缀</h4>
@@ -297,14 +297,14 @@
               <p class="hint">留空使用 VPS 公网 IP。申请 ACME 证书须填写域名；域名须在 Cloudflare 添加 A 记录指向 VPS IP，并关闭代理（DNS only）。</p>
               <label class="f">直连 SNI <span class="opt">选填</span></label>
               <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同；TLS 握手用的域名">
-              <p class="hint">默认与直连地址相同，可自行修改。Reality 的 SNI 请使用目标扫描结果。</p>
+              <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
               <h4 style="margin-top:14px;">其他安全参数</h4>
               <p class="hint">Trojan、VMess、Hysteria2 及 Shadowsocks 的密码均为节点 UUID；Shadowsocks 加密方式为 aes-256-gcm。</p>
             </div>
             <div class="sec-card direct">
               <h4>证书配置</h4>
               <div id="certCard" class="hidden">
-                <p class="hint">当前选中的直连协议需要证书（Reality、VLESS + TCP、Shadowsocks 不需要证书）。</p>
+                <p class="hint">当前选中的直连协议需要证书；Reality、VLESS + TCP、Shadowsocks 除外。</p>
                 <div class="pills">
                   <label class="pill"><input type="radio" name="certMode" value="acme" checked> ACME 自动申请（默认）</label>
                   <label class="pill"><input type="radio" name="certMode" value="selfsigned"> 自签名</label>
@@ -317,7 +317,7 @@
                   <label class="f">私钥内容（cert_key） <span class="req">* 必填</span></label>
                   <textarea id="cert_key" rows="4" class="mono" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
                 </div>
-                <div id="certAcmeNote" class="warn hidden">ACME 自动申请：域名须解析到 VPS，端口 80 须放行；申请失败自动回退自签名。</div>
+                <div id="certAcmeNote" class="warn hidden">ACME 自动申请：域名须解析至 VPS，端口 80 须放行。</div>
                 <div id="certStatusLine" class="status info">证书状态：加载中…</div>
               </div>
               <p id="certNotNeeded" class="hint">当前选中的协议不需要证书，无需配置。</p>
@@ -327,10 +327,10 @@
         <div id="realitySection">
 <div id="realityCard" class="sec-card direct" style="width:100%;">
             <h4>Reality 配置</h4>
-            <p class="hint">不勾选 VLESS + Reality 时，此处不可修改。Reality 不需要大厂域名的证书。</p>
+            <p class="hint">未勾选 VLESS + Reality 时，此处不可修改。Reality 无需证书。</p>
             <label class="f">目标 <span class="req">* 必填</span></label>
             <div style="display:flex; gap:8px;"><input type="text" id="reality_dest" class="mono" placeholder="例如 www.microsoft.com:443，留空用自己的域名"><button type="button" class="sm ghost scan-btn" id="btnRealityScan" style="flex-shrink:0;">扫描</button><button type="button" class="sm ghost scan-btn" id="btnRealityFind" style="flex-shrink:0;">查找目标</button></div>
-            <p class="hint">扫描：扫上面输入框里填的域名。查找目标：弹出 REALITY 目标扫描器，选一行点「使用」自动填入。</p>
+            <p class="hint">扫描：检测上方输入的域名；查找目标：打开目标扫描器，选择一行点「使用」自动填入。</p>
             <div id="realityScanOut" class="status info"></div>
             <div id="realityResultCard" class="hidden" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:13px; line-height:1.8;"></div>
             <div id="realityScanModal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:99; display:flex; align-items:center; justify-content:center;"><div style="background:#fff; border-radius:12px; padding:16px; width:min(860px,92vw); max-height:80vh; overflow:auto;"><div style="display:flex; justify-content:space-between; align-items:center;"><h3 style="margin:0;">REALITY 目标扫描器</h3><button type="button" class="sm ghost" id="btnCloseRealityModal">关闭</button></div><div id="realityScanModalOut" class="status info" style="margin:8px 0;">正在扫描…</div><div style="overflow-x:auto;"><table class="scan-table"><thead><tr><th>目标</th><th>状态</th><th>TLS</th><th>ALPN</th><th>密钥交换</th><th>证书</th><th>证书有效期</th><th>证书链</th><th>延迟</th><th>操作</th></tr></thead><tbody id="realityScanBody"></tbody></table></div></div></div>
@@ -338,12 +338,12 @@
             <input type="text" id="reality_sni" class="mono" placeholder="默认与目标域名相同，可填自己的域名">
             <label class="f">公钥 <span class="opt">只读</span></label>
             <input type="text" id="reality_pubkey" class="mono" readonly placeholder="未生成，点下方获取新证书">
-            <p class="hint">私钥保存在服务器 reality.json，不会返回前端。扫完目标或自己填好域名，马上点获取证书，是一整套顺序。</p>
+            <p class="hint">私钥保存于服务器 reality.json，不返回前端；确定目标后请立即获取证书。</p>
             <div class="btnrow" style="margin-top:6px;"><button type="button" class="sm ghost" id="btnRealityNewKeys">获取新证书</button><button type="button" class="sm ghost" id="btnRealityClearKeys" style="color:#dc2626; border-color:#fecaca;">清除</button></div>
             <label class="f">Short IDs <span class="opt">选填</span></label>
             <div id="realityShortIds"></div>
             <div style="display:flex; gap:8px; margin-top:8px;"><input type="text" id="reality_short_id_new" class="mono" placeholder="新增 Short ID (hex, 如 c8f27e)"><button type="button" class="sm ghost" id="btnAddShortId" style="flex-shrink:0;">添加</button><button type="button" class="sm ghost" id="btnRegenShortIds" style="flex-shrink:0;">重新生成</button></div>
-            <p class="hint">Short IDs 可以有多个，第一项用于生成节点链接；部署时自动生成并保存在 reality.json。</p>
+            <p class="hint">Short ID 可添加多个，第一项用于生成节点链接；部署时自动生成并保存。</p>
             <div class="row2">
               <div>
                 <label class="f">指纹 <span class="opt">选填</span></label>
@@ -661,7 +661,7 @@ function updateCertModeBox() {
   const notes = {
     selfsigned: "自签名证书有效期 10 年，无需续期。",
     upload: "上传证书到期后需重新上传。",
-    acme: "ACME 证书有效期 90 天，剩余 30 天自动续期；域名须解析到 VPS，端口 80 须放行，申请失败自动回退自签名。",
+    acme: "ACME 证书有效期 90 天，剩余 30 天自动续期；域名须解析至 VPS，端口 80 须放行；申请失败自动回退自签名。",
   };
   $("certModeNote").textContent = notes[m] || "";
 }
