@@ -65,8 +65,8 @@
   .pill:has(input:checked) { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; }
   .pill input { accent-color: #6366f1; }
   .mode-box { border-radius: 14px; padding: 14px; margin-top: 10px; border: 1px solid #e2e8f0; border-left: 5px solid; }
-  .mode-box.direct { background: #f0fdf4; border-left-color: #16a34a; }
-  .mode-box.direct h4 { color: #15803d; margin: 0 0 8px; font-size: 14.5px; }
+  .mode-box.direct { background: #eef2ff; border-left-color: #6366f1; }
+  .mode-box.direct h4 { color: #4f46e5; margin: 0 0 8px; font-size: 14.5px; }
   .mode-box.tunnel { background: #eef2ff; border-left-color: #6366f1; }
   .mode-box.tunnel h4 { color: #4f46e5; margin: 0 0 8px; font-size: 14.5px; }
   .proto { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 15px; padding: 5px 8px; margin-top: 4px; }
@@ -87,11 +87,11 @@
   @media (max-width: 900px) { .proto-wrap { flex-direction: column; } }
   .sec-card { flex: 1; min-width: 0; border: 1px solid #eef0fb; border-radius: 12px; padding: 12px 14px; background: #fafaff; }
   .sec-card h4 { margin: 0 0 4px; font-size: 14px; color: var(--tx); }
-  .sec-card.direct { background: #f0fdf4; border-color: #bbf7d0; }
-  .sec-card.direct h4 { color: #15803d; }
+  .sec-card.direct { background: #eef2ff; border-color: #c7d2fe; }
+  .sec-card.direct h4 { color: #4f46e5; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 15px; margin: 2px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 16px; padding: 6px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 15px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; } #argoToken { max-width: 900px; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols h4 { min-height: 42px; line-height: 1.4; margin-bottom: 2px; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 200px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 200px; text-align: center; }  #tunnelFields .row2 { margin-top: 12px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 344px 344px; gap: 212px; justify-content: start; }  .row-prefix { grid-template-columns: 150px 150px !important; gap: 100px !important; justify-content: start !important; } #argoPrefix, #directPrefix { max-width: 150px; }  #tunnelFields .row2.uuid-row { grid-template-columns: 600px 200px; gap: 100px; justify-content: start; } #nodeUuid { flex: none; width: 380px; }  .proto .port input { font-size: 16.5px; width: 64px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 2px 0 2px; } #realityCard input, #realityCard select { padding: 5px 8px; } #realityCard .hint { margin: 0 0 2px; }
+  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 15px; margin: 2px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 16px; padding: 6px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 15px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; } #argoToken { max-width: 900px; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols h4 { min-height: 42px; line-height: 1.4; margin-bottom: 2px; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 300px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 300px; text-align: center; }  #tunnelFields .row2 { margin-top: 12px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 444px 444px; gap: 12px; justify-content: start; }  .row-prefix { grid-template-columns: 150px 150px !important; gap: 100px !important; justify-content: start !important; } #argoPrefix, #directPrefix { max-width: 150px; }  #nodeUuid { flex: none; width: 380px; }  .proto .port input { font-size: 16.5px; width: 64px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 2px 0 2px; } #realityCard input, #realityCard select { padding: 6px 9px; } #realityCard .hint { margin: 0 0 4px; } #realityCard input[type=text], #realityCard select { max-width: 300px; } #tunnelFields .optaddr-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; } #tunnelFields .optaddr-row label.f { margin: 0; white-space: nowrap; } .warn-inline { display: inline-block; background: #fef9c3; border: 1px solid #fde68a; color: #854d0e; border-radius: 8px; padding: 2px 8px; font-size: 12.5px; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 10px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
   .scan-table th { color: #64748b; font-weight: 600; }
@@ -239,11 +239,13 @@
           <label class="pill"><input type="checkbox" name="clientSel" value="ios"> iOS</label>
         </div>
 
-        <h3 class="step-h">③ 协议选择</h3>
+        <h3 class="step-h">③ 协议选择 | UUID 生成</h3>
                 <div class="pills">
           <label class="pill"><input type="radio" name="clientMode" value="recommended" checked> 推荐协议</label>
           <label class="pill"><input type="radio" name="clientMode" value="suitable"> 全部适配协议</label>
         </div>
+        <div class="uuid-row" style="margin-top:12px;"><label class="f">节点 UUID <span class="req">* 必填</span></label>
+        <div style="display:flex; gap:4px;"><input type="text" id="nodeUuid" class="mono" placeholder="点右侧生成"><button class="ghost sm" id="btnGenUuid" type="button">生成</button></div></div>
         <div class="proto-wrap">
         <details id="argoGroup" class="proto-group" open>
           <summary><span id="argoCount">Argo 组 · 已选 6</span><span class="muted">（隧道协议，启用核心后至少勾选一个）</span></summary>
@@ -270,20 +272,20 @@
         <details id="directGroup" class="proto-group hidden">
           <summary><span id="directCount">直连组 · 已选 0</span><span class="muted">（直连协议，启用直连后至少勾选一个）</span></summary>
           <div class="direct-cols" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-items:start;">
-          <div><h4>共用组 <span class="opt">Xray 和 Sing-box 都能跑的协议，放一起</span></h4>
+          <div><h4>共用 <span class="opt">Xray 和 Sing-box 都能跑的协议，放一起</span></h4>
           <div class="proto"><label><input type="checkbox" id="direct_vless_tls" checked> <span class="tag direct">直连</span> VLESS + TLS（Xray）</label><span class="port">端口 <input type="number" id="direct_vless_tls_port" value="443" min="1" max="65535"></span></div>
           <div class="proto"><label><input type="checkbox" id="direct_sb_tls" checked> <span class="tag direct">直连</span> VLESS + TLS（Sing-box）</label><span class="port">端口 <input type="number" id="direct_sb_tls_port" value="8443" min="1" max="65535"></span></div>
           <div class="proto"><label><input type="checkbox" id="direct_trojan"> <span class="tag direct">直连</span> Trojan + TLS（Xray）</label><span class="port">端口 <input type="number" id="direct_trojan_port" value="9443" min="1" max="65535"></span></div>
           <div class="proto"><label><input type="checkbox" id="direct_sb_trojan" checked> <span class="tag direct">直连</span> Trojan + TLS（Sing-box）</label><span class="port">端口 <input type="number" id="direct_sb_trojan_port" value="9445" min="1" max="65535"></span></div>
           </div>
-          <div><h4>Xray 组</h4>
+          <div><h4>Xray-core</h4>
           <div class="proto"><label><input type="checkbox" id="direct_vless_tcp"> <span class="tag direct">直连</span> VLESS + TCP</label><span class="port">端口 <input type="number" id="direct_vless_tcp_port" value="8082" min="1" max="65535"></span></div>
           <div class="proto"><label><input type="checkbox" id="direct_vless_reality"> <span class="tag direct">直连</span> VLESS + Reality</label><span class="port">端口 <input type="number" id="direct_vless_reality_port" value="9447" min="1" max="65535"></span></div>
           <div class="proto"><label><input type="checkbox" id="direct_vless_ws"> <span class="tag direct">直连</span> VLESS + WS</label><span class="port">端口 <input type="number" id="direct_vless_ws_port" value="8083" min="1" max="65535"></span></div>
           <div class="proto"><label><input type="checkbox" id="direct_vless_grpc"> <span class="tag direct">直连</span> VLESS + gRPC</label><span class="port">端口 <input type="number" id="direct_vless_grpc_port" value="8084" min="1" max="65535"></span></div>
           <div class="proto"><label><input type="checkbox" id="direct_vmess_ws"> <span class="tag direct">直连</span> VMess + WS</label><span class="port">端口 <input type="number" id="direct_vmess_ws_port" value="9444" min="1" max="65535"></span></div>
           </div>
-          <div><h4>Sing-box 组</h4>
+          <div><h4>Sing-box</h4>
           <div class="proto"><label><input type="checkbox" id="direct_ss"> <span class="tag direct">直连</span> Shadowsocks</label><span class="port">端口 <input type="number" id="direct_ss_port" value="8388" min="1" max="65535"></span></div>
           <div class="proto"><label><input type="checkbox" id="direct_hy2"> <span class="tag direct">直连</span> Hysteria2</label><span class="port">端口 <input type="number" id="direct_hy2_port" value="9446" min="1" max="65535"></span></div>
           </div></div>
@@ -293,19 +295,16 @@
         <h3 class="step-h">④ 配置参数</h3>
         <div class="cfg-grid">
         <div id="directFields" class="mode-box direct hidden">
-          <h4>直连安全配置</h4>
-          <div class="warn">直连将暴露 VPS 真实 IP，仅作备用；须与隧道节点使用不同子域名。</div>
+          <h4>直连安全配置 <span class="warn-inline">直连将暴露 VPS 真实 IP，仅作备用；须与隧道节点使用不同子域名。</span></h4>
           <div class="proto-wrap">
             <div class="sec-card direct">
               <h4>直连域名与前缀</h4>
               <label class="f">直连地址 address <span class="opt">选填</span></label>
-              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP，也可填域名">
+              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP">
               <p class="hint">留空使用 VPS 公网 IP。ACME 证书须填写域名，且域名须解析至 VPS IP（DNS only）。</p>
               <label class="f">直连 SNI <span class="opt">选填</span></label>
-              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同；TLS 握手用的域名">
+              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同">
               <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
-              <h4 style="margin-top:14px;">其他安全参数</h4>
-              <p class="hint">Trojan、VMess、Hysteria2 及 Shadowsocks 的密码均为节点 UUID；Shadowsocks 加密方式为 aes-256-gcm。</p>
             </div>
             <div class="sec-card direct">
               <h4>证书配置</h4>
@@ -333,22 +332,22 @@
         <div id="realitySection">
 <div id="realityCard" class="sec-card direct" style="width:100%;">
             <h4>Reality 配置</h4>
-            <p class="hint">未勾选 VLESS + Reality 时，此处不可修改。Reality 无需证书。</p>
+            <p class="hint">Reality 无需证书。</p>
             <label class="f">目标 <span class="req">* 必填</span></label>
-            <div style="display:flex; gap:8px;"><input type="text" id="reality_dest" class="mono" placeholder="例如 www.microsoft.com:443，留空用自己的域名"><button type="button" class="sm ghost scan-btn" id="btnRealityScan" style="flex-shrink:0;">扫描</button><button type="button" class="sm ghost scan-btn" id="btnRealityFind" style="flex-shrink:0;">查找目标</button></div>
+            <div style="display:flex; gap:8px;"><input type="text" id="reality_dest" class="mono" placeholder="例如 www.microsoft.com:443"><button type="button" class="sm ghost scan-btn" id="btnRealityScan" style="flex-shrink:0;">扫描</button><button type="button" class="sm ghost scan-btn" id="btnRealityFind" style="flex-shrink:0;">查找目标</button></div>
             <p class="hint">扫描：检测上方域名；查找目标：打开扫描器，选一行点「使用」自动填入。</p>
             <div id="realityScanOut" class="status info"></div>
-            <div id="realityResultCard" class="hidden" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:13px; line-height:1.8;"></div>
+            <div id="realityResultCard" class="hidden" style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:13px; line-height:1.8;"></div>
             <div id="realityScanModal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:99; display:flex; align-items:center; justify-content:center;"><div style="background:#fff; border-radius:12px; padding:16px; width:min(860px,92vw); max-height:80vh; overflow:auto;"><div style="display:flex; justify-content:space-between; align-items:center;"><h3 style="margin:0;">REALITY 目标扫描器</h3><button type="button" class="sm ghost" id="btnCloseRealityModal">关闭</button></div><div id="realityScanModalOut" class="status info" style="margin:8px 0;">正在扫描…</div><div style="overflow-x:auto;"><table class="scan-table"><thead><tr><th>目标</th><th>状态</th><th>TLS</th><th>ALPN</th><th>密钥交换</th><th>证书</th><th>证书有效期</th><th>证书链</th><th>延迟</th><th>操作</th></tr></thead><tbody id="realityScanBody"></tbody></table></div></div></div>
             <label class="f">SNI <span class="opt">选填</span></label>
-            <input type="text" id="reality_sni" class="mono" placeholder="默认与目标域名相同，可填自己的域名">
+            <input type="text" id="reality_sni" class="mono" placeholder="默认与目标域名相同">
             <label class="f">公钥 <span class="opt">只读</span></label>
             <input type="text" id="reality_pubkey" class="mono" readonly placeholder="未生成，点下方获取新证书">
             <p class="hint">私钥保存于服务器 reality.json，不返回前端；确定目标后请立即获取证书。</p>
             <div class="btnrow" style="margin-top:6px;"><button type="button" class="sm ghost" id="btnRealityNewKeys">获取新证书</button><button type="button" class="sm ghost" id="btnRealityClearKeys" style="color:#dc2626; border-color:#fecaca;">清除</button></div>
             <label class="f">Short IDs <span class="opt">选填</span></label>
             <div id="realityShortIds"></div>
-            <div style="display:flex; gap:8px; margin-top:8px;"><input type="text" id="reality_short_id_new" class="mono" placeholder="新增 Short ID (hex, 如 c8f27e)"><button type="button" class="sm ghost" id="btnAddShortId" style="flex-shrink:0;">添加</button><button type="button" class="sm ghost" id="btnRegenShortIds" style="flex-shrink:0;">重新生成</button></div>
+            <div style="display:flex; gap:8px; margin-top:8px;"><input type="text" id="reality_short_id_new" class="mono" placeholder="新增 Short ID，如 c8f27e"><button type="button" class="sm ghost" id="btnAddShortId" style="flex-shrink:0;">添加</button><button type="button" class="sm ghost" id="btnRegenShortIds" style="flex-shrink:0;">重新生成</button></div>
             <p class="hint">Short ID 可添加多个，第一项用于生成节点链接；部署时自动生成并保存。</p>
             <div class="row2">
               <div>
@@ -361,7 +360,7 @@
               </div>
               <div>
                 <label class="f">flow <span class="opt">选填</span></label>
-                <input type="text" id="reality_flow" class="mono" value="xtls-rprx-vision">
+                <select id="reality_flow"><option value="xtls-rprx-vision" selected>xtls-rprx-vision</option><option value="none">none</option></select>
               </div>
             </div>
             <div class="row2">
@@ -391,13 +390,7 @@
               <p class="hint" style="margin-top:6px;">Zero Trust 路由：Sing-box 域名 → 127.0.0.1:Sing-box 端口。</p>
             </div>
           </div>
-          <div class="row2 uuid-row">
-            <div><label class="f">节点 UUID <span class="req">* 必填</span></label>
-            <div style="display:flex; gap:4px;"><input type="text" id="nodeUuid" class="mono" placeholder="点右侧生成"><button class="ghost sm" id="btnGenUuid" type="button">生成</button></div></div>
-            <div><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label>
-            <input type="text" id="optAddrSingle" class="mono" value="cloudflare.com">
-            </div>
-          </div>
+          <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><input type="text" id="optAddrSingle" class="mono" value="cloudflare.com"></div>
         </div>
         <div id="portConflictOut" class="status"></div>
 
@@ -412,7 +405,7 @@
         <p class="hint">订阅统一拉取隧道节点（裂变后）和直连节点，一个订阅里全有，由面板直接提供。</p>
         <label class="f">订阅路径 <span class="opt">选填</span></label>
         <div class="subtpl">
-          <span class="static" id="subTplScheme">https://</span><input type="text" id="subHost" class="mono" style="max-width:320px;text-align:center" placeholder="面板域名或 IP:端口"><span class="static">/</span><span class="static mono" id="subTplUuid">UUID</span><span class="static">/</span><input type="text" id="subPath" value="sub" class="mono"><span class="static" id="subTplSuffix">/raw</span>
+          <span class="static" id="subTplScheme">https://</span><input type="text" id="subHost" class="mono" style="max-width:300px;text-align:center" placeholder="面板域名或 IP:端口"><span class="static">/</span><span class="static mono" id="subTplUuid">UUID</span><span class="static">/</span><input type="text" id="subPath" value="sub" class="mono"><span class="static" id="subTplSuffix">/raw</span>
         </div>
 
         <h3 class="step-h">⑤ 开始部署</h3>
@@ -691,9 +684,9 @@ function updateGroupCounts() {
   if (directN) $("directGroup").classList.remove("field-err");
 }
 function updateRealityFields() {
-  // Reality 只和直连配置一起出现: 没勾直连就隐藏; 勾直连后显示, 不勾 Reality 时整块禁用
-  const show = $("modeDirect").checked;
-  const enabled = show && $("direct_vless_reality").checked;
+  // Reality 只在勾了直连 + VLESS + Reality 时才显示
+  const show = $("modeDirect").checked && $("direct_vless_reality").checked;
+  const enabled = show;
   const sec = $("realitySection"); if (sec) sec.classList.toggle("hidden", !show);
   const card = $("realityCard");
   card.classList.toggle("disabled", !enabled);
