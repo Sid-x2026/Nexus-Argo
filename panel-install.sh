@@ -83,7 +83,9 @@ center_line() {
   printf '%*s%s\n' "$pad" '' "$line"
 }
 
-PANEL_PORT="${PANEL_PORT:-2053}"
+# 重装默认端口: 先读 panel-info.json 里上次保存的, 没有才回 2053 (之前每次重装都回 2053, 路由还指旧端口就 502)
+_SAVED_PORT="$(python3 -c "import json;print(json.load(open('/opt/nexus-argo/panel/panel-info.json')).get('panel_port',''))" 2>/dev/null || true)"
+PANEL_PORT="${PANEL_PORT:-${_SAVED_PORT:-2053}}"
 PANEL_PATH="${PANEL_PATH:-/Nexus}"
 RAW_BASE="${RAW_BASE:-https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main}"
 WORKDIR="/opt/nexus-argo"
