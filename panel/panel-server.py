@@ -1102,6 +1102,15 @@ def _scan_target_list(target):
     return []
 
 
+_SCAN_SSL_CTX = None
+def _scan_ssl_ctx():
+    global _SCAN_SSL_CTX
+    if _SCAN_SSL_CTX is None:
+        import ssl
+        _SCAN_SSL_CTX = ssl.create_default_context()
+    return _SCAN_SSL_CTX
+
+
 def _probe_reality_target(host):
     """对一个目标做 TLS 握手探测, 返回 3X-UI 式的行:
     {target, domain, status, tls, alpn, key_exchange, cert, latency_ms}。
@@ -1109,13 +1118,16 @@ def _probe_reality_target(host):
     row = {"target": f"{host}:443", "domain": host, "status": "不可用",
            "tls": "", "alpn": "", "key_exchange": "", "cert": "",
            "cert_expiry": "", "cert_chain": "", "latency_ms": None}
-    # 延迟: 只测 TLS 握手时间 (3X-UI 式), 不发完整 HTTP 请求, 数值更低更灵敏
+    # 延迟: 只测 TCP+TLS 握手时间 (3X-UI 式), 不发完整 HTTP 请求。
+    # DNS 在计时外解析; SSL 上下文全局复用 —— 建上下文要读 CA 包很慢,
+    # 每次新建会把延迟抬到几百毫秒, 不能算进握手时间里。
     try:
-        import socket, ssl
+        import socket
+        infos = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        addr = infos[0][4]
         t0 = time.monotonic()
-        ctx = ssl.create_default_context()
-        with socket.create_connection((host, 443), timeout=5) as sock:
-            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+        with socket.create_connection(addr, timeout=5) as sock:
+            with _scan_ssl_ctx().wrap_socket(sock, server_hostname=host) as ssock:
                 pass
         row["latency_ms"] = int(round((time.monotonic() - t0) * 1000))
     except Exception:
@@ -1133,7 +1145,11 @@ def _probe_reality_target(host):
         m = re.search(r"ALPN protocol\s*:\s*(\S+)", text)
         if m:
             row["alpn"] = m.group(1)
-        m = re.search(r"Server Temp Key:\s*([A-Za-z0-9]+)", text)
+        m = re.search(r"(?i)server temp key\s*:\s*([A-Za-z0-9_\-]+)", text)
+        if not m:
+            m = re.search(r"(?i)temp key\s*:\s*([A-Za-z0-9_\-]+)", text)
+        if not m:
+            m = re.search(r"(?i)key exchange\s*:\s*([A-Za-z0-9_\-]+)", text)
         if m:
             row["key_exchange"] = m.group(1)
         m = re.search(r"subject=CN\s*=\s*([^\n,;]+)", text)
