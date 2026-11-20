@@ -841,11 +841,29 @@ def _run(cmd, timeout=10):
         return "", -1
 
 
+_DOCKER_CACHE = {"t": 0.0, "states": {}}
+def _docker_states():
+    # 刷新慢的主因: /api/status 原来对每个容器逐个 docker inspect (8 次串行)。
+    # 改成一次 docker ps 拿全部状态, 3 秒缓存, 刷新从 4-5 秒降到 1 秒左右。
+    import time as _time
+    now = _time.time()
+    if now - _DOCKER_CACHE["t"] < 3 and _DOCKER_CACHE["states"]:
+        return _DOCKER_CACHE["states"]
+    out, code = _run(["docker", "ps", "-a", "--format", "{{.Names}} {{.Status}}"], timeout=5)
+    states = {}
+    if code == 0:
+        for line in out.splitlines():
+            parts = line.split(None, 1)
+            if parts:
+                states[parts[0]] = "running" if len(parts) > 1 and parts[1].startswith("Up") else "stopped"
+    _DOCKER_CACHE.update({"t": now, "states": states})
+    return states
+
 def _docker_running(name):
-    out, code = _run(["docker", "inspect", "-f", "{{.State.Running}}", name], timeout=5)
-    if code != 0:
+    states = _docker_states()
+    if name not in states:
         return "not_installed"
-    return "running" if out.strip() == "true" else "stopped"
+    return states[name]
 
 
 def _argo_tunnel_state():
