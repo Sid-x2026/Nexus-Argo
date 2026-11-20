@@ -311,32 +311,17 @@
             <h4>Reality 配置</h4>
             <p class="hint">只有勾选 VLESS + Reality 时才显示。Reality 不需要大厂域名的证书。</p>
             <label class="f">目标 <span class="req">* 必填</span></label>
-            <input type="text" id="reality_dest" class="mono" placeholder="例如 www.microsoft.com:443">
-            <label class="f">扫描目标 <span class="opt">选填</span></label>
-            <div style="display:flex; gap:8px;"><input type="text" id="reality_scan_target" class="mono" placeholder="域名或 IP/CIDR，留空用常用候选"><button type="button" class="sm ghost" id="btnRealityScan" class="scan-btn" style="flex-shrink:0;">扫描</button><button type="button" class="sm ghost" id="btnRealityFind" class="scan-btn" style="flex-shrink:0;">查找目标</button></div>
+            <div style="display:flex; gap:8px;"><input type="text" id="reality_dest" class="mono" placeholder="例如 www.microsoft.com:443，留空用自己的域名"><button type="button" class="sm ghost scan-btn" id="btnRealityScan" style="flex-shrink:0;">扫描</button><button type="button" class="sm ghost scan-btn" id="btnRealityFind" style="flex-shrink:0;">查找目标</button></div>
+            <p class="hint">扫描：扫上面输入框里填的域名。查找目标：弹出 REALITY 目标扫描器，选一行点「使用」自动填入。</p>
             <div id="realityScanOut" class="status info"></div>
-            <div id="realityScanTableWrap" class="hidden" style="overflow-x:auto;">
-              <table class="scan-table">
-                <thead><tr><th>目标</th><th>状态</th><th>TLS</th><th>ALPN</th><th>密钥交换</th><th>证书</th><th>延迟</th><th>操作</th></tr></thead>
-                <tbody id="realityScanBody"></tbody>
-              </table>
-            </div>
+            <div id="realityResultCard" class="hidden" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:13px; line-height:1.8;"></div>
+            <div id="realityScanModal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:99; display:flex; align-items:center; justify-content:center;"><div style="background:#fff; border-radius:12px; padding:16px; width:min(860px,92vw); max-height:80vh; overflow:auto;"><div style="display:flex; justify-content:space-between; align-items:center;"><h3 style="margin:0;">REALITY 目标扫描器</h3><button type="button" class="sm ghost" id="btnCloseRealityModal">关闭</button></div><div id="realityScanModalOut" class="status info" style="margin:8px 0;">正在扫描…</div><div style="overflow-x:auto;"><table class="scan-table"><thead><tr><th>目标</th><th>状态</th><th>TLS</th><th>ALPN</th><th>密钥交换</th><th>证书</th><th>证书有效期</th><th>证书链</th><th>延迟</th><th>操作</th></tr></thead><tbody id="realityScanBody"></tbody></table></div></div></div>
             <label class="f">SNI <span class="opt">选填</span></label>
             <input type="text" id="reality_sni" class="mono" placeholder="默认与目标域名相同，可填自己的域名">
-            <div class="row3">
-              <div>
-                <label class="f">最大时间差 (ms) <span class="opt">选填</span></label>
-                <input type="number" id="reality_max_time_diff" value="0" min="0">
-              </div>
-              <div>
-                <label class="f">最小客户端版本 <span class="opt">选填</span></label>
-                <input type="text" id="reality_min_client_ver" class="mono" value="1.0.0">
-              </div>
-              <div>
-                <label class="f">最大客户端版本 <span class="opt">选填</span></label>
-                <input type="text" id="reality_max_client_ver" class="mono" value="x.y.z">
-              </div>
-            </div>
+            <label class="f">公钥 <span class="opt">只读</span></label>
+            <input type="text" id="reality_pubkey" class="mono" readonly placeholder="未生成，点下方获取新证书">
+            <p class="hint">私钥保存在服务器 reality.json，不会返回前端。扫完目标或自己填好域名，马上点获取证书，是一整套顺序。</p>
+            <div class="btnrow" style="margin-top:6px;"><button type="button" class="sm ghost" id="btnRealityNewKeys">获取新证书</button><button type="button" class="sm ghost" id="btnRealityClearKeys" style="color:#dc2626; border-color:#fecaca;">清除</button></div>
             <label class="f">Short IDs <span class="opt">选填</span></label>
             <div id="realityShortIds"></div>
             <div style="display:flex; gap:8px; margin-top:8px;"><input type="text" id="reality_short_id_new" class="mono" placeholder="新增 Short ID (hex, 如 c8f27e)"><button type="button" class="sm ghost" id="btnAddShortId" style="flex-shrink:0;">添加</button><button type="button" class="sm ghost" id="btnRegenShortIds" style="flex-shrink:0;">重新生成</button></div>
@@ -365,10 +350,6 @@
                 <input type="text" id="reality_spiderx" class="mono" value="/">
               </div>
             </div>
-            <label class="f">公钥 <span class="opt">只读</span></label>
-            <input type="text" id="reality_pubkey" class="mono" readonly placeholder="未生成，部署时自动生成">
-            <p class="hint">私钥保存在服务器 reality.json，不会返回前端。</p>
-            <div class="btnrow" style="margin-top:10px;"><button type="button" class="sm ghost" id="btnRealityNewKeys">获取新证书</button><button type="button" class="sm ghost" id="btnRealityClearKeys" style="color:#dc2626; border-color:#fecaca;">清除</button></div>
             </div>
           </div>
         </div>
@@ -1113,7 +1094,7 @@ $("btnRealityClearKeys").onclick = async () => {
 };
 
 function renderRealityScanTable(list) {
-  const wrap = $("realityScanTableWrap");
+  const wrap = $("realityScanModal");
   const body = $("realityScanBody");
   body.innerHTML = "";
   if (!list.length) { wrap.classList.add("hidden"); return; }
@@ -1121,8 +1102,9 @@ function renderRealityScanTable(list) {
     const tr = document.createElement("tr");
     if (i === 0 && r.status === "可用") tr.className = "best";
     const lat = r.latency_ms == null ? "—" : r.latency_ms + " ms";
+    const expiry = r.cert_expiry || "—"; const chain = r.cert_chain || "—";
     const status = r.status === "可用" ? '<span class="pill-ok">可用</span>' : '<span class="pill-bad">不可用</span>';
-    tr.innerHTML = "<td class=\"mono\">" + r.target + "</td><td>" + status + "</td><td>" + (r.tls || "—") + "</td><td>" + (r.alpn || "—") + "</td><td>" + (r.key_exchange || "—") + "</td><td>" + (r.cert || "—") + "</td><td>" + lat + "</td>";
+    tr.innerHTML = "<td class=\"mono\">" + r.target + "</td><td>" + status + "</td><td>" + (r.tls || "—") + "</td><td>" + (r.alpn || "—") + "</td><td>" + (r.key_exchange || "—") + "</td><td>" + (r.cert || "—") + "</td><td>" + expiry + "</td><td>" + chain + "</td><td>" + lat + "</td>";
     const td = document.createElement("td");
     const btn = document.createElement("button");
     btn.type = "button";
@@ -1133,15 +1115,20 @@ function renderRealityScanTable(list) {
       $("reality_dest").value = r.target;
       $("reality_sni").value = r.domain || r.target.split(":")[0];
       $("reality_dest").classList.remove("field-err");
-      $("realityScanTableWrap").classList.add("hidden");
+      $("realityScanModal").classList.add("hidden");
       ensureShortIds(3);
-      setOut($("realityScanOut"), "已选择目标：" + r.target + "，已填入目标栏和 SNI 栏，并自动生成 3 个 Short ID。", "ok");
+      const card = $("realityResultCard");
+      card.innerHTML = "<b style=\"color:#16a34a;\">✓ 可用</b>　SNI：" + (r.domain||"") + "　TLS：" + (r.tls||"—") + "　ALPN：" + (r.alpn||"—") + "　密钥交换：" + (r.key_exchange||"—") + "<br>证书：" + (r.cert||"—") + "　证书有效期：" + (r.cert_expiry||"—") + "　证书链：" + (r.cert_chain||"—") + "　延迟：" + (r.latency_ms==null?"—":r.latency_ms+" ms") + "<br>已填入目标栏和 SNI 栏，并自动生成 3 个 Short ID，请点「获取新证书」。";
+      card.classList.remove("hidden");
+      setOut($("realityScanOut"), "已选择目标：" + r.target + "，请点「获取新证书」。", "ok");
     };
     td.appendChild(btn);
     tr.appendChild(td);
     body.appendChild(tr);
   });
   wrap.classList.remove("hidden");
+  const modal = $("realityScanModal"); if (modal) modal.classList.remove("hidden");
+  const mout = $("realityScanModalOut"); if (mout) mout.textContent = "扫描完成，点一行「使用」填入目标栏和 SNI 栏。";
 }
 async function runRealityScan(target) {
   const out = $("realityScanOut");
@@ -1149,7 +1136,7 @@ async function runRealityScan(target) {
   out.className = "status info";
   $("btnRealityScan").disabled = true;
   $("btnRealityFind").disabled = true;
-  $("realityScanTableWrap").classList.add("hidden");
+  const _w = document.querySelector("#realityScanModal table"); 
   try {
     const r = await api("/api/reality-scan", {method: "POST", body: JSON.stringify({target: target || ""})});
     const list = r.results || [];
@@ -1166,8 +1153,9 @@ async function runRealityScan(target) {
     $("btnRealityFind").disabled = false;
   }
 }
-$("btnRealityScan").onclick = () => runRealityScan($("reality_scan_target").value.trim());
-$("btnRealityFind").onclick = () => { $("reality_scan_target").value = ""; runRealityScan(""); };
+$("btnRealityScan").onclick = () => runRealityScan($("reality_dest").value.trim().split(":")[0]);
+$("btnRealityFind").onclick = () => { $("realityScanModal").classList.remove("hidden"); runRealityScan(""); };
+$("btnCloseRealityModal").onclick = () => $("realityScanModal").classList.add("hidden");
 
 
 // ---- 客户端选择: 自动最优 ----

@@ -1052,7 +1052,7 @@ def _probe_reality_target(host):
     任何一步失败都记「不可用」, 不抛错、不阻塞。"""
     row = {"target": f"{host}:443", "domain": host, "status": "不可用",
            "tls": "", "alpn": "", "key_exchange": "", "cert": "",
-           "latency_ms": None}
+           "cert_expiry": "", "cert_chain": "", "latency_ms": None}
     # 延迟: 只测 TLS 握手时间 (3X-UI 式), 不发完整 HTTP 请求, 数值更低更灵敏
     try:
         import socket, ssl
@@ -1087,6 +1087,21 @@ def _probe_reality_target(host):
             row["cert"] = m.group(1).strip()
         if row["tls"]:
             row["status"] = "可用"
+        # 证书有效期 + 证书链: openssl x509 读叶证书 dates, s_client 输出数链深度
+        m = re.search(r"Certificate chain\s*\n((?:\s*\d+ s:.*\n?)+)", text)
+        if m:
+            depths = re.findall(r"^\s*(\d+)\s+s:", m.group(1), re.M)
+            row["cert_chain"] = f"{len(depths)} 级" if depths else ""
+    except Exception:
+        pass
+    try:
+        proc = subprocess.run(
+            ["sh", "-c", f"echo | openssl s_client -connect {host}:443 -servername {host} 2>/dev/null | openssl x509 -noout -dates 2>/dev/null"],
+            capture_output=True, timeout=8)
+        t = proc.stdout.decode("utf-8", "replace")
+        m = re.search(r"notAfter=([^\n]+)", t)
+        if m:
+            row["cert_expiry"] = m.group(1).strip()
     except Exception:
         pass
     return row
