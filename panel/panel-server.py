@@ -30,6 +30,9 @@
 #   GET  /api/deploy/log?offset=N 部署日志增量 (按字节偏移)
 #   GET  /api/subscription        订阅地址 + 自定义路径
 #   POST /api/subscription        {sub_path} 改订阅路径, 重启 nexus-sub 生效
+#   GET  /<uuid>/<sub_path>/raw|merged  面板订阅 (公开, 免登录):
+#        面板收到后转发给本机 nexus-sub, 订阅不再需要单独的域名/端口/路由,
+#        地址就是面板自己的域名或 IP:端口 + UUID + 订阅路径。
 #   GET  /api/cert               证书状态 (是否已部署 / 颁发给谁 / 到期时间 / 续期方式)
 #   POST /api/reality-scan       3X-UI 式 Reality 目标扫描 (域名/IP/CIDR, 返回
 #                                 目标/状态/TLS/ALPN/密钥交换/证书/延迟表)
@@ -138,6 +141,7 @@ DEFAULT_CONFIG = {
     "singbox_domain": "sb.ahstshu.eu.cc",
     "singbox_protocols": {"ws": 8443, "httpupgrade": 8443, "grpc": 8443},
     "opt_addrs": ["cloudflare.com"],
+    "sub_host": "",
     "sub_domain": "sub.ahstshu.eu.cc",
     "sub_port": 18080,
     "sub_path": "sub",
@@ -419,7 +423,15 @@ def validate_config(raw):
 
     cfg["xray_port"] = _as_int(cfg.get("xray_port"), 8001)
     cfg["singbox_port"] = _as_int(cfg.get("singbox_port"), 8002)
-    cfg["sub_port"] = _as_int(cfg.get("sub_port"), 18080)
+    cfg["sub_port"] = 18080  # 订阅服务内部端口, 不再由用户填, 面板代理到本机 nexus-sub
+    # 订阅地址主机: 域名或 IP, 可带端口 (面板域名 / IP:面板端口); 为空则用请求时的 Host
+    _sh = str(cfg.get("sub_host") or cfg.get("sub_domain") or "").strip()
+    _sh_host, _sh_port = _split_host_port(_sh) if _sh else ("", 443)
+    if _sh and not (_is_domain(_sh_host) or _is_ipv4(_sh_host)):
+        errors.append("订阅地址格式不正确, 请填域名或 IP, 可带端口")
+        _sh_host, _sh_port = "", 443
+    cfg["sub_host"] = f"{_sh_host}:{_sh_port}" if _sh_host and _sh_port != 443 else _sh_host
+    cfg["sub_domain"] = _sh_host
     for name, label in (("xray_port", "Xray 回源端口"),
                         ("singbox_port", "Sing-box 回源端口"),
                         ("sub_port", "订阅端口")):
@@ -907,20 +919,41 @@ def _public_ip():
     return ip
 
 
-def subscription_urls(cfg):
-    """订阅地址 (按当前配置算, 改 sub_path 后实时变)。"""
+def _sub_base(cfg, host=None, scheme=None):
+    """面板订阅 base: 优先用配置里的 sub_host (面板域名 / IP:端口),
+    没配就用请求时的 Host; 域名默认 https, IP 默认 http (带面板端口)。"""
+    _h = (cfg.get("sub_host") or "").strip() or (host or "").strip()
+    if not _h:
+        return None
+    _hh, _pp = _split_host_port(_h)
+    if not _hh:
+        return None
+    _sc = (scheme or "").strip().lower()
+    if _sc not in ("http", "https"):
+        _sc = "http" if _is_ipv4(_hh) else "https"
+    if _pp == 443 and _is_ipv4(_hh):
+        _hp = f"{_hh}:{PANEL_PORT}"
+    elif _pp == 443:
+        _hp = _hh
+    else:
+        _hp = f"{_hh}:{_pp}"
+    return f"{_sc}://{_hp}"
+
+
+def subscription_urls(cfg, host=None, scheme=None):
+    """订阅地址 (按当前配置算, 改 sub_path 后实时变)。
+    面板订阅: 地址就是面板自己的域名或 IP:端口 + UUID + 订阅路径。"""
     uuid = cfg["node_uuid"]
     sub_path = cfg.get("sub_path") or "sub"
-    base = None
-    if cfg.get("sub_domain"):
-        base = f"https://{cfg['sub_domain']}"
+    base = _sub_base(cfg, host, scheme)
     out = {
+        "sub_host": cfg.get("sub_host") or "",
         "sub_domain": cfg.get("sub_domain") or "",
         "sub_path": sub_path,
         "sub_port": cfg.get("sub_port") or 18080,
         "raw_url": f"{base}/{uuid}/{sub_path}/raw" if base and uuid else "",
         "merged_url": f"{base}/{uuid}/{sub_path}/merged" if base and uuid else "",
-        "generator_url": f"https://{cfg['sub_domain']}/" if cfg.get("sub_domain") else "",
+        "generator_url": "",
         "raw_count": _count_lines(os.path.join(WORKDIR, "sub", "raw.txt")),
         "merged_count": _count_lines(os.path.join(WORKDIR, "sub", "merged.txt")),
     }
@@ -1160,6 +1193,33 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _proxy_sub(self, url):
+        """面板订阅代理: /<uuid>/<sub_path>/raw|merged[?format=...] 转发给
+        本机 nexus-sub (127.0.0.1:订阅内部端口), 面板域名/IP 直接出订阅。"""
+        cfg = load_config()
+        target = f"http://127.0.0.1:{cfg.get('sub_port') or 18080}{url.path}"
+        if url.query:
+            target += "?" + url.query
+        try:
+            req = urllib.request.Request(target, method="GET")
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = r.read()
+                self.send_response(r.status)
+                self.send_header("Content-Type", r.headers.get("Content-Type") or "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+        except urllib.error.HTTPError as e:
+            data = e.read()
+            self.send_response(e.code)
+            self.send_header("Content-Type", e.headers.get("Content-Type") or "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception:
+            self._send_json({"error": "订阅服务未运行, 请先部署"}, 502)
+
     def _cookie_token(self):
         raw = self.headers.get("Cookie") or ""
         for part in raw.split(";"):
@@ -1199,6 +1259,11 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/", "/index.html") or (_pp and path in (_pp, _pp + "/index.html")):
             self._send_file(_PANEL_HTML, "text/html; charset=utf-8")
             return
+        _m = re.match(r"^/([0-9a-fA-F-]{36})/", path)
+        if _m and UUID_RE.match(_m.group(1)):
+            # 面板订阅 (公开, 免登录): 转发给本机 nexus-sub
+            self._proxy_sub(url)
+            return
         if path == "/api/status":
             if not self._need_auth():
                 return
@@ -1209,7 +1274,7 @@ class Handler(BaseHTTPRequestHandler):
                 if svc["name"] == "nexus-argo":
                     svc["state"] = _argo_tunnel_state()
             st = deploy_status()
-            sub = subscription_urls(cfg)
+            sub = subscription_urls(cfg, self.headers.get("Host"), self.headers.get("X-Forwarded-Proto"))
             self._send_json({
                 "deployed": st.get("state") == "ok" or os.path.exists(os.path.join(WORKDIR, "sub", "raw.txt")),
                 "deploy_state": st.get("state", "idle"),
@@ -1252,7 +1317,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/subscription":
             if not self._need_auth():
                 return
-            self._send_json(subscription_urls(load_config()))
+            self._send_json(subscription_urls(load_config(), self.headers.get("Host"), self.headers.get("X-Forwarded-Proto")))
             return
         if path == "/api/cert":
             if not self._need_auth():
