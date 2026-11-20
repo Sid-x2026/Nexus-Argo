@@ -70,7 +70,7 @@
   .mode-box.tunnel { background: #eef2ff; border-left-color: #6366f1; }
   .mode-box.tunnel h4 { color: #4f46e5; margin: 0 0 8px; font-size: 14.5px; }
   .proto { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 13px; padding: 5px 8px; margin-top: 4px; } border: 1px solid #eef0fb; background: #fafaff; border-radius: 12px; padding: 11px 14px; margin-top: 8px; font-size: 15.5px; }
-  .proto label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
+  .proto label { display: block; cursor: pointer; font-weight: 600; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } .proto label input, .proto label .tag { margin-right: 6px; vertical-align: middle; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
   .proto input[type=checkbox] { accent-color: #6366f1; width: 16px; height: 16px; }
   .proto .port { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 13px; }
   .proto .port input { width: 56px; padding: 5px 6px; font-size: 13px; text-align: center; }
@@ -79,7 +79,7 @@
   .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
   .proto-wrap { display: grid; grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.7fr); gap: 10px; align-items: stretch; margin-top: 8px; }
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
-  .proto-wrap .row2 { grid-template-columns: 1fr 1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; } #argoGroup .proto .port { margin-left: 12px; }
+  .proto-wrap .row2 { grid-template-columns: 0.9fr 1.1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; } #argoGroup .proto .port { margin-left: 12px; }
   .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
   .proto { flex-wrap: wrap; } .proto .port input { width: 64px; }
   .direct-cols { grid-template-columns: repeat(3, minmax(170px, 1fr)) !important; gap: 10px !important; }
@@ -91,7 +91,7 @@
   .sec-card.direct h4 { color: #15803d; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 14.5px; padding: 9px 12px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 13.5px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 640px; } .card input[type=number] { max-width: 140px; text-align: center; } .card textarea { max-width: 640px; } .direct-cols h4 { min-height: 42px; line-height: 1.4; margin-bottom: 2px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 8px 0 4px; } #realityCard input, #realityCard select { padding: 7px 10px; } #realityCard .hint { margin: 0 0 8px; }
+  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 14.5px; padding: 7px 10px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 13.5px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 640px; } .card input[type=number] { max-width: 140px; text-align: center; } .card textarea { max-width: 640px; } .direct-cols h4 { min-height: 42px; line-height: 1.4; margin-bottom: 2px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 5px 0 3px; } #realityCard input, #realityCard select { padding: 6px 9px; } #realityCard .hint { margin: 0 0 5px; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 10px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
   .scan-table th { color: #64748b; font-weight: 600; }
@@ -229,15 +229,14 @@
           <label class="pill"><input type="checkbox" name="clientSel" value="clash"> Clash</label>
           <label class="pill"><input type="checkbox" name="clientSel" value="ios"> iOS</label>
         </div>
-        <p class="hint" id="clientHint" style="margin-top:6px;">默认 V2Ray，可多选；下面③协议选择里默认按推荐协议勾选，也可以切换成客户端适配的所有协议。</p>
 
         <h3 class="step-h">③ 协议选择</h3>
-        <p class="hint">隧道协议与直连协议在同一处勾选，只部署选中的协议；每条协议后面都有自己的端口设置。只勾一种方式时，只显示那种方式的协议。</p>
-        <div class="pills">
+                <div class="pills">
           <label class="pill"><input type="radio" name="clientMode" value="recommended" checked> 推荐协议</label>
           <label class="pill"><input type="radio" name="clientMode" value="suitable"> 全部适配协议</label>
         </div>
         <p class="hint">推荐协议：按上面选的客户端推荐的协议搭配；全部适配协议：这个客户端能用的全部协议。</p>
+        <p class="hint">隧道协议与直连协议在同一处勾选，只部署选中的协议；每条协议后面都有自己的端口设置。只勾一种方式时，只显示那种方式的协议。</p>
         <div class="proto-wrap">
         <details id="argoGroup" class="proto-group" open>
           <summary><span id="argoCount">Argo 组 · 已选 6</span><span class="muted">（隧道协议，启用核心后至少勾选一个）</span></summary>
@@ -1207,7 +1206,7 @@ function applyClientSelection() {
   const list = (CLIENT_PROTOCOLS[key]||{suitable:DIRECT_IDS,recommended:DIRECT_IDS})[mode] || DIRECT_IDS;
   DIRECT_IDS.forEach(id => { $(id).checked = list.indexOf(id) >= 0; });
   updateGroupCounts(); updateCertCard(); updateRealityFields(); checkPortConflicts();
-  $("clientHint").textContent = "已按 " + sel + "（" + (mode === "suitable" ? "全部适配协议" : "推荐协议") + "）自动勾选。";
+  const ch = $("clientHint"); if (ch) ch.textContent = "已按 " + sel + "（" + (mode === "suitable" ? "全部适配协议" : "推荐协议") + "）自动勾选。";
 }
 document.querySelectorAll('input[name="clientSel"], input[name="clientMode"]').forEach(r => r.addEventListener("change", applyClientSelection));
 
