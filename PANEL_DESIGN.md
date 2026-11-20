@@ -215,3 +215,15 @@ Reality 配置在③配置参数的直连区里（`realityCard`），只在勾�
 - 面板后缀默认 /Nexus，安装时提示、回车即默认；`bash panel-install.sh info` 呼出面板信息（登录地址/隧道面板地址/域名/后缀/端口/账号，存 panel-info.json）。
 - 安装完成框：「隧道地址」改成「隧道面板地址」，重要地址绿色加粗、密码黄色加粗。
 - 总览页：状态卡片渐变加高，卡片铺满。
+
+## 第 6 步 (2026-11-20)
+- 部署页顺序：①部署方式 → ②代理客户端（单独一块，可多选 V2Ray/Sing-box/Clash/iOS）→ ③协议选择 → ④配置参数 → ⑤节点与订阅。
+- 代理客户端：全选是把能适合所有客户端的协议全选中；推荐是按客户端推荐的协议搭配；也可以全选，不强制按客户端限制；iOS 按 Clash 订阅格式走。
+- 协议选择横向排：Argo 里 Xray/Sing-box 横向；直连下面横向一分为三（共用组/Xray组/Sing-box组），左右对齐。
+- 证书顺序：ACME 自动申请 / 自签名 / 上传自己的证书。
+- 直连域名加备注（不是面板域名，CF 加 A 记录到 VPS IP，DNS only 灰云）；直连 SNI 自动填入直连地址。
+- Bug 修：客户端推荐改勾选后触发 updateRealityFields，Reality 版块不再不出。
+- Argo 安全配置：UUID 和优选地址一排，优选地址只填一个域名默认 cloudflare.com；Token 在上、Xray/Sing-box 隧道设置在下；订阅域名/端口挪到⑤节点与订阅。
+- 侧边导航：fixed 全高悬浮不占版面，内容区铺满；顺序路由在前、出站在后。
+- 面板后缀真接上：panel-server.py 认 /Nexus（PANEL_PATH 环境变量），/ 跳到 /Nexus，/api 不变。
+- 完成框对齐：值列对齐，隧道面板地址后同一行加「（需在 Zero Trust 中添加对应路由后方可访问）」；加速说明：重装别跑 cleanup 清镜像，RAW_BASE 可改 jsDelivr。

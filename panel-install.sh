@@ -191,7 +191,7 @@ docker rm -f nexus-panel >/dev/null 2>&1 || true
 docker run -d --name nexus-panel --restart unless-stopped --network host \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$WORKDIR:/opt/nexus-argo" \
-  -e PANEL_DIR="$PANEL_DIR" -e PANEL_PORT="$PANEL_PORT" \
+  -e PANEL_DIR="$PANEL_DIR" -e PANEL_PORT="$PANEL_PORT" -e PANEL_PATH="$PANEL_PATH" \
   nexus-panel || die "面板容器启动失败"
 
 # ---- 等面板起来 ----
@@ -248,7 +248,7 @@ do_bind_tunnel() {
     docker run -d --name nexus-panel --restart unless-stopped --network host \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v "$WORKDIR:/opt/nexus-argo" \
-      -e PANEL_DIR="$PANEL_DIR" -e PANEL_PORT="$PANEL_PORT_BIND" \
+      -e PANEL_DIR="$PANEL_DIR" -e PANEL_PORT="$PANEL_PORT_BIND" -e PANEL_PATH="$PANEL_PATH" \
       nexus-panel || die "面板容器重启失败"
     for _ in $(seq 1 20); do
       if curl -fsS --max-time 2 -o /dev/null "http://127.0.0.1:$PANEL_PORT_BIND/" 2>/dev/null; then break; fi
@@ -404,21 +404,21 @@ echo "  ★ 面板已安装完成, 请保存下面这几行 ★"
 echo "=================================================================="
 # 关键内容最后显示, 地址对齐, 隧道域名在前、IP 地址在后
 if [ -n "$TUNNEL_URL" ]; then
-  printf '  %-12s %s%s%s\n' "隧道面板地址:" "${C_BOLD}${C_GREEN}" "$TUNNEL_URL" "${C_RESET}"
-  printf '  %-10s %s\n' "" "(加完上面那条路由后可用)"
+  printf '  %s %s%s%s %s\n' "隧道面板地址:" "${C_BOLD}${C_GREEN}" "$TUNNEL_URL" "${C_RESET}" "（需在 Zero Trust 中添加对应路由后方可访问）"
 fi
-printf '  %-12s %s%s%s\n' "面板地址:" "${C_BOLD}${C_GREEN}" "$PANEL_URL" "${C_RESET}"
-printf '  %-10s %s\n' "账号:" "admin"
+printf '  %s     %s%s%s\n' "面板地址:" "${C_BOLD}${C_GREEN}" "$PANEL_URL" "${C_RESET}"
+printf '  %s         %s\n' "账号:" "admin"
 if [ -n "$PASS" ]; then
-  printf '  %-12s %s%s%s  %s\n' "密码:" "${C_BOLD}${C_YELLOW}" "$PASS" "${C_RESET}" "← 只显示这一次, 请立即保存"
+  printf '  %s         %s%s%s  %s\n' "密码:" "${C_BOLD}${C_YELLOW}" "$PASS" "${C_RESET}" "← 只显示这一次, 请立即保存"
 else
-  printf '  %-10s %s\n' "密码:" "不变"
+  printf '  %s         %s\n' "密码:" "不变"
 fi
 echo ""
 echo "  卸载方式 (简单版):"
 echo "    只拆面板:  bash panel-install.sh uninstall"
 echo "    只清节点:  bash /opt/nexus-argo/install.sh uninstall"
 echo "    全部清掉:  bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/cleanup.sh)"
+echo "    （重装想快一点: 别跑 cleanup 清镜像, 镜像还在就不用重新拉）"
 echo "=================================================================="
 echo ""
 echo "本次安装内容: 只装了管理面板 (nexus-panel, 端口 $PANEL_PORT), 节点尚未部署, 请在面板里填设置点「开始部署」。"
