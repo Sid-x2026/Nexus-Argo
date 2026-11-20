@@ -67,6 +67,11 @@ PANEL_PORT = int(os.environ.get("PANEL_PORT", "2053") or 2053)
 INSTALL_SH = os.path.join(WORKDIR, "install.sh")
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PANEL_HTML = os.path.join(_HERE, "panel.html")
+# 面板后缀 (默认 /Nexus): 安装时 PANEL_PATH 环境变量传入, 也可以在 panel-info.json 里改
+import os as _os
+PANEL_PATH = _os.environ.get("PANEL_PATH", "/Nexus").strip() or ""
+if PANEL_PATH == "/":
+    PANEL_PATH = ""
 
 CONFIG_PATH = os.path.join(PANEL_DIR, "config.json")
 AUTH_PATH = os.path.join(PANEL_DIR, "auth.json")
@@ -1170,7 +1175,10 @@ class Handler(BaseHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         path = url.path
 
-        if path in ("/", "/index.html"):
+        _pp = PANEL_PATH.rstrip("/") if PANEL_PATH else ""
+        if _pp and path == "/":
+            self.send_response(302); self.send_header("Location", _pp); self.end_headers(); return
+        if path in ("/", "/index.html") or (_pp and path in (_pp, _pp + "/index.html")):
             self._send_file(_PANEL_HTML, "text/html; charset=utf-8")
             return
         if path == "/api/status":
