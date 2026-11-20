@@ -256,7 +256,7 @@
           </div>
         </details>
 
-        <details id="directGroup" class="proto-group">
+        <details id="directGroup" class="proto-group hidden">
           <summary><span id="directCount">直连组 · 已选 0</span><span class="muted">（直连协议，启用直连后至少勾选一个）</span></summary>
           <div class="direct-cols" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-items:start;">
           <div><h4>共用组 <span class="opt">Xray 和 Sing-box 都能跑的协议，放一起</span></h4>
@@ -827,6 +827,7 @@ function toggleMode() {
 }
 $("modeTunnel").onchange = toggleMode;
 $("modeDirect").onchange = toggleMode;
+toggleMode(); // 进来先按当前勾选隐藏另一组, 不等 /api/config 回来 (之前 config 没回来前直连组会留一个空白框)
 $("enableXray").onchange = () => { document.querySelectorAll("#xrayProtos .proto").forEach(p => p.classList.toggle("off", !$("enableXray").checked)); updateGroupCounts(); checkPortConflicts(); };
 $("enableSb").onchange = () => { document.querySelectorAll("#sbProtos .proto").forEach(p => p.classList.toggle("off", !$("enableSb").checked)); updateGroupCounts(); checkPortConflicts(); };
 document.querySelectorAll(".xp, .sp").forEach(el => el.addEventListener("change", updateGroupCounts));
