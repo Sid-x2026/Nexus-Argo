@@ -7,7 +7,7 @@
 <style>
   * { box-sizing: border-box; }
   :root { --bg:#ffffff; --card:#ffffff; --bd:#e8eaf3; --tx:#1f2937; --tx2:#6b7280; --tx3:#9ca3af; --ac:#6366f1; --ac2:#3b82f6; --ok:#22c55e; }
-  html, body { min-height: 100%; } body { margin: 0; background: var(--bg); min-height: 100vh; color: var(--tx); font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 15px; line-height: 1.6; }
+  html, body { min-height: 100%; } body { margin: 0; background: var(--bg); min-height: 100vh; color: var(--tx); font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 14.5px; line-height: 1.6; }
   .wrap { max-width: none; margin: 0; padding: 0; }
   #appView > .hero { margin-left: 140px; border-radius: 0; border: none; background: linear-gradient(120deg, #4f46e5, #3b82f6 55%, #06b6d4); color: #fff; padding: 30px 28px; box-shadow: 0 4px 16px rgba(59,130,246,.25); }
   #appView > .hero h1 { margin: 0; font-size: 24px; color: #fff; display: block; letter-spacing: .5px; } #appView > .hero h1::before { content: '◆'; color: #c7d2fe; margin-right: 8px; font-size: 14px; vertical-align: 2px; }
@@ -30,12 +30,12 @@
   .hero .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
   .hero button { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
   .card { background: var(--card); border: 1px solid var(--bd); border-radius: 18px; box-shadow: 0 2px 12px rgba(15,23,42,.05); padding: 14px 22px; margin-top: 10px; }
-  .card h2 { margin: 0 0 4px; font-size: 16.5px; color: var(--tx); }
+  .card h2 { margin: 0 0 4px; font-size: 15.5px; color: var(--tx); }
   .card h3 { margin: 0 0 10px; font-size: 14px; color: #6366f1; }
-  .card h3.step-h { color: var(--tx); font-size: 16px; margin: 10px 0 5px; padding-top: 8px; border-top: 1px solid #eef0fb; }
+  .card h3.step-h { color: var(--tx); font-size: 15px; margin: 8px 0 4px; padding-top: 6px; border-top: 1px solid #eef0fb; }
   .card h3.step-h:first-of-type { border-top: none; padding-top: 0; }
   .card h4 { margin: 14px 0 4px; font-size: 14px; color: #475569; }
-  .hint { color: #6b7280; font-size: 14px; margin: 0 0 6px; line-height: 1.55; }
+  .hint { color: #6b7280; font-size: 13.5px; margin: 0 0 5px; line-height: 1.5; }
   .tabs { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   .tabs button { border: 1px solid #e2e8f0; background: #fff; color: #334155; border-radius: 20px; padding: 7px 16px; font-size: 14.5px; cursor: pointer; }
   .tabs button.on { background: linear-gradient(135deg,#6366f1,#3b82f6); color: #fff; border-color: transparent; }
@@ -69,11 +69,11 @@
   .mode-box.direct h4 { color: #15803d; margin: 0 0 8px; font-size: 14.5px; }
   .mode-box.tunnel { background: #eef2ff; border-left-color: #6366f1; }
   .mode-box.tunnel h4 { color: #4f46e5; margin: 0 0 8px; font-size: 14.5px; }
-  .proto { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: nowrap; font-size: 13.5px; padding: 7px 10px; margin-top: 6px; } border: 1px solid #eef0fb; background: #fafaff; border-radius: 12px; padding: 11px 14px; margin-top: 8px; font-size: 15.5px; }
+  .proto { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 13px; padding: 5px 8px; margin-top: 4px; } border: 1px solid #eef0fb; background: #fafaff; border-radius: 12px; padding: 11px 14px; margin-top: 8px; font-size: 15.5px; }
   .proto label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
   .proto input[type=checkbox] { accent-color: #6366f1; width: 16px; height: 16px; }
   .proto .port { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 13px; }
-  .proto .port input { width: 56px; padding: 5px 6px; font-size: 13px; }
+  .proto .port input { width: 56px; padding: 5px 6px; font-size: 13px; text-align: center; }
   .proto.off { opacity: .45; }
   .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; font-weight: 600; }
   .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
@@ -91,7 +91,7 @@
   .sec-card.direct h4 { color: #15803d; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 2; grid-row: 1; min-width: 0; } #realitySection, #realityCard, #directFields { height: 100%; } .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 14px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 15px; padding: 9px 12px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 14px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 640px; } .card input[type=number] { max-width: 140px; } .card textarea { max-width: 640px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 8px 0 4px; } #realityCard input, #realityCard select { padding: 7px 10px; } #realityCard .hint { margin: 0 0 8px; }
+  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 14.5px; padding: 9px 12px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 13.5px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 640px; } .card input[type=number] { max-width: 140px; text-align: center; } .card textarea { max-width: 640px; } .direct-cols h4 { min-height: 42px; line-height: 1.4; margin-bottom: 2px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 8px 0 4px; } #realityCard input, #realityCard select { padding: 7px 10px; } #realityCard .hint { margin: 0 0 8px; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 10px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
   .scan-table th { color: #64748b; font-weight: 600; }
@@ -220,7 +220,6 @@
           <label class="pill"><input type="checkbox" id="modeTunnel" checked> Argo 隧道</label>
           <label class="pill"><input type="checkbox" id="modeDirect"> 直连节点</label>
         </div>
-        <p class="hint" style="margin-top:8px;">Argo 为默认；直连会暴露 VPS 真实 IP，仅作备用。两种可以一起装。隧道节点和直连节点共用一个域名会同时暴露两种入口，请使用不同的子域名。</p>
 
         <h3 class="step-h">② 代理客户端</h3>
         <p class="hint">单独选你要用的客户端，可多选：V2Ray、Sing-box、Clash、iOS。下面的协议按选中的客户端匹配，全选是把能适合所有客户端的协议全选中，推荐是推荐这个客户端用的协议搭配。</p>
@@ -287,7 +286,7 @@
 
         <h3 class="step-h">④ 配置参数</h3>
         <p class="hint">安全参数统一在这里设置，协议只管勾选和端口，部署时直接调用。直连在前、Argo 在后；只显示当前模式相关的配置。</p>
-        <p class="hint">左：直连域名与证书；右：Reality 配置（不勾 Reality 时不可修改，未勾选直连时不显示）。Argo 配置单独在下面。</p>
+        <p class="hint">上：直连域名与证书；下：Reality 配置（不勾 Reality 时不可修改，未勾选直连时不显示）。Argo 配置单独在下面。</p>
         <div class="cfg-grid">
         <div id="directFields" class="mode-box direct hidden">
           <h4>直连安全配置</h4>
