@@ -69,8 +69,8 @@
   .mode-box.direct h4 { color: #15803d; margin: 0 0 8px; font-size: 14.5px; }
   .mode-box.tunnel { background: #eef2ff; border-left-color: #6366f1; }
   .mode-box.tunnel h4 { color: #4f46e5; margin: 0 0 8px; font-size: 14.5px; }
-  .proto { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 13px; padding: 5px 8px; margin-top: 4px; } border: 1px solid #eef0fb; background: #fafaff; border-radius: 12px; padding: 11px 14px; margin-top: 8px; font-size: 15.5px; }
-  .proto label { display: block; cursor: pointer; font-weight: 600; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } .proto label input, .proto label .tag { margin-right: 6px; vertical-align: middle; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
+  .proto { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 13px; padding: 5px 8px; margin-top: 4px; }
+  .proto label { display: block !important; cursor: pointer; font-weight: 600; min-width: 0; overflow: hidden; white-space: nowrap !important; text-overflow: ellipsis; } .proto label input, .proto label .tag { margin-right: 6px; vertical-align: middle; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
   .proto input[type=checkbox] { accent-color: #6366f1; width: 16px; height: 16px; }
   .proto .port { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 13px; }
   .proto .port input { width: 56px; padding: 5px 6px; font-size: 13px; text-align: center; }
@@ -81,7 +81,7 @@
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
   .proto-wrap .row2 { grid-template-columns: 0.9fr 1.1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; } #argoGroup .proto .port { margin-left: 12px; }
   .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
-  .proto { flex-wrap: wrap; } .proto .port input { width: 64px; }
+
   .direct-cols { grid-template-columns: repeat(3, minmax(170px, 1fr)) !important; gap: 10px !important; }
   .uuid-row input, .uuid-row button { height: 36px; box-sizing: border-box; }
   @media (max-width: 900px) { .proto-wrap { flex-direction: column; } }
