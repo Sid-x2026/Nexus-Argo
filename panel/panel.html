@@ -79,7 +79,7 @@
   .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
   .proto-wrap { display: grid; grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.7fr); gap: 10px; align-items: stretch; margin-top: 8px; }
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
-  .proto-wrap .row2 { grid-template-columns: 1fr 1fr; }
+  .proto-wrap .row2 { grid-template-columns: 1fr 1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; } #argoGroup .proto .port { margin-left: 12px; }
   .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
   .proto { flex-wrap: wrap; } .proto .port input { width: 64px; }
   .direct-cols { grid-template-columns: repeat(3, minmax(170px, 1fr)) !important; gap: 10px !important; }
@@ -91,7 +91,7 @@
   .sec-card.direct h4 { color: #15803d; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 2; grid-row: 1; min-width: 0; } .cfg-grid:has(> #directFields.hidden) { grid-template-columns: 1fr; } .cfg-grid:has(> #directFields.hidden) #realitySection { grid-column: 1; } .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 14px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 15px; padding: 9px 12px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 14px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 8px 0 4px; } #realityCard input, #realityCard select { padding: 7px 10px; } #realityCard .hint { margin: 0 0 8px; }
+  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 2; grid-row: 1; min-width: 0; } #realitySection, #realityCard, #directFields { height: 100%; } .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 14px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 15px; padding: 9px 12px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 14px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 640px; } .card input[type=number] { max-width: 140px; } .card textarea { max-width: 640px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 8px 0 4px; } #realityCard input, #realityCard select { padding: 7px 10px; } #realityCard .hint { margin: 0 0 8px; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 10px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
   .scan-table th { color: #64748b; font-weight: 600; }
@@ -287,7 +287,7 @@
 
         <h3 class="step-h">④ 配置参数</h3>
         <p class="hint">安全参数统一在这里设置，协议只管勾选和端口，部署时直接调用。直连在前、Argo 在后；只显示当前模式相关的配置。</p>
-        <p class="hint">左：直连域名与证书；右：Reality 配置（不勾 Reality 时不可修改）。Argo 配置单独在下面。</p>
+        <p class="hint">左：直连域名与证书；右：Reality 配置（不勾 Reality 时不可修改，未勾选直连时不显示）。Argo 配置单独在下面。</p>
         <div class="cfg-grid">
         <div id="directFields" class="mode-box direct hidden">
           <h4>直连安全配置</h4>
@@ -297,12 +297,12 @@
               <h4>直连域名与前缀</h4>
               <label class="f">直连地址 address <span class="opt">选填</span></label>
               <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP，也可填域名">
-              <p class="hint">留空默认用 VPS 公网 IP；也可以填域名。ACME 申请证书必须填域名，填 IP 申请不了。<br>注意：这里不是面板域名。直连域名要在 Cloudflare 里加一条 A 记录解析到 VPS IP，代理关掉选 DNS only（灰云），开了小黄云就变成走 CDN、不是直连了。</p>
+              <p class="hint">留空使用 VPS 公网 IP。申请 ACME 证书须填写域名；域名须在 Cloudflare 添加 A 记录指向 VPS IP，并关闭代理（DNS only）。</p>
               <label class="f">直连 SNI <span class="opt">选填</span></label>
               <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同；TLS 握手用的域名">
-              <p class="hint">SNI 会自动填入上面直连地址里的地址，也可以自己改。Reality 的 SNI 用下面扫描的大厂域名，不走这里。</p>
+              <p class="hint">默认与直连地址相同，可自行修改。Reality 的 SNI 请使用目标扫描结果。</p>
               <h4 style="margin-top:14px;">其他安全参数</h4>
-              <p class="hint">Trojan、VMess、Hysteria2 的密码就是节点 UUID，无需另设；Shadowsocks 加密方式固定为 aes-256-gcm，密码同样是节点 UUID。</p>
+              <p class="hint">Trojan、VMess、Hysteria2 及 Shadowsocks 的密码均为节点 UUID；Shadowsocks 加密方式为 aes-256-gcm。</p>
             </div>
             <div class="sec-card direct">
               <h4>证书配置</h4>
@@ -689,8 +689,10 @@ function updateGroupCounts() {
   if (directN) $("directGroup").classList.remove("field-err");
 }
 function updateRealityFields() {
-  // Reality 配置常驻在 ④ 右边: 不勾 Reality 时整块禁用, 不隐藏
-  const enabled = $("modeDirect").checked && $("direct_vless_reality").checked;
+  // Reality 只和直连配置一起出现: 没勾直连就隐藏; 勾直连后显示, 不勾 Reality 时整块禁用
+  const show = $("modeDirect").checked;
+  const enabled = show && $("direct_vless_reality").checked;
+  const sec = $("realitySection"); if (sec) sec.classList.toggle("hidden", !show);
   const card = $("realityCard");
   card.classList.toggle("disabled", !enabled);
   card.querySelectorAll("input,select,textarea,button").forEach(el => { el.disabled = !enabled; });
