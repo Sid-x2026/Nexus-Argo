@@ -10,6 +10,7 @@
 #         bash <(curl -Ls https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main/panel-install.sh)
 #       不写 Token / 域名就是直连 / IP 进面板 (走①)。
 #   bash panel-install.sh uninstall     # 只拆面板, 不动节点部署
+#   bash panel-install.sh info          # 呼出面板信息: 登录地址/域名/后缀/端口/账号
 #
 # 默认只装面板 (不需要 Token): 装完用 http://VPS-IP:2053 + 账号密码进面板,
 # 在面板里填设置、点部署, 自动完成部署。装完会问要不要绑定隧道:
@@ -83,6 +84,7 @@ center_line() {
 }
 
 PANEL_PORT="${PANEL_PORT:-2053}"
+PANEL_PATH="${PANEL_PATH:-/Nexus}"
 RAW_BASE="${RAW_BASE:-https://raw.githubusercontent.com/Sid-x2026/Nexus-Argo/main}"
 WORKDIR="/opt/nexus-argo"
 PANEL_DIR="$WORKDIR/panel"
@@ -90,6 +92,14 @@ PANEL_DIR="$WORKDIR/panel"
 log() { echo "[nexus-panel] $*"; }
 die() { echo "[nexus-panel] ERROR: $*" >&2; exit 1; }
 
+if [ "${1:-}" = "info" ]; then
+  echo "Nexus-Argo 面板信息"
+  echo "  面板目录: $PANEL_DIR"
+  if [ -f "$PANEL_DIR/panel-info.json" ]; then cat "$PANEL_DIR/panel-info.json"; else echo "  (未找到 panel-info.json, 可能是旧版安装, 请重装一次)"; fi
+  echo "  面板容器: $(docker ps --format '{{.Names}} {{.Status}}' 2>/dev/null | grep nexus-panel || echo '未运行')"
+  echo "  订阅端口/路径: 见面板「订阅地址」页"
+  exit 0
+fi
 if [ "${1:-install}" = "uninstall" ]; then
   log "只拆面板 (节点部署不动, 要清节点请在面板里点清除部署, 或跑 install.sh uninstall) ..."
   docker rm -f nexus-panel nexus-panel-argo >/dev/null 2>&1 || true
@@ -254,7 +264,8 @@ do_bind_tunnel() {
   docker run -d --name nexus-panel-argo --restart unless-stopped --network host \
     cloudflare/cloudflared:latest tunnel --no-autoupdate run --token "$ARGO_TOKEN" \
     || die "cloudflared 启动失败"
-  TUNNEL_URL="https://$PANEL_DOMAIN/"
+  case "$PANEL_PATH" in /*) ;; *) PANEL_PATH="/$PANEL_PATH";; esac
+  TUNNEL_URL="https://$PANEL_DOMAIN$PANEL_PATH"
   echo ""
   sep
   echo "${C_YELLOW}${C_BOLD}  ⚠ 还差一步: 去 Cloudflare Zero Trust 里加一条路由${C_RESET}"
@@ -355,6 +366,9 @@ elif [ -t 0 ]; then
         continue
       fi
       echo "已设置面板端口: $PANEL_PORT_BIND (Zero Trust 路由请填: $PANEL_DOMAIN -> http://127.0.0.1:$PANEL_PORT_BIND)"
+      ask_tty _pp2 "面板后缀 [默认 /Nexus, 回车即默认, 不加后缀填 /]: "
+      PANEL_PATH="${_pp2:-/Nexus}"; [ "$PANEL_PATH" = "/" ] && PANEL_PATH=""
+      echo "已设置面板后缀: ${PANEL_PATH:-无}"
       _port_ok=""
       while true; do
         ask_tty _port_ok "这个端口对吗? (回车默认 y 确认 / n 重新输入): "
@@ -382,6 +396,7 @@ echo "只用直连协议: 不用绑隧道, 直接用面板装直连协议就行�
 if [ -n "$PASS" ]; then
   echo "密码也存在 $PANEL_DIR/password.txt (权限 600)"
 fi
+printf '{\n  "panel_url": "%s",\n  "tunnel_panel_url": "%s",\n  "panel_domain": "%s",\n  "panel_path": "%s",\n  "panel_port": "%s",\n  "account": "admin"\n}\n' "$PANEL_URL" "${TUNNEL_URL:-}" "${PANEL_DOMAIN:-}" "${PANEL_PATH:-}" "$PANEL_PORT" > "$PANEL_DIR/panel-info.json" 2>/dev/null || true
 echo ""
 sep
 echo "=================================================================="
@@ -389,13 +404,13 @@ echo "  ★ 面板已安装完成, 请保存下面这几行 ★"
 echo "=================================================================="
 # 关键内容最后显示, 地址对齐, 隧道域名在前、IP 地址在后
 if [ -n "$TUNNEL_URL" ]; then
-  printf '  %-10s %s\n' "隧道地址:" "$TUNNEL_URL"
+  printf '  %-12s %s%s%s\n' "隧道面板地址:" "${C_BOLD}${C_GREEN}" "$TUNNEL_URL" "${C_RESET}"
   printf '  %-10s %s\n' "" "(加完上面那条路由后可用)"
 fi
-printf '  %-10s %s\n' "面板地址:" "$PANEL_URL"
+printf '  %-12s %s%s%s\n' "面板地址:" "${C_BOLD}${C_GREEN}" "$PANEL_URL" "${C_RESET}"
 printf '  %-10s %s\n' "账号:" "admin"
 if [ -n "$PASS" ]; then
-  printf '  %-10s %s  %s\n' "密码:" "$PASS" "← 只显示这一次, 请立即保存"
+  printf '  %-12s %s%s%s  %s\n' "密码:" "${C_BOLD}${C_YELLOW}" "$PASS" "${C_RESET}" "← 只显示这一次, 请立即保存"
 else
   printf '  %-10s %s\n' "密码:" "不变"
 fi
