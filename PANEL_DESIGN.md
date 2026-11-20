@@ -227,3 +227,12 @@ Reality 配置在③配置参数的直连区里（`realityCard`），只在勾�
 - 侧边导航：fixed 全高悬浮不占版面，内容区铺满；顺序路由在前、出站在后。
 - 面板后缀真接上：panel-server.py 认 /Nexus（PANEL_PATH 环境变量），/ 跳到 /Nexus，/api 不变。
 - 完成框对齐：值列对齐，隧道面板地址后同一行加「（需在 Zero Trust 中添加对应路由后方可访问）」；加速说明：重装别跑 cleanup 清镜像，RAW_BASE 可改 jsDelivr。
+
+## 第 7 步 (2026-11-20)
+- 部署页：只勾一种方式时只显示该方式的协议组（修复 details display:flex 导致已隐藏的组还留空白框）。
+- 代理客户端去掉「自动最优」「全部客户端」，默认 V2Ray，只留 V2Ray/Sing-box/Clash/iOS（可多选）。
+- 推荐协议挪到③协议选择里，改名「推荐协议」（默认）/「全部适配协议」。
+- 协议选择自适应：Argo 组窄、直连组宽（grid 0.8fr / 1.7fr，单组时占满），直连三列 minmax 170px，端口框收窄。
+- Argo 配置：UUID 与优选地址移到版块底部，输入框高度拉平（36px），按钮改成「生成」。
+- 配置参数一分为二：勾 Reality 时 Reality 版块单独在上面先显示，再显示直连域名与证书；不勾只显示直连配置；版块顶部有说明。
+- 刷新慢：/api/status 原来 8 次 docker inspect 串行，改成一次 docker ps + 3 秒缓存，刷新约 4-5 秒降到 1 秒左右；前端 showApp 并行加载。
