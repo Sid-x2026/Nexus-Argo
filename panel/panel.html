@@ -9,7 +9,7 @@
   :root { --bg:#ffffff; --card:#ffffff; --bd:#e8eaf3; --tx:#1f2937; --tx2:#6b7280; --tx3:#9ca3af; --ac:#6366f1; --ac2:#3b82f6; --ok:#22c55e; }
   html, body { min-height: 100%; } body { margin: 0; background: var(--bg); min-height: 100vh; color: var(--tx); font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 16px; line-height: 1.6; }
   .wrap { max-width: none; margin: 0; padding: 0; }
-  #appView > .hero { margin-left: 180px; border-radius: 0; border: none; background: linear-gradient(120deg, #4f46e5, #3b82f6 55%, #06b6d4); color: #fff; padding: 38px 28px; box-shadow: 0 4px 16px rgba(59,130,246,.25); }
+  #appView > .hero { position: sticky; top: 0; z-index: 40; margin-left: 180px; border-radius: 0; border: none; background: linear-gradient(120deg, #4f46e5, #3b82f6 55%, #06b6d4); color: #fff; padding: 38px 28px; box-shadow: 0 4px 16px rgba(59,130,246,.25); }
   #appView > .hero h1 { margin: 0; font-size: 35px; color: #fff; display: block; letter-spacing: .5px; } #appView > .hero h1::before { content: '◆'; color: #c7d2fe; margin-right: 8px; font-size: 14px; vertical-align: 2px; }
   #appView > .hero h1 .tag { font-size: 11px; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.45); color: #fff; padding: 2px 8px; border-radius: 20px; vertical-align: middle; margin-left: 8px; font-weight: 400; }
   #appView > .hero p { margin: 8px 0 0; color: rgba(255,255,255,.85); font-size: 18.5px; display: block; }
@@ -35,7 +35,7 @@
   .card h3.step-h { color: var(--tx); font-size: 16.5px; margin: 8px 0 4px; padding-top: 6px; border-top: 1px solid #eef0fb; }
   .card h3.step-h:first-of-type { border-top: none; padding-top: 0; }
   .card h4 { margin: 14px 0 4px; font-size: 13.5px; color: #475569; }
-  .hint { color: #6b7280; font-size: 15px; margin: 0 0 4px; white-space: nowrap; line-height: 1.5; }
+  .hint { color: #6b7280; font-size: 12.7px; margin: 0 0 4px; white-space: nowrap; line-height: 1.5; }
   .tabs { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   .tabs button { border: 1px solid #e2e8f0; background: #fff; color: #334155; border-radius: 20px; padding: 7px 16px; font-size: 14px; cursor: pointer; }
   .tabs button.on { background: linear-gradient(135deg,#6366f1,#3b82f6); color: #fff; border-color: transparent; }
@@ -51,7 +51,7 @@
   label.f { display: block; font-size: 13.5px; color: #475569; margin: 10px 0 5px; font-weight: 600; }
   .req { color: #dc2626; font-weight: 700; }
   .opt { color: #94a3b8; font-weight: 400; font-size: 11.5px; }
-  input[type=text], input[type=password], input[type=number], textarea, select { width: 100%; border: 1px solid #e2e8f0; border-radius: 12px; padding: 9px 12px; font-size: 14px; background: #fff; color: var(--tx); outline: none; }
+  input[type=text], input[type=password], input[type=number], textarea, select { width: 100%; border: 1px solid #e2e8f0; border-radius: 12px; padding: 9px 12px; font-size: 13.7px; background: #fff; color: var(--tx); outline: none; }
   input:focus, textarea:focus, select:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
   input[type=number] { font-family: monospace; }
   .field-err { border-color: #dc2626 !important; box-shadow: 0 0 0 3px rgba(220,38,38,.15) !important; }
@@ -73,11 +73,11 @@
   .proto label { display: block !important; cursor: pointer; font-weight: 600; min-width: 0; overflow: hidden; white-space: nowrap !important; text-overflow: ellipsis; } .proto label input, .proto label .tag { margin-right: 6px; vertical-align: middle; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
   .proto input[type=checkbox] { accent-color: #6366f1; width: 16px; height: 16px; }
   .proto .port { display: flex; align-items: center; gap: 4px; color: #64748b; font-size: 12.5px; }
-  .proto .port input { width: 56px; padding: 5px 6px; font-size: 12.5px; text-align: center; }
+  .proto .port input { width: 56px; padding: 5px 6px; font-size: 14.5px; text-align: center; }
   .proto.off { opacity: .45; }
   .tag { display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; font-weight: 600; }
   .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
-  .proto-wrap { display: grid; grid-template-columns: minmax(520px, 1fr) minmax(0, 1.3fr); gap: 8px; align-items: stretch; margin-top: 8px; }
+  .proto-wrap { display: grid; grid-template-columns: minmax(460px, 0.8fr) minmax(0, 1.5fr); gap: 8px; align-items: stretch; margin-top: 8px; }
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
   .proto-wrap .row2 { grid-template-columns: 0.9fr 1.1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) auto; } #argoGroup .proto .port { margin-left: 12px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: minmax(280px, 460px) minmax(280px, 460px); justify-content: start; }
   .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
@@ -91,7 +91,7 @@
   .sec-card.direct h4 { color: #4f46e5; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 14.5px; margin: 2px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 15.5px; padding: 6px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 14.5px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; } #argoToken { max-width: 900px; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols .ghead { min-height: 42px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px; } .pill.static { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; cursor: default; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 300px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 300px; text-align: center; }  #tunnelFields .row2 { margin-top: 12px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 444px 444px; gap: 12px; justify-content: start; }  .row-prefix { grid-template-columns: 150px 150px !important; gap: 100px !important; justify-content: start !important; } #argoPrefix, #directPrefix { max-width: 150px; }  #nodeUuid { flex: none; width: 380px; }  .proto .port input { font-size: 16px; width: 60px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 2px 0 2px; } #realityCard input, #realityCard select { padding: 6px 9px; } #realityCard .hint { margin: 0 0 4px; } #realityCard input[type=text], #realityCard select { max-width: 300px; } #tunnelFields .optaddr-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; } #tunnelFields .optaddr-row label.f { margin: 0; white-space: nowrap; } .warn-inline { display: inline-block; background: #fef9c3; border: 1px solid #fde68a; color: #854d0e; border-radius: 8px; padding: 2px 8px; font-size: 12px; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; }
+  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 10px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; margin: 2px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 13.7px; padding: 6px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 12.7px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 14px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; } #argoToken { max-width: 900px; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols .ghead { min-height: 42px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px; } .pill.static { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; cursor: default; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 300px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 300px; text-align: center; }  #tunnelFields .row2 { margin-top: 12px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 444px 444px; gap: 12px; justify-content: start; }  .row-prefix { grid-template-columns: 150px 150px !important; gap: 100px !important; justify-content: start !important; } #argoPrefix, #directPrefix { max-width: 150px; }  #nodeUuid { flex: none; width: 320px; text-align: center; }  .proto .port input { font-size: 14.5px; width: 60px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 12px; } #realityCard label.f { margin: 2px 0 2px; } #realityCard input, #realityCard select { padding: 6px 9px; } #realityCard .hint { margin: 0 0 4px; } #realityCard input[type=text], #realityCard select { max-width: 300px; } #tunnelFields .optaddr-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; } #tunnelFields .optaddr-row label.f { margin: 0; white-space: nowrap; } .warn-inline { display: inline-block; background: #fef9c3; border: 1px solid #fde68a; color: #854d0e; border-radius: 8px; padding: 2px 8px; font-size: 12px; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
   .scan-table th { color: #64748b; font-weight: 600; }
@@ -340,7 +340,7 @@
             <p class="hint">扫描：检测上方域名；查找目标：打开扫描器，选一行点「使用」自动填入。</p>
             <div id="realityScanOut" class="status info"></div>
             <div id="realityResultCard" class="hidden" style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; padding:10px 12px; margin:8px 0; font-size:12.5px; line-height:1.8;"></div>
-            <div id="realityScanModal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:99; display:flex; align-items:center; justify-content:center;"><div style="background:#fff; border-radius:12px; padding:16px; width:min(860px,92vw); max-height:80vh; overflow:auto;"><div style="display:flex; justify-content:space-between; align-items:center;"><h3 style="margin:0;">REALITY 目标扫描器</h3><button type="button" class="sm ghost" id="btnCloseRealityModal">关闭</button></div><div id="realityScanModalOut" class="status info" style="margin:8px 0;">正在扫描…</div><div style="overflow-x:auto;"><table class="scan-table"><thead><tr><th>目标</th><th>状态</th><th>TLS</th><th>ALPN</th><th>密钥交换</th><th>证书</th><th>证书有效期</th><th>证书链</th><th>延迟</th><th>操作</th></tr></thead><tbody id="realityScanBody"></tbody></table></div></div></div>
+            <div id="realityScanModal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:99; display:flex; align-items:center; justify-content:center;"><div style="background:#fff; border-radius:12px; padding:16px; width:min(1200px,94vw); max-height:80vh; overflow:auto;"><div style="display:flex; justify-content:space-between; align-items:center;"><h3 style="margin:0;">REALITY 目标扫描器</h3><button type="button" class="sm ghost" id="btnCloseRealityModal">关闭</button></div><div id="realityScanModalOut" class="status info" style="margin:8px 0;">正在扫描…</div><div style="overflow-x:auto;"><table class="scan-table"><thead><tr><th>目标</th><th>状态</th><th>TLS</th><th>ALPN</th><th>密钥交换</th><th>证书</th><th>证书有效期</th><th>证书链</th><th>延迟</th><th>操作</th></tr></thead><tbody id="realityScanBody"></tbody></table></div></div></div>
             <label class="f">SNI <span class="opt">选填</span></label>
             <input type="text" id="reality_sni" class="mono" placeholder="默认与目标域名相同">
             <label class="f">公钥 <span class="opt">只读</span></label>
@@ -348,9 +348,8 @@
             <p class="hint">私钥保存于服务器 reality.json，不返回前端；确定目标后请立即获取证书。</p>
             <div class="btnrow" style="margin-top:6px;"><button type="button" class="sm ghost" id="btnRealityNewKeys">获取新证书</button><button type="button" class="sm ghost" id="btnRealityClearKeys" style="color:#dc2626; border-color:#fecaca;">清除</button></div>
             <label class="f">Short IDs <span class="opt">选填</span></label>
-            <div id="realityShortIds"></div>
-            <div style="display:flex; gap:8px; margin-top:8px;"><input type="text" id="reality_short_id_new" class="mono" placeholder="新增 Short ID，如 c8f27e"><button type="button" class="sm ghost" id="btnAddShortId" style="flex-shrink:0;">添加</button><button type="button" class="sm ghost" id="btnRegenShortIds" style="flex-shrink:0;">重新生成</button></div>
-            <p class="hint">Short ID 可添加多个，第一项用于生成节点链接；部署时自动生成并保存。</p>
+            <div style="display:flex; gap:8px;"><input type="text" id="reality_short_ids" class="mono" placeholder="多个 Short ID 用逗号隔开，如 a1b2c3d4,e5f6a7b8"><button type="button" class="sm ghost" id="btnRegenShortIds" style="flex-shrink:0;">重新生成</button></div>
+            <p class="hint">多个 Short ID 用逗号隔开，第一项用于生成节点链接；留空时部署自动生成并保存。</p>
             <div class="row2">
               <div>
                 <label class="f">指纹 <span class="opt">选填</span></label>
@@ -543,7 +542,13 @@ const CERT_NEED_IDS = ["direct_vless_tls", "direct_vless_grpc", "direct_trojan",
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const SUB_PATH_RE = /^[A-Za-z0-9._-]{1,32}$/;
 const RESERVED_SUB_PATH = ["api", "config.json", "help.txt"];
-let realityShortIds = [];
+function parseShortIds(v) {
+  const seen = new Set(); const out = [];
+  String(v || "").split(/[,，、\s]+/).forEach(s => { s = s.trim().toLowerCase(); if (/^[0-9a-f]{2,16}$/.test(s) && !seen.has(s)) { seen.add(s); out.push(s); } });
+  return out.slice(0, 8);
+}
+function getShortIds() { return parseShortIds($("reality_short_ids").value); }
+function setShortIds(ids) { $("reality_short_ids").value = (ids || []).slice(0, 8).join(", "); }
 
 async function api(path, opts) {
   const r = await fetch(path, Object.assign({headers: {"Content-Type": "application/json"}}, opts || {}));
@@ -752,7 +757,7 @@ function collectConfig() {
   cfg.reality_flow = $("reality_flow").value.trim() || "xtls-rprx-vision";
   cfg.reality_encryption = $("reality_encryption").value.trim() || "mlkem768x25519plus.native";
   cfg.reality_spiderx = $("reality_spiderx").value.trim() || "/";
-  cfg.reality_short_ids = realityShortIds.slice();
+  cfg.reality_short_ids = getShortIds();
   // 旧字段名兼容 (direct_xray_tls)
   cfg.direct_xray_tls = cfg.direct_vless_tls;
   cfg.direct_xray_tls_port = cfg.direct_vless_tls_port;
@@ -804,8 +809,7 @@ function fillConfig(c) {
   $("reality_encryption").value = c.reality_encryption || "mlkem768x25519plus.native";
   $("reality_spiderx").value = c.reality_spiderx || "/";
   if (Array.isArray(c.reality_short_ids) && c.reality_short_ids.length) {
-    realityShortIds = c.reality_short_ids.slice(0, 8);
-    renderShortIds();
+    setShortIds(c.reality_short_ids);
   }
   const cm = c.cert_mode || "acme";
   const radio = document.querySelector('input[name="certMode"][value="' + cm + '"]');
@@ -998,7 +1002,6 @@ $("btnDeploy").onclick = async () => {
     return;
   }
   setOut($("deployOut"), "正在启动部署…", "info");
-  $("btnDeploy").disabled = true;
   $("logWrap").classList.remove("hidden");
   $("deployLog").textContent = "";
   logOffset = 0;
@@ -1010,7 +1013,6 @@ $("btnDeploy").onclick = async () => {
     pollDeploy();
   } catch (e) {
     setOut($("deployOut"), e.message, "err");
-    $("btnDeploy").disabled = false;
   }
 };
 async function pollDeploy() {
@@ -1022,7 +1024,6 @@ async function pollDeploy() {
     logOffset = l.offset;
     if (s.state === "ok" || s.state === "failed") {
       clearInterval(logTimer); logTimer = null;
-      $("btnDeploy").disabled = false;
       setOut($("deployOut"), s.message || (s.state === "ok" ? "部署完成" : "部署失败"), s.state === "ok" ? "ok" : "err");
       loadStatus(); loadSubscription(); loadCert();
     }
@@ -1037,57 +1038,26 @@ $("btnClear").onclick = async () => {
   } catch (e) { setOut($("deployOut"), e.message, "err"); }
 };
 
-function renderShortIds() {
-  const box = $("realityShortIds");
-  box.innerHTML = "";
-  if (!realityShortIds.length) {
-    box.innerHTML = '<span class="muted">暂无 Short ID，部署时自动生成一个。</span>';
-    return;
-  }
-  realityShortIds.forEach((sid, i) => {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.textContent = sid;
-    const x = document.createElement("button");
-    x.type = "button";
-    x.textContent = "×";
-    x.title = "删除";
-    x.onclick = () => { realityShortIds.splice(i, 1); renderShortIds(); };
-    chip.appendChild(x);
-    box.appendChild(chip);
-  });
-}
 function randomShortId() {
   const buf = new Uint8Array(4);
   (window.crypto || {}).getRandomValues ? crypto.getRandomValues(buf) : buf.forEach((_, i) => buf[i] = Math.floor(Math.random() * 256));
   return Array.from(buf).map(b => b.toString(16).padStart(2, "0")).join("");
 }
-$("btnAddShortId").onclick = () => {
-  const v = $("reality_short_id_new").value.trim().toLowerCase();
-  const sid = v || randomShortId();
-  if (!/^[0-9a-f]{2,16}$/.test(sid)) { alert("Short ID 只能是 2-16 位 hex 字符"); return; }
-  if (realityShortIds.length >= 8) { alert("Short IDs 最多 8 个"); return; }
-  if (realityShortIds.indexOf(sid) >= 0) { alert("这个 Short ID 已存在"); return; }
-  realityShortIds.push(sid);
-  $("reality_short_id_new").value = "";
-  renderShortIds();
-};
 function ensureShortIds(n) {
   // 默认 3 个；每次换目标域名后重新随机生成，避免大量重复
-  const seen = new Set();
-  realityShortIds = [];
-  while (realityShortIds.length < (n || 3)) { const s = randomShortId(); if (!seen.has(s)) { seen.add(s); realityShortIds.push(s); } }
-  renderShortIds();
+  const seen = new Set(); const ids = [];
+  while (ids.length < (n || 3)) { const s = randomShortId(); if (!seen.has(s)) { seen.add(s); ids.push(s); } }
+  setShortIds(ids);
 }
 $("btnRegenShortIds").onclick = () => ensureShortIds(3);
 async function loadRealityKeys() {
   try {
     const k = await api("/api/reality-keys");
     $("reality_pubkey").value = k.public_key || "";
-    if (Array.isArray(k.short_ids) && k.short_ids.length && !realityShortIds.length) {
-      realityShortIds = k.short_ids.slice(0, 8);
-      renderShortIds();
+    if (Array.isArray(k.short_ids) && k.short_ids.length && !$("reality_short_ids").value.trim()) {
+      setShortIds(k.short_ids);
     }
+    if (!$("reality_short_ids").value.trim()) { ensureShortIds(3); }
   } catch (e) {}
 }
 $("btnRealityNewKeys").onclick = async () => {
@@ -1095,7 +1065,7 @@ $("btnRealityNewKeys").onclick = async () => {
   try {
     const k = await api("/api/reality-keys", {method: "POST", body: JSON.stringify({action: "regenerate"})});
     $("reality_pubkey").value = k.public_key || "";
-    if (Array.isArray(k.short_ids) && k.short_ids.length) { realityShortIds = k.short_ids.slice(0, 8); renderShortIds(); }
+    if (Array.isArray(k.short_ids) && k.short_ids.length) { setShortIds(k.short_ids); }
     setOut($("realityScanOut"), "已生成新的 Reality 密钥对", "ok");
   } catch (e) { setOut($("realityScanOut"), e.message, "err"); }
 };
@@ -1104,8 +1074,7 @@ $("btnRealityClearKeys").onclick = async () => {
   try {
     await api("/api/reality-keys", {method: "POST", body: JSON.stringify({action: "clear"})});
     $("reality_pubkey").value = "";
-    realityShortIds = [];
-    renderShortIds();
+    $("reality_short_ids").value = "";
     setOut($("realityScanOut"), "已清除 Reality 密钥", "ok");
   } catch (e) { setOut($("realityScanOut"), e.message, "err"); }
 };
