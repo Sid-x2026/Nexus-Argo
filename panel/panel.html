@@ -474,11 +474,10 @@
         <div class="sec-card tunnel">
         <div class="sticky-deploy">
           <div class="btnrow" style="margin-top:0;">
-            <button id="btnSaveCfg" class="ghost">只保存配置</button>
             <button id="btnDeploy">开始部署</button>
             <button id="btnClear" class="red">清除部署</button>
           </div>
-          <p class="hint">只保存配置：只保存配置，不部署。<br>开始部署：保存配置并开始部署。<br>清除部署：只删除节点容器和生成的配置文件，面板与已保存配置保留；如需连面板一起彻底清理，请在 VPS 上执行一键清理脚本 cleanup.sh。</p>
+          <p class="hint">开始部署：保存配置并开始部署。本面板仅支持一次部署；部署完成后如需调整，请先清除部署，再重新部署。<br>清除部署：卸载除面板外的全部部署（节点容器与生成的配置文件），面板及已保存配置保留；如需连同面板彻底清理，请在 VPS 上执行一键清理脚本 cleanup.sh。</p>
           <div id="deployOut" class="status info"></div>
         </div>
         </div>
@@ -696,6 +695,12 @@ async function loadStatus() {
     $("nDeploy").textContent = ds;
     $("lastRefresh").textContent = "上次刷新 " + new Date().toLocaleTimeString();
     if (s.panel_port) { panelPort = s.panel_port; checkPortConflicts(); }
+    // 面板仅支持一次部署: 任一节点容器存在即视为已部署, 禁用开始部署
+    const NODE_CONTAINERS = ["nexus-xray", "nexus-singbox", "nexus-sb-dispatch", "nexus-argo", "nexus-sub", "nexus-web-panel"];
+    const deployedNow = NODE_CONTAINERS.some(n => svc(n) !== "not_installed");
+    const bd = $("btnDeploy");
+    if (bd) bd.disabled = deployedNow;
+    if (deployedNow) setOut($("deployOut"), "已部署，如需修改请先清除部署，再重新部署。", "info");
   } catch (e) {}
 }
 
@@ -1106,12 +1111,6 @@ function validateDeploy() {
   return errs;
 }
 
-$("btnSaveCfg").onclick = async () => {
-  try {
-    await api("/api/config", {method: "POST", body: JSON.stringify(collectConfig())});
-    setOut($("deployOut"), "配置已保存", "ok");
-  } catch (e) { setOut($("deployOut"), e.message, "err"); }
-};
 $("btnDeploy").onclick = async () => {
   const errs = validateDeploy();
   if (errs.length) {
@@ -1123,6 +1122,7 @@ $("btnDeploy").onclick = async () => {
     }
     return;
   }
+  $("btnDeploy").disabled = true;
   setOut($("deployOut"), "正在启动部署…", "info");
   $("logWrap").classList.remove("hidden");
   $("deployLog").textContent = "";
@@ -1134,6 +1134,7 @@ $("btnDeploy").onclick = async () => {
     logTimer = setInterval(pollDeploy, 1500);
     pollDeploy();
   } catch (e) {
+    $("btnDeploy").disabled = false;
     setOut($("deployOut"), e.message, "err");
   }
 };

@@ -122,6 +122,7 @@ def _split_host_port(s):
 
 # 部署过的服务容器 (健康检查用, 和 install.sh 里起的名字一致)
 SERVICES = ["nexus-argo", "nexus-panel-argo", "nexus-xray", "nexus-singbox", "nexus-sb-dispatch", "nexus-sub", "nexus-web-panel"]
+NODE_CONTAINERS = ("nexus-xray", "nexus-singbox", "nexus-sb-dispatch", "nexus-argo", "nexus-sub", "nexus-web-panel")
 
 DEFAULT_CONFIG = {
     "node_uuid": "",
@@ -893,6 +894,11 @@ def _docker_running(name):
     return states[name]
 
 
+def _is_deployed():
+    # 任一节点容器存在(运行中或已停止)即视为已有部署; 面板隧道 nexus-panel-argo 不算
+    return any(_docker_running(n) != "not_installed" for n in NODE_CONTAINERS)
+
+
 def _argo_tunnel_state():
     """Argo 隧道状态 = 节点隧道 nexus-argo 与面板隧道 nexus-panel-argo
     任一在跑即运行中。只查 nexus-argo 会漏掉面板隧道, 导致用户明明
@@ -1320,7 +1326,7 @@ class Handler(BaseHTTPRequestHandler):
             st = deploy_status()
             sub = subscription_urls(cfg, self.headers.get("Host"), self.headers.get("X-Forwarded-Proto"))
             self._send_json({
-                "deployed": st.get("state") == "ok" or os.path.exists(os.path.join(WORKDIR, "sub", "raw.txt")),
+                "deployed": _is_deployed(),
                 "deploy_state": st.get("state", "idle"),
                 "services": services,
                 "nodes": {"native": sub["raw_count"], "dynamic": sub["merged_count"]},
@@ -1431,6 +1437,9 @@ class Handler(BaseHTTPRequestHandler):
             cfg, errors = validate_config(body if body else load_config())
             if errors:
                 self._send_json({"error": "；".join(errors)}, 400)
+                return
+            if _is_deployed():
+                self._send_json({"error": "已有部署，请先清除部署后再重新部署"}, 409)
                 return
             # 直连 WS path 与 gRPC serviceName 每次部署重新随机生成
             cfg["direct_ws_path"], cfg["direct_grpc_service"] = _gen_direct_paths()
@@ -1626,6 +1635,7 @@ class Handler(BaseHTTPRequestHandler):
             # 清除本次部署 (节点容器 + 配置文件), 面板本身保留, 配置保留可一键重部署
             for name in ("nexus-xray", "nexus-singbox", "nexus-sb-dispatch", "nexus-argo", "nexus-sub", "nexus-web-panel"):
                 _run(["docker", "rm", "-f", name], timeout=30)
+            _DOCKER_CACHE.update({"t": 0, "states": {}})
             for sub in ("xray", "singbox", "sub", "sb-dispatch", "web"):
                 _run(["rm", "-rf", os.path.join(WORKDIR, sub)], timeout=10)
             for f in ("ROUTES.md",):
