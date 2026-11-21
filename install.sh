@@ -229,6 +229,10 @@ DIRECT_SS_PORT="${DIRECT_SS_PORT:-8388}"
 DIRECT_HY2="${DIRECT_HY2:-false}"
 DIRECT_HY2_PORT="${DIRECT_HY2_PORT:-9446}"
 CERT_MODE="${CERT_MODE:-selfsigned}"
+# 直连 WS path 与 gRPC serviceName: 面板部署时由 panel-server.py
+# 每次随机生成经环境变量传进来; 独立部署没传时用公开默认值。
+DIRECT_WS_PATH="${DIRECT_WS_PATH:-/ws}"
+DIRECT_GRPC_SERVICE="${DIRECT_GRPC_SERVICE:-grpc}"
 # Filled in by the cert / Reality setup below (before render); exported
 # to the Python render block and to the nexus-sub container.
 REALITY_PUBLIC_KEY="${REALITY_PUBLIC_KEY:-}"
@@ -783,7 +787,7 @@ def render_xray(port, configs):
                 "port": int(os.environ.get("DIRECT_VLESS_WS_PORT", "8083")), "protocol": "vless",
                 "settings": {"clients": [{"id": uuid}], "decryption": "none"},
                 "streamSettings": {"network": "ws", "security": "none",
-                                   "wsSettings": {"path": "/ws"}}
+                                   "wsSettings": {"path": os.environ.get("DIRECT_WS_PATH", "/ws")}}
             })
         if _is_true(os.environ.get("DIRECT_VLESS_GRPC")):
             inbounds.append({
@@ -791,7 +795,7 @@ def render_xray(port, configs):
                 "settings": {"clients": [{"id": uuid}], "decryption": "none"},
                 "streamSettings": {"network": "grpc", "security": "tls",
                                    "tlsSettings": _direct_tls(),
-                                   "grpcSettings": {"serviceName": "grpc"}}
+                                   "grpcSettings": {"serviceName": os.environ.get("DIRECT_GRPC_SERVICE", "grpc")}}
             })
         if _is_true(os.environ.get("DIRECT_TROJAN")):
             inbounds.append({
@@ -806,7 +810,7 @@ def render_xray(port, configs):
                 "settings": {"clients": [{"id": uuid, "alterId": 0}]},
                 "streamSettings": {"network": "ws", "security": "tls",
                                    "tlsSettings": _direct_tls(),
-                                   "wsSettings": {"path": "/ws"}}
+                                   "wsSettings": {"path": os.environ.get("DIRECT_WS_PATH", "/ws")}}
             })
     if not inbounds:
         return None
@@ -967,7 +971,7 @@ def _ai():
 def _vmess_link(dd, port):
     cfg = {"v": "2", "ps": f"{prefix_direct}丨Xray-VMess-WS", "add": dd, "port": str(port),
            "id": uuid, "aid": "0", "net": "ws", "type": "none", "host": dd,
-           "path": "/ws", "tls": "tls", "sni": dd}
+           "path": os.environ.get("DIRECT_WS_PATH", "/ws"), "tls": "tls", "sni": dd}
     return "vmess://" + _b64link.b64encode(json.dumps(cfg, ensure_ascii=False).encode()).decode()
 
 def _ss_link(dd, port):
@@ -978,6 +982,7 @@ def _ss_link(dd, port):
 direct = []
 if _is_true(os.environ.get("ENABLE_DIRECT")):
     _dd = os.environ.get("DIRECT_DOMAIN", "").strip()
+    _dsni = os.environ.get("DIRECT_SNI", "").strip() or _dd
     if _dd:
         if _is_true(os.environ.get("DIRECT_XRAY_TLS")):
             direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_XRAY_TLS_PORT', '443')}/?encryption=none&security=tls&sni={_dsni}&type=tcp{_ai()}#{prefix_direct}丨Xray-TLS")
@@ -1005,9 +1010,9 @@ if _is_true(os.environ.get("ENABLE_DIRECT")):
             _rlink += f"#{prefix_direct}丨Xray-Reality"
             direct.append(_rlink)
         if _is_true(os.environ.get("DIRECT_VLESS_WS")):
-            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_WS_PORT', '8083')}/?encryption=none&type=ws&path=%2Fws#{prefix_direct}丨Xray-WS")
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_WS_PORT', '8083')}/?encryption=none&type=ws&path={_uparse.quote(os.environ.get('DIRECT_WS_PATH', '/ws'), safe='')}#{prefix_direct}丨Xray-WS")
         if _is_true(os.environ.get("DIRECT_VLESS_GRPC")):
-            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_GRPC_PORT', '8084')}/?encryption=none&security=tls&sni={_dsni}&type=grpc&serviceName=grpc{_ai()}#{prefix_direct}丨Xray-gRPC")
+            direct.append(f"vless://{uuid}@{_dd}:{os.environ.get('DIRECT_VLESS_GRPC_PORT', '8084')}/?encryption=none&security=tls&sni={_dsni}&type=grpc&serviceName={_uparse.quote(os.environ.get('DIRECT_GRPC_SERVICE', 'grpc'), safe='')}{_ai()}#{prefix_direct}丨Xray-gRPC")
         if _is_true(os.environ.get("DIRECT_TROJAN")):
             direct.append(f"trojan://{uuid}@{_dd}:{os.environ.get('DIRECT_TROJAN_PORT', '9443')}?security=tls&sni={_dsni}{_ai()}#{prefix_direct}丨Xray-Trojan")
         if _is_true(os.environ.get("DIRECT_VMESS_WS")):
@@ -1231,6 +1236,7 @@ if [ -n "$SUB_DOMAIN" ]; then
       -e DIRECT_VLESS_REALITY="$DIRECT_VLESS_REALITY" -e DIRECT_VLESS_REALITY_PORT="$DIRECT_VLESS_REALITY_PORT" \
       -e DIRECT_VLESS_WS="$DIRECT_VLESS_WS" -e DIRECT_VLESS_WS_PORT="$DIRECT_VLESS_WS_PORT" \
       -e DIRECT_VLESS_GRPC="$DIRECT_VLESS_GRPC" -e DIRECT_VLESS_GRPC_PORT="$DIRECT_VLESS_GRPC_PORT" \
+      -e DIRECT_WS_PATH="$DIRECT_WS_PATH" -e DIRECT_GRPC_SERVICE="$DIRECT_GRPC_SERVICE" \
       -e DIRECT_TROJAN="$DIRECT_TROJAN" -e DIRECT_TROJAN_PORT="$DIRECT_TROJAN_PORT" \
       -e DIRECT_VMESS_WS="$DIRECT_VMESS_WS" -e DIRECT_VMESS_WS_PORT="$DIRECT_VMESS_WS_PORT" \
       -e DIRECT_SB_TROJAN="$DIRECT_SB_TROJAN" -e DIRECT_SB_TROJAN_PORT="$DIRECT_SB_TROJAN_PORT" \
