@@ -746,16 +746,41 @@ def _ob_num(o):
         return 0
 
 
+def _ob_security(o):
+    # 出站安全: 新字段 security 为准 (none/tls/reality); 旧记录只有 tls
+    # 布尔值时推导 (True -> tls, False -> none)。
+    s = str(o.get("security") or "").strip().lower()
+    if s in ("none", "tls", "reality"):
+        return s
+    return "tls" if bool(o.get("tls", True)) else "none"
+
+
+def _ob_sni(o, addr):
+    # SNI 为空时默认用地址。
+    return str(o.get("sni") or "").strip() or addr
+
+
+def _ob_transport(o):
+    tr = str(o.get("transport") or "tcp").strip().lower() or "tcp"
+    return tr if tr in ("tcp", "ws", "grpc") else "tcp"
+
+
 def _xray_outbound(o):
     # 一条面板出站 -> Xray outbound。未知类型返回 None (跳过)。
+    # 新字段为空时输出与第 53 步一致 (不改变已有部署的行为)。
     t = str(o.get("type") or "freedom").lower()
     tag = str(o.get("tag") or "direct")
     addr = str(o.get("address") or "").strip()
     port = _ob_num(o)
     user = str(o.get("username") or "").strip()
     pw = str(o.get("password") or "")
+    st = str(o.get("send_through") or "").strip()
+    mux = bool(o.get("mux"))
     if t == "freedom":
-        return {"protocol": "freedom", "tag": tag}
+        d = {"protocol": "freedom", "tag": tag}
+        if st:
+            d["sendThrough"] = st
+        return d
     if t == "blackhole":
         return {"protocol": "blackhole", "tag": tag}
     if t == "dns":
@@ -764,63 +789,130 @@ def _xray_outbound(o):
         srv = {"address": addr, "port": port}
         if user:
             srv["users"] = [{"user": user, "pass": pw}]
-        return {"protocol": "socks", "tag": tag, "settings": {"servers": [srv]}}
+        d = {"protocol": "socks", "tag": tag, "settings": {"servers": [srv]}}
+        if st:
+            d["sendThrough"] = st
+        if mux:
+            d["mux"] = {"enabled": True, "concurrency": 8}
+        return d
     if t == "http":
         srv = {"address": addr, "port": port}
         if user:
             srv["users"] = [{"user": user, "pass": pw}]
-        return {"protocol": "http", "tag": tag, "settings": {"servers": [srv]}}
-    if t == "vless":
-        tls = bool(o.get("tls", True))
-        ss = {"network": "tcp", "security": "tls" if tls else "none"}
-        if tls:
-            ss["tlsSettings"] = {"serverName": addr}
-        return {"protocol": "vless", "tag": tag,
-                "settings": {"vnext": [{"address": addr, "port": port,
-                                        "users": [{"id": str(o.get("uuid") or "").strip(),
-                                                   "encryption": "none"}]}]},
-                "streamSettings": ss}
-    if t == "vmess":
-        tls = bool(o.get("tls", True))
-        ss = {"network": "tcp", "security": "tls" if tls else "none"}
-        if tls:
-            ss["tlsSettings"] = {"serverName": addr}
-        return {"protocol": "vmess", "tag": tag,
-                "settings": {"vnext": [{"address": addr, "port": port,
-                                        "users": [{"id": str(o.get("uuid") or "").strip(),
-                                                   "security": "auto"}]}]},
-                "streamSettings": ss}
+        d = {"protocol": "http", "tag": tag, "settings": {"servers": [srv]}}
+        if st:
+            d["sendThrough"] = st
+        if mux:
+            d["mux"] = {"enabled": True, "concurrency": 8}
+        return d
+    if t in ("vless", "vmess"):
+        sec = _ob_security(o)
+        tr = _ob_transport(o)
+        ss = {"network": tr, "security": sec}
+        if sec == "tls":
+            ts = {"serverName": _ob_sni(o, addr)}
+            if bool(o.get("insecure")):
+                ts["allowInsecure"] = True
+            ss["tlsSettings"] = ts
+        elif sec == "reality":
+            rs = {"serverName": _ob_sni(o, addr), "fingerprint": "chrome",
+                  "publicKey": str(o.get("reality_public_key") or "").strip()}
+            sid = str(o.get("reality_short_id") or "").strip()
+            if sid:
+                rs["shortId"] = sid
+            ss["realitySettings"] = rs
+        if tr == "ws":
+            ss["wsSettings"] = {"path": "/"}
+        elif tr == "grpc":
+            ss["grpcSettings"] = {"serviceName": "grpc"}
+        if t == "vless":
+            settings = {"vnext": [{"address": addr, "port": port,
+                                   "users": [{"id": str(o.get("uuid") or "").strip(),
+                                              "encryption": "none"}]}]}
+        else:
+            settings = {"vnext": [{"address": addr, "port": port,
+                                   "users": [{"id": str(o.get("uuid") or "").strip(),
+                                              "security": "auto"}]}]}
+        d = {"protocol": t, "tag": tag, "settings": settings, "streamSettings": ss}
+        if st:
+            d["sendThrough"] = st
+        if mux:
+            d["mux"] = {"enabled": True, "concurrency": 8}
+        return d
     if t == "trojan":
-        return {"protocol": "trojan", "tag": tag,
-                "settings": {"servers": [{"address": addr, "port": port, "password": pw}]},
-                "streamSettings": {"network": "tcp", "security": "tls",
-                                   "tlsSettings": {"serverName": addr}}}
+        sec = _ob_security(o)
+        tr = _ob_transport(o)
+        ss = {"network": tr, "security": sec}
+        if sec == "tls":
+            ts = {"serverName": _ob_sni(o, addr)}
+            if bool(o.get("insecure")):
+                ts["allowInsecure"] = True
+            ss["tlsSettings"] = ts
+        elif sec == "reality":
+            rs = {"serverName": _ob_sni(o, addr), "fingerprint": "chrome",
+                  "publicKey": str(o.get("reality_public_key") or "").strip()}
+            sid = str(o.get("reality_short_id") or "").strip()
+            if sid:
+                rs["shortId"] = sid
+            ss["realitySettings"] = rs
+        if tr == "ws":
+            ss["wsSettings"] = {"path": "/"}
+        elif tr == "grpc":
+            ss["grpcSettings"] = {"serviceName": "grpc"}
+        d = {"protocol": "trojan", "tag": tag,
+             "settings": {"servers": [{"address": addr, "port": port, "password": pw}]},
+             "streamSettings": ss}
+        if st:
+            d["sendThrough"] = st
+        if mux:
+            d["mux"] = {"enabled": True, "concurrency": 8}
+        return d
     if t == "shadowsocks":
-        return {"protocol": "shadowsocks", "tag": tag,
-                "settings": {"servers": [{"address": addr, "port": port,
-                                          "method": str(o.get("method") or "aes-256-gcm").strip(),
-                                          "password": pw}]}}
+        d = {"protocol": "shadowsocks", "tag": tag,
+             "settings": {"servers": [{"address": addr, "port": port,
+                                       "method": str(o.get("method") or "aes-256-gcm").strip(),
+                                       "password": pw}]}}
+        if st:
+            d["sendThrough"] = st
+        if mux:
+            d["mux"] = {"enabled": True, "concurrency": 8}
+        return d
     if t == "hysteria2":
-        return {"protocol": "hysteria2", "tag": tag,
-                "settings": {"servers": [{"address": addr, "port": port, "password": pw}]}}
+        d = {"protocol": "hysteria2", "tag": tag,
+             "settings": {"servers": [{"address": addr, "port": port, "password": pw}]}}
+        # Hysteria2 始终走 TLS; 只有填了 SNI 或开了允许不安全证书时才补
+        # streamSettings (否则输出与第 53 步一致)。
+        if str(o.get("sni") or "").strip() or bool(o.get("insecure")):
+            ts = {"serverName": _ob_sni(o, addr)}
+            if bool(o.get("insecure")):
+                ts["allowInsecure"] = True
+            d["streamSettings"] = {"network": "udp", "security": "tls", "tlsSettings": ts}
+        if st:
+            d["sendThrough"] = st
+        return d
     if t == "wireguard":
-        return {"protocol": "wireguard", "tag": tag,
-                "settings": {"secretKey": str(o.get("private_key") or "").strip(),
-                             "address": [str(o.get("local_address") or "10.0.0.2/32").strip()],
-                             "peers": [{"publicKey": str(o.get("peer_public_key") or "").strip(),
-                                        "endpoint": addr + ":" + str(port)}]}}
+        d = {"protocol": "wireguard", "tag": tag,
+             "settings": {"secretKey": str(o.get("private_key") or "").strip(),
+                          "address": [str(o.get("local_address") or "10.0.0.2/32").strip()],
+                          "peers": [{"publicKey": str(o.get("peer_public_key") or "").strip(),
+                                     "endpoint": addr + ":" + str(port)}]}}
+        if st:
+            d["sendThrough"] = st
+        return d
     return None
 
 
 def _sb_outbound(o):
     # 一条面板出站 -> Sing-box outbound。类型名映射:
     # freedom -> direct, blackhole -> block。
+    # 发送通过 (sendThrough) 没有对等的按 IP 绑定, Sing-box 不渲染。
     t = str(o.get("type") or "freedom").lower()
     tag = str(o.get("tag") or "direct")
     addr = str(o.get("address") or "").strip()
     port = _ob_num(o)
     user = str(o.get("username") or "").strip()
     pw = str(o.get("password") or "")
+    mux = bool(o.get("mux"))
     if t == "freedom":
         return {"type": "direct", "tag": tag}
     if t == "blackhole":
@@ -832,37 +924,85 @@ def _sb_outbound(o):
         if user:
             d["username"] = user
             d["password"] = pw
+        if mux:
+            d["multiplex"] = {"enabled": True}
         return d
     if t == "http":
         d = {"type": "http", "tag": tag, "server": addr, "server_port": port}
         if user:
             d["username"] = user
             d["password"] = pw
+        if mux:
+            d["multiplex"] = {"enabled": True}
         return d
-    if t == "vless":
-        tls = bool(o.get("tls", True))
-        d = {"type": "vless", "tag": tag, "server": addr, "server_port": port,
-             "uuid": str(o.get("uuid") or "").strip(), "tls": {"enabled": tls}}
-        if tls:
-            d["tls"]["server_name"] = addr
-        return d
-    if t == "vmess":
-        tls = bool(o.get("tls", True))
-        d = {"type": "vmess", "tag": tag, "server": addr, "server_port": port,
-             "uuid": str(o.get("uuid") or "").strip(), "security": "auto",
-             "tls": {"enabled": tls}}
-        if tls:
-            d["tls"]["server_name"] = addr
+    if t in ("vless", "vmess"):
+        sec = _ob_security(o)
+        tr = _ob_transport(o)
+        tls = {"enabled": sec != "none"}
+        if sec == "tls":
+            tls["server_name"] = _ob_sni(o, addr)
+            if bool(o.get("insecure")):
+                tls["insecure"] = True
+        elif sec == "reality":
+            tls["server_name"] = _ob_sni(o, addr)
+            rl = {"enabled": True,
+                  "public_key": str(o.get("reality_public_key") or "").strip()}
+            sid = str(o.get("reality_short_id") or "").strip()
+            if sid:
+                rl["short_id"] = sid
+            tls["reality"] = rl
+        if t == "vless":
+            d = {"type": "vless", "tag": tag, "server": addr, "server_port": port,
+                 "uuid": str(o.get("uuid") or "").strip(), "tls": tls}
+        else:
+            d = {"type": "vmess", "tag": tag, "server": addr, "server_port": port,
+                 "uuid": str(o.get("uuid") or "").strip(), "security": "auto", "tls": tls}
+        if tr == "ws":
+            d["transport"] = {"type": "ws", "path": "/"}
+        elif tr == "grpc":
+            d["transport"] = {"type": "grpc", "service_name": "grpc"}
+        if mux:
+            d["multiplex"] = {"enabled": True}
         return d
     if t == "trojan":
-        return {"type": "trojan", "tag": tag, "server": addr, "server_port": port,
-                "password": pw, "tls": {"enabled": True, "server_name": addr}}
+        sec = _ob_security(o)
+        tr = _ob_transport(o)
+        tls = {"enabled": sec != "none"}
+        if sec == "tls":
+            tls["server_name"] = _ob_sni(o, addr)
+            if bool(o.get("insecure")):
+                tls["insecure"] = True
+        elif sec == "reality":
+            tls["server_name"] = _ob_sni(o, addr)
+            rl = {"enabled": True,
+                  "public_key": str(o.get("reality_public_key") or "").strip()}
+            sid = str(o.get("reality_short_id") or "").strip()
+            if sid:
+                rl["short_id"] = sid
+            tls["reality"] = rl
+        d = {"type": "trojan", "tag": tag, "server": addr, "server_port": port,
+             "password": pw, "tls": tls}
+        if tr == "ws":
+            d["transport"] = {"type": "ws", "path": "/"}
+        elif tr == "grpc":
+            d["transport"] = {"type": "grpc", "service_name": "grpc"}
+        if mux:
+            d["multiplex"] = {"enabled": True}
+        return d
     if t == "shadowsocks":
-        return {"type": "shadowsocks", "tag": tag, "server": addr, "server_port": port,
-                "method": str(o.get("method") or "aes-256-gcm").strip(), "password": pw}
+        d = {"type": "shadowsocks", "tag": tag, "server": addr, "server_port": port,
+             "method": str(o.get("method") or "aes-256-gcm").strip(), "password": pw}
+        if mux:
+            d["multiplex"] = {"enabled": True}
+        return d
     if t == "hysteria2":
-        return {"type": "hysteria2", "tag": tag, "server": addr, "server_port": port,
-                "password": pw, "tls": {"enabled": True}}
+        d = {"type": "hysteria2", "tag": tag, "server": addr, "server_port": port,
+             "password": pw, "tls": {"enabled": True}}
+        if str(o.get("sni") or "").strip():
+            d["tls"]["server_name"] = _ob_sni(o, addr)
+        if bool(o.get("insecure")):
+            d["tls"]["insecure"] = True
+        return d
     if t == "wireguard":
         return {"type": "wireguard", "tag": tag, "server": addr, "server_port": port,
                 "local_address": [str(o.get("local_address") or "10.0.0.2/32").strip()],
@@ -898,6 +1038,7 @@ def _build_outbounds(obs, make):
 def _xray_rules(routes):
     # 面板路由 -> Xray routing.rules。domain 用 full: (精确),
     # domain_suffix 用 domain: (后缀), ip 用 ip, port 用字符串。
+    # 评论不进配置; 网络/协议/源 IP/源端口/入站标签是附加匹配条件。
     rules = []
     for r in routes:
         if not isinstance(r, dict):
@@ -908,18 +1049,37 @@ def _xray_rules(routes):
         if not vals:
             continue
         if mt == "domain":
-            rules.append({"type": "field", "domain": ["full:" + v for v in vals], "outboundTag": ob})
+            rule = {"type": "field", "domain": ["full:" + v for v in vals], "outboundTag": ob}
         elif mt == "domain_suffix":
-            rules.append({"type": "field", "domain": ["domain:" + v for v in vals], "outboundTag": ob})
+            rule = {"type": "field", "domain": ["domain:" + v for v in vals], "outboundTag": ob}
         elif mt == "ip_cidr":
-            rules.append({"type": "field", "ip": vals, "outboundTag": ob})
+            rule = {"type": "field", "ip": vals, "outboundTag": ob}
         elif mt == "port":
-            rules.append({"type": "field", "port": ",".join(vals), "outboundTag": ob})
+            rule = {"type": "field", "port": ",".join(vals), "outboundTag": ob}
+        else:
+            continue
+        net = str(r.get("network") or "").strip().lower()
+        if net in ("tcp", "udp"):
+            rule["network"] = net
+        proto = str(r.get("protocol") or "").strip().lower()
+        if proto:
+            rule["protocol"] = [proto]
+        src_ip = [str(v).strip() for v in (r.get("source_ip") or []) if str(v).strip()]
+        if src_ip:
+            rule["source"] = src_ip
+        src_port = [str(v).strip() for v in (r.get("source_port") or []) if str(v).strip()]
+        if src_port:
+            rule["sourcePort"] = ",".join(src_port)
+        inbound = str(r.get("inbound") or "").strip()
+        if inbound:
+            rule["inboundTag"] = [inbound]
+        rules.append(rule)
     return rules
 
 
 def _sb_rules(routes):
     # 面板路由 -> Sing-box route.rules。port 单值进 port, 区间进 port_range。
+    # 评论不进配置; 网络/协议/源 IP/源端口/入站标签是附加匹配条件。
     rules = []
     for r in routes:
         if not isinstance(r, dict):
@@ -930,11 +1090,11 @@ def _sb_rules(routes):
         if not vals:
             continue
         if mt == "domain":
-            rules.append({"domain": vals, "outbound": ob})
+            rule = {"domain": vals, "outbound": ob}
         elif mt == "domain_suffix":
-            rules.append({"domain_suffix": vals, "outbound": ob})
+            rule = {"domain_suffix": vals, "outbound": ob}
         elif mt == "ip_cidr":
-            rules.append({"ip_cidr": vals, "outbound": ob})
+            rule = {"ip_cidr": vals, "outbound": ob}
         elif mt == "port":
             singles, ranges = [], []
             for v in vals:
@@ -953,7 +1113,36 @@ def _sb_rules(routes):
             if not rule:
                 continue
             rule["outbound"] = ob
-            rules.append(rule)
+        else:
+            continue
+        net = str(r.get("network") or "").strip().lower()
+        if net in ("tcp", "udp"):
+            rule["network"] = net
+        proto = str(r.get("protocol") or "").strip().lower()
+        if proto:
+            rule["protocol"] = [proto]
+        src_ip = [str(v).strip() for v in (r.get("source_ip") or []) if str(v).strip()]
+        if src_ip:
+            rule["source_ip_cidr"] = src_ip
+        src_port = [str(v).strip() for v in (r.get("source_port") or []) if str(v).strip()]
+        if src_port:
+            s_singles, s_ranges = [], []
+            for v in src_port:
+                if "-" in v:
+                    s_ranges.append(v)
+                else:
+                    try:
+                        s_singles.append(int(v))
+                    except Exception:
+                        pass
+            if s_singles:
+                rule["source_port"] = s_singles
+            if s_ranges:
+                rule["source_port_range"] = s_ranges
+        inbound = str(r.get("inbound") or "").strip()
+        if inbound:
+            rule["inbound"] = [inbound]
+        rules.append(rule)
     return rules
 
 
