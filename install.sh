@@ -706,6 +706,253 @@ def _direct_tls():
                               "keyFile": "/etc/nexus-direct/key.pem"}]}
 
 
+# ---- 面板出站 / 路由 (家宽对接) ----
+# 出站与路由由面板定义一次, 部署时经 NEXUS_OUTBOUNDS / NEXUS_ROUTES
+# (JSON 环境变量, 见 panel-server.py config_to_env) 传进来, 在这里
+# 翻译成 Xray 与 Sing-box 各自的格式。没有自定义出站/路由时, 生成
+# 的配置与旧版一致 (默认 direct, 无路由规则), 只是多一条未被引
+# 用的 blocked 出站 (面板默认就有 direct + blocked, 行为不变)。
+# 路由按面板保存顺序匹配, 先命中先生效; 不匹配的走默认 direct。
+_PANEL_NETS = None
+
+
+def _load_panel_nets():
+    global _PANEL_NETS
+    if _PANEL_NETS is not None:
+        return _PANEL_NETS
+    try:
+        _obs = json.loads(os.environ.get("NEXUS_OUTBOUNDS") or "[]")
+    except Exception:
+        _obs = []
+    try:
+        _rts = json.loads(os.environ.get("NEXUS_ROUTES") or "[]")
+    except Exception:
+        _rts = []
+    if not isinstance(_obs, list):
+        _obs = []
+    if not isinstance(_rts, list):
+        _rts = []
+    _PANEL_NETS = (_obs, _rts)
+    return _PANEL_NETS
+
+
+def _ob_num(o):
+    try:
+        return int(o.get("port") or 0)
+    except Exception:
+        return 0
+
+
+def _xray_outbound(o):
+    # 一条面板出站 -> Xray outbound。未知类型返回 None (跳过)。
+    t = str(o.get("type") or "freedom").lower()
+    tag = str(o.get("tag") or "direct")
+    addr = str(o.get("address") or "").strip()
+    port = _ob_num(o)
+    user = str(o.get("username") or "").strip()
+    pw = str(o.get("password") or "")
+    if t == "freedom":
+        return {"protocol": "freedom", "tag": tag}
+    if t == "blackhole":
+        return {"protocol": "blackhole", "tag": tag}
+    if t == "dns":
+        return {"protocol": "dns", "tag": tag}
+    if t == "socks":
+        srv = {"address": addr, "port": port}
+        if user:
+            srv["users"] = [{"user": user, "pass": pw}]
+        return {"protocol": "socks", "tag": tag, "settings": {"servers": [srv]}}
+    if t == "http":
+        srv = {"address": addr, "port": port}
+        if user:
+            srv["users"] = [{"user": user, "pass": pw}]
+        return {"protocol": "http", "tag": tag, "settings": {"servers": [srv]}}
+    if t == "vless":
+        tls = bool(o.get("tls", True))
+        ss = {"network": "tcp", "security": "tls" if tls else "none"}
+        if tls:
+            ss["tlsSettings"] = {"serverName": addr}
+        return {"protocol": "vless", "tag": tag,
+                "settings": {"vnext": [{"address": addr, "port": port,
+                                        "users": [{"id": str(o.get("uuid") or "").strip(),
+                                                   "encryption": "none"}]}]},
+                "streamSettings": ss}
+    if t == "vmess":
+        tls = bool(o.get("tls", True))
+        ss = {"network": "tcp", "security": "tls" if tls else "none"}
+        if tls:
+            ss["tlsSettings"] = {"serverName": addr}
+        return {"protocol": "vmess", "tag": tag,
+                "settings": {"vnext": [{"address": addr, "port": port,
+                                        "users": [{"id": str(o.get("uuid") or "").strip(),
+                                                   "security": "auto"}]}]},
+                "streamSettings": ss}
+    if t == "trojan":
+        return {"protocol": "trojan", "tag": tag,
+                "settings": {"servers": [{"address": addr, "port": port, "password": pw}]},
+                "streamSettings": {"network": "tcp", "security": "tls",
+                                   "tlsSettings": {"serverName": addr}}}
+    if t == "shadowsocks":
+        return {"protocol": "shadowsocks", "tag": tag,
+                "settings": {"servers": [{"address": addr, "port": port,
+                                          "method": str(o.get("method") or "aes-256-gcm").strip(),
+                                          "password": pw}]}}
+    if t == "hysteria2":
+        return {"protocol": "hysteria2", "tag": tag,
+                "settings": {"servers": [{"address": addr, "port": port, "password": pw}]}}
+    if t == "wireguard":
+        return {"protocol": "wireguard", "tag": tag,
+                "settings": {"secretKey": str(o.get("private_key") or "").strip(),
+                             "address": [str(o.get("local_address") or "10.0.0.2/32").strip()],
+                             "peers": [{"publicKey": str(o.get("peer_public_key") or "").strip(),
+                                        "endpoint": addr + ":" + str(port)}]}}
+    return None
+
+
+def _sb_outbound(o):
+    # 一条面板出站 -> Sing-box outbound。类型名映射:
+    # freedom -> direct, blackhole -> block。
+    t = str(o.get("type") or "freedom").lower()
+    tag = str(o.get("tag") or "direct")
+    addr = str(o.get("address") or "").strip()
+    port = _ob_num(o)
+    user = str(o.get("username") or "").strip()
+    pw = str(o.get("password") or "")
+    if t == "freedom":
+        return {"type": "direct", "tag": tag}
+    if t == "blackhole":
+        return {"type": "block", "tag": tag}
+    if t == "dns":
+        return {"type": "dns", "tag": tag}
+    if t == "socks":
+        d = {"type": "socks", "tag": tag, "server": addr, "server_port": port}
+        if user:
+            d["username"] = user
+            d["password"] = pw
+        return d
+    if t == "http":
+        d = {"type": "http", "tag": tag, "server": addr, "server_port": port}
+        if user:
+            d["username"] = user
+            d["password"] = pw
+        return d
+    if t == "vless":
+        tls = bool(o.get("tls", True))
+        d = {"type": "vless", "tag": tag, "server": addr, "server_port": port,
+             "uuid": str(o.get("uuid") or "").strip(), "tls": {"enabled": tls}}
+        if tls:
+            d["tls"]["server_name"] = addr
+        return d
+    if t == "vmess":
+        tls = bool(o.get("tls", True))
+        d = {"type": "vmess", "tag": tag, "server": addr, "server_port": port,
+             "uuid": str(o.get("uuid") or "").strip(), "security": "auto",
+             "tls": {"enabled": tls}}
+        if tls:
+            d["tls"]["server_name"] = addr
+        return d
+    if t == "trojan":
+        return {"type": "trojan", "tag": tag, "server": addr, "server_port": port,
+                "password": pw, "tls": {"enabled": True, "server_name": addr}}
+    if t == "shadowsocks":
+        return {"type": "shadowsocks", "tag": tag, "server": addr, "server_port": port,
+                "method": str(o.get("method") or "aes-256-gcm").strip(), "password": pw}
+    if t == "hysteria2":
+        return {"type": "hysteria2", "tag": tag, "server": addr, "server_port": port,
+                "password": pw, "tls": {"enabled": True}}
+    if t == "wireguard":
+        return {"type": "wireguard", "tag": tag, "server": addr, "server_port": port,
+                "local_address": [str(o.get("local_address") or "10.0.0.2/32").strip()],
+                "private_key": str(o.get("private_key") or "").strip(),
+                "peer_public_key": str(o.get("peer_public_key") or "").strip()}
+    return None
+
+
+def _build_outbounds(obs, make):
+    # make: _xray_outbound 或 _sb_outbound。direct 放第一位 (默认出站),
+    # blocked 也确保存在; 自定义出站按面板顺序排在后面。
+    by_tag = {}
+    for o in obs:
+        if isinstance(o, dict) and str(o.get("tag") or "").strip():
+            by_tag[str(o.get("tag")).strip()] = o
+    out = []
+    for tag, typ in (("direct", "freedom"), ("blocked", "blackhole")):
+        o = dict(by_tag.get(tag) or {})
+        o["tag"] = tag
+        o["type"] = typ
+        r = make(o)
+        if r is not None:
+            out.append(r)
+    for tag, o in by_tag.items():
+        if tag in ("direct", "blocked"):
+            continue
+        r = make(o)
+        if r is not None:
+            out.append(r)
+    return out
+
+
+def _xray_rules(routes):
+    # 面板路由 -> Xray routing.rules。domain 用 full: (精确),
+    # domain_suffix 用 domain: (后缀), ip 用 ip, port 用字符串。
+    rules = []
+    for r in routes:
+        if not isinstance(r, dict):
+            continue
+        mt = str(r.get("match_type") or "").strip()
+        vals = [str(v).strip() for v in (r.get("values") or []) if str(v).strip()]
+        ob = str(r.get("outbound") or "direct").strip() or "direct"
+        if not vals:
+            continue
+        if mt == "domain":
+            rules.append({"type": "field", "domain": ["full:" + v for v in vals], "outboundTag": ob})
+        elif mt == "domain_suffix":
+            rules.append({"type": "field", "domain": ["domain:" + v for v in vals], "outboundTag": ob})
+        elif mt == "ip_cidr":
+            rules.append({"type": "field", "ip": vals, "outboundTag": ob})
+        elif mt == "port":
+            rules.append({"type": "field", "port": ",".join(vals), "outboundTag": ob})
+    return rules
+
+
+def _sb_rules(routes):
+    # 面板路由 -> Sing-box route.rules。port 单值进 port, 区间进 port_range。
+    rules = []
+    for r in routes:
+        if not isinstance(r, dict):
+            continue
+        mt = str(r.get("match_type") or "").strip()
+        vals = [str(v).strip() for v in (r.get("values") or []) if str(v).strip()]
+        ob = str(r.get("outbound") or "direct").strip() or "direct"
+        if not vals:
+            continue
+        if mt == "domain":
+            rules.append({"domain": vals, "outbound": ob})
+        elif mt == "domain_suffix":
+            rules.append({"domain_suffix": vals, "outbound": ob})
+        elif mt == "ip_cidr":
+            rules.append({"ip_cidr": vals, "outbound": ob})
+        elif mt == "port":
+            singles, ranges = [], []
+            for v in vals:
+                if "-" in v:
+                    ranges.append(v)
+                else:
+                    try:
+                        singles.append(int(v))
+                    except Exception:
+                        pass
+            rule = {}
+            if singles:
+                rule["port"] = singles
+            if ranges:
+                rule["port_range"] = ranges
+            if not rule:
+                continue
+            rule["outbound"] = ob
+            rules.append(rule)
+    return rules
+
 def render_xray(port, configs):
     # Inbounds: one unified VLESS/XHTTP tunnel inbound (if any tunnel
     # protocol is selected) + direct inbounds (if direct is on).
@@ -823,11 +1070,16 @@ def render_xray(port, configs):
             })
     if not inbounds:
         return None
-    return {
+    _obs, _rts = _load_panel_nets()
+    _cfg = {
         "log": {"loglevel": "warning"},
         "inbounds": inbounds,
-        "outbounds": [{"protocol": "freedom", "tag": "direct"}]
+        "outbounds": _build_outbounds(_obs, _xray_outbound)
     }
+    _rules = _xray_rules(_rts)
+    if _rules:
+        _cfg["routing"] = {"domainStrategy": "AsIs", "rules": _rules}
+    return _cfg
 
 def render_singbox(port, configs):
     # Dispatcher design (see DISPATCHER_DESIGN.md): one VLESS inbound
@@ -894,11 +1146,16 @@ def render_singbox(port, configs):
             })
     if not inbounds:
         return None
-    return {
+    _obs, _rts = _load_panel_nets()
+    _cfg = {
         "log": {"level": "warn"},
         "inbounds": inbounds,
-        "outbounds": [{"type": "direct", "tag": "direct"}]
+        "outbounds": _build_outbounds(_obs, _sb_outbound)
     }
+    _rules = _sb_rules(_rts)
+    if _rules:
+        _cfg["route"] = {"rules": _rules, "final": "direct"}
+    return _cfg
 
 # A core is rendered when it has a tunnel inbound, a direct inbound,
 # or both; a core with nothing to listen on gets no config file at all
