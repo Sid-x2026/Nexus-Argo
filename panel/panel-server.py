@@ -1496,7 +1496,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/reality-keys":
             # 公钥 / 私钥 / Short IDs 查询与密钥管理。私钥随公钥一同返回前端 (仅登录后可见)。
             # body: {} 查询; {action:"regenerate"} 重新生成密钥对
-            # (Short IDs 不变, 没有就生成一个); {action:"clear"} 清空
+            # (Short IDs 不变, 没有就生成三个); {action:"clear"} 清空
             # 密钥与 Short IDs (下次部署时 install.sh 会重新生成)。
             action = str(body.get("action") or "").strip().lower()
             data = _load_reality_json()
@@ -1508,8 +1508,11 @@ class Handler(BaseHTTPRequestHandler):
                 data["private_key"] = priv
                 data["public_key"] = pub
                 if not data.get("short_ids") and not data.get("short_id"):
-                    data["short_id"] = secrets.token_hex(4)
-                    data["short_ids"] = [data["short_id"]]
+                    _sids = set()
+                    while len(_sids) < 3:
+                        _sids.add(secrets.token_hex(4))
+                    data["short_ids"] = sorted(_sids)
+                    data["short_id"] = data["short_ids"][0]
                 elif data.get("short_ids"):
                     data["short_id"] = data["short_ids"][0]
                 _save_reality_json(data)

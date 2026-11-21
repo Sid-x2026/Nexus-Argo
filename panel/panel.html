@@ -64,7 +64,7 @@
   .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e2e8f0; border-radius: 20px; padding: 7px 14px; cursor: pointer; font-size: 13.5px; background: #fff; color: var(--tx); user-select: none; }
   .pill:has(input:checked) { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; }
   .pill input { accent-color: #6366f1; }
-  .mode-box { border-radius: 14px; padding: 6px; margin-top: 4px; border: 1px solid #e2e8f0; border-left: 5px solid; }
+  .mode-box { border-radius: 12px; padding: 6px; margin-top: 4px; border: 1px solid #c7d2fe; border-left: 5px solid #6366f1; }
   .mode-box.direct { background: #eef2ff; border-left-color: #6366f1; }
   .mode-box.direct h4 { color: #4f46e5; margin: 0 0 8px; font-size: 13.5px; }
   .mode-box.tunnel { background: #eef2ff; border-left-color: #6366f1; }
@@ -87,7 +87,7 @@
   .direct-cols { grid-template-columns: minmax(200px, 1.2fr) minmax(170px, 1fr) minmax(170px, 1fr) !important; gap: 8px !important; }
   .uuid-row input, .uuid-row button { height: 30px; box-sizing: border-box; }
   @media (max-width: 900px) { .proto-wrap { flex-direction: column; } }
-  .sec-card { flex: 1; min-width: 0; border: 1px solid #eef0fb; border-radius: 12px; padding: 10px 12px; background: #fafaff; }
+  .sec-card { flex: 1; min-width: 0; border: 1px solid #c7d2fe; border-left: 5px solid #6366f1; border-radius: 12px; padding: 10px 12px; background: #eef2ff; }
   .sec-card h4 { margin: 0 0 4px; font-size: 13.5px; color: var(--tx); }
   .sec-card.direct { background: #eef2ff; border-color: #c7d2fe; border-left: 5px solid #6366f1; }
   .sec-card.direct h4 { color: #4f46e5; }
@@ -211,9 +211,9 @@
   <div id="appView" class="hidden">
     <div class="hero">
       <div class="row">
-        <div>
+        <div style="flex:1; text-align:center;">
           <h1>Nexus-Argo 面板 <span class="tag">v1 精简版</span></h1>
-          <p>部署节点 · 拿订阅</p>
+          <p>多协议代理节点 · 一键部署 · 智能订阅</p>
         </div>
         <button id="btnLogout" class="sm">退出登录</button>
       </div>
@@ -382,7 +382,7 @@
         <div id="realitySection">
 <div id="realityCard" class="sec-card direct" style="width:100%;">
             <h4>Reality 配置 <span class="reality-note">Reality 无需证书</span></h4>
-            <div class="reality-cols" style="display:grid; grid-template-columns:minmax(0,0.75fr) minmax(0,1.25fr); gap:12px; align-items:start;">
+            <div class="reality-cols" style="display:grid; grid-template-columns:minmax(0,0.75fr) minmax(0,1.25fr); gap:12px; align-items:stretch;">
               <div class="sec-card direct">
                 <h4>目标与证书</h4>
                 <label class="f">目标 <span class="req">* 必填</span></label>
@@ -867,6 +867,7 @@ function fillConfig(c) {
   if (Array.isArray(c.reality_short_ids) && c.reality_short_ids.length) {
     setShortIds(c.reality_short_ids);
   }
+  fillShortIdsTo(3);
   const cm = c.cert_mode || "acme";
   const radio = document.querySelector('input[name="certMode"][value="' + cm + '"]');
   if (radio) radio.checked = true;
@@ -1180,6 +1181,13 @@ function ensureShortIds(n) {
   while (ids.length < (n || 3)) { const s = randomShortId(); if (!seen.has(s)) { seen.add(s); ids.push(s); } }
   setShortIds(ids);
 }
+function fillShortIdsTo(n) {
+  // 保留已有的，不足 n 个时补足随机生成（不推倒重来）
+  const ids = getShortIds();
+  const seen = new Set(ids);
+  while (ids.length < (n || 3)) { const s = randomShortId(); if (!seen.has(s)) { seen.add(s); ids.push(s); } }
+  setShortIds(ids);
+}
 $("btnRegenShortIds").onclick = () => ensureShortIds(3);
 async function loadRealityKeys() {
   try {
@@ -1189,7 +1197,7 @@ async function loadRealityKeys() {
     if (Array.isArray(k.short_ids) && k.short_ids.length && !$("reality_short_ids").value.trim()) {
       setShortIds(k.short_ids);
     }
-    if (!$("reality_short_ids").value.trim()) { ensureShortIds(3); }
+    fillShortIdsTo(3);
   } catch (e) {}
 }
 $("btnRealityNewKeys").onclick = async () => {
