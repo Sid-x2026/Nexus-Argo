@@ -15,7 +15,7 @@
   #appView > .hero p { margin: 8px 0 0; color: rgba(255,255,255,.85); font-size: 18.5px; display: block; }
   #appView > .hero .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   #appView > .hero button { background: #fff; color: #3730a3; border: 1px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,.15); padding: 12px 24px; font-size: 19px; }
-  .shell { display: block; } .main { padding-left: 192px; padding-right: 20px; padding-bottom: 12px; }
+  .shell { display: block; } .main { padding-left: 192px; padding-right: 20px; padding-bottom: 4px; }
   .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 180px; z-index: 50; background: #fff; border-right: 1px solid var(--bd); padding: 160px 10px 16px; display: flex; flex-direction: column; gap: 6px; }
   .sidebar button { width: 100%; height: 56px; border-radius: 12px; background: transparent; color: #475569; border: 1px solid transparent; padding: 0 14px; font-size: 22px; font-weight: 600; line-height: 1.3; display: flex; align-items: center; gap: 10px; text-align: left; }
   .sidebar button:hover { background: #f1f5f9; }
@@ -43,7 +43,7 @@
   .scan-btn:disabled { background: #9ca3af !important; border-color: #9ca3af !important; }
   .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
   @media (max-width: 760px) { .grid4 { grid-template-columns: repeat(2, 1fr); } }
-  .stat:nth-child(1) { background: linear-gradient(180deg,#eef2ff,#ffffff); } .stat:nth-child(2) { background: linear-gradient(180deg,#eff6ff,#ffffff); } .stat:nth-child(3) { background: linear-gradient(180deg,#f0fdf4,#ffffff); } .stat:nth-child(4) { background: linear-gradient(180deg,#fdf2f8,#ffffff); } .stat { background: linear-gradient(180deg,#fff,#fbfcff); border: 1px solid var(--bd); border-radius: 16px; padding: 10px 16px; box-shadow: 0 2px 10px rgba(15,23,42,.05); min-height: 68px; display: flex; flex-direction: column; justify-content: center; }
+  .stat { background: linear-gradient(180deg,#fff,#fbfcff); border: 1px solid var(--bd); border-radius: 16px; padding: 10px 16px; box-shadow: 0 2px 10px rgba(15,23,42,.05); min-height: 68px; display: flex; flex-direction: column; justify-content: center; }
   .stat .t { font-size: 13.5px; color: #6b7280; }
   .stat .v { font-size: 22.5px; font-weight: 700; margin-top: 4px; color: var(--tx); } #tab-overview .muted { font-size: 13.5px; }
   .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
@@ -69,17 +69,17 @@
   .mode-box.direct h4 { color: #4f46e5; margin: 0 0 8px; font-size: 13.5px; }
   .mode-box.tunnel { background: #eef2ff; border-left-color: #6366f1; }
   .mode-box.tunnel h4 { color: #4f46e5; margin: 0 0 8px; font-size: 13.5px; }
-  .proto { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; font-size: 14.5px; padding: 6px 6px; margin-top: 6px; }
+  .proto { display: grid; grid-template-columns: minmax(0, 1fr) 120px; align-items: center; gap: 6px; font-size: 14.5px; padding: 6px 6px; margin-top: 6px; }
   .proto label { display: block !important; cursor: pointer; font-weight: 600; min-width: 0; overflow: hidden; white-space: nowrap !important; text-overflow: ellipsis; } .proto label input, .proto label .tag { margin-right: 6px; vertical-align: middle; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
   .proto input[type=checkbox] { accent-color: #6366f1; width: 16px; height: 16px; }
-  .proto .port { display: flex; align-items: center; gap: 4px; color: #64748b; font-size: 12.5px; }
+  .proto .port { display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: #64748b; font-size: 12.5px; }
   .proto .port input { width: 56px; padding: 5px 6px; font-size: 14.5px; text-align: center; }
   .proto.off { opacity: .45; }
   .tag { display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; font-weight: 600; }
   .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
   .proto-wrap { display: grid; grid-template-columns: minmax(460px, 0.8fr) minmax(0, 1.5fr); gap: 8px; align-items: start; margin-top: 10px; }
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
-  .proto-wrap .row2 { grid-template-columns: 0.9fr 1.1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) auto; } #argoGroup .proto .port { margin-left: 12px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
+  .proto-wrap .row2 { grid-template-columns: 0.9fr 1.1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) 120px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
   .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
   #directFields .proto-wrap { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); gap: 12px; }
   @media (max-width: 900px) { #directFields .proto-wrap { grid-template-columns: 1fr; } .reality-cols { grid-template-columns: 1fr; } }
@@ -93,8 +93,8 @@
   .sec-card.direct h4 { color: #4f46e5; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; border-left: 5px solid #6366f1; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: stretch; margin-top: 4px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; margin: 5px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 13.7px; padding: 5px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 12.7px; margin: 4px 0 3px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 13.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; text-align: center; } #tunnelFields #argoToken { max-width: none; width: 100%; resize: vertical; min-height: 62px; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols .ghead { min-height: 36px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px; } .pill.static { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; cursor: default; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 300px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 300px; text-align: center; }  #tunnelFields .row2 { margin-top: 4px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 1fr; gap: 8px; }  .row-prefix { grid-template-columns: 230px 230px !important; gap: 60px !important; justify-content: start !important; } .row-prefix > div { display: flex; align-items: center; gap: 8px; } .row-prefix label.f { margin: 0; white-space: nowrap; } #argoPrefix, #directPrefix { max-width: 150px; }  #nodeUuid { flex: none; width: 320px; text-align: center; }  .proto .port input { font-size: 14.5px; width: 60px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 8px; } #realityCard label.f { margin: 5px 0 2px; } #realityCard input, #realityCard select { padding: 5px 9px; } #realityCard .hint { margin: 4px 0 3px; } #realityCard input[type=text], #realityCard select { max-width: 250px; } #reality_short_ids { flex: 1 1 0; min-width: 0; } #tunnelFields .optaddr-row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-top: 0; flex: 1; } #tunnelFields .sec-card { display: flex; flex-direction: column; }
-#tunnelFields #optAddrSingle { max-width: 250px; width: 100%; text-align: center; resize: vertical; min-height: 130px; flex: 1; } #tunnelFields .optaddr-row label.f { margin: 0; white-space: nowrap; } .warn-inline { display: inline-block; background: #fef9c3; border: 1px solid #fde68a; color: #854d0e; border-radius: 8px; padding: 2px 8px; font-size: 12.7px; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; } .reality-note { font-size: 11.7px; color: #64748b; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; }
+  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: stretch; margin-top: 4px; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; margin: 5px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 13.7px; padding: 5px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 12.7px; margin: 4px 0 3px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 13.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; text-align: center; } #tunnelFields #argoToken { max-width: none; width: 100%; resize: vertical; min-height: 36px; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols .ghead { min-height: 36px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px; } .pill.static { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; cursor: default; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 300px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 300px; text-align: center; }  #tunnelFields .row2 { margin-top: 12px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 1fr; gap: 12px; }  .row-prefix { grid-template-columns: 230px 230px !important; gap: 30px !important; justify-content: start !important; } .row-prefix > div { display: flex; align-items: center; gap: 8px; } .row-prefix label.f { margin: 0; white-space: nowrap; } #argoPrefix, #directPrefix { width: 150px; max-width: 150px; }  #nodeUuid { flex: none; width: 320px; text-align: center; }  .proto .port input { font-size: 14.5px; width: 60px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 8px; } #realityCard label.f { margin: 5px 0 2px; } #realityCard input, #realityCard select { padding: 5px 9px; } #realityCard .hint { margin: 4px 0 3px; } #realityCard input[type=text], #realityCard select { max-width: 250px; } #reality_short_ids { flex: 1 1 0; min-width: 0; } #tunnelFields .optaddr-row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-top: 0; flex: 1; } #tunnelFields .sec-card { display: flex; flex-direction: column; }
+#tunnelFields #optAddrSingle { max-width: 250px; width: 100%; text-align: center; resize: vertical; min-height: 80px; } #tunnelFields .optaddr-row label.f { margin: 0; white-space: nowrap; } .warn-inline { display: inline-block; background: #fef9c3; border: 1px solid #fde68a; color: #854d0e; border-radius: 8px; padding: 2px 8px; font-size: 12.7px; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; } .reality-note { font-size: 11.7px; color: #64748b; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; } .scan-table th { font-size: 12.5px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
   .scan-table th { color: #64748b; font-weight: 600; }
@@ -126,7 +126,7 @@
   button.sm { padding: 7px 14px; font-size: 13.5px; display: inline-flex; align-items: center; justify-content: center; }
   .btnrow { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; align-items: center; }
   .status { margin-top: 12px; font-size: 14px; min-height: 20px; line-height: 1.6; }
-#portConflictOut:empty { display: none; } #deployOut:empty { display: none; } .sticky-deploy .hint { margin-top: 10px; }
+#portConflictOut:empty { display: none; } #deployOut:empty { display: none; } .sticky-deploy .hint { margin-top: 10px; line-height: 22px; }
   .status.err { color: #dc2626; } .status.ok { color: #16a34a; } .status.info { color: #475569; }
   .log { background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 14px; height: 260px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin-top: 12px; }
   .addr-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
@@ -179,6 +179,11 @@
 #tab-deploy .warn, #tab-deploy .warn-inline { font-size: 11.7px; }
 /* 第35步⑦：总览订阅行间距收紧 */
 #tab-overview .addr-label { margin-top: 10px; }
+/* 第43步: 总览三列分隔线(15) / 总览底部收紧(18) / 订阅页按钮与输入(20) / 出站提示条收窄(21) */
+#tab-overview .row3 > div { text-align: center; } #tab-overview .row3 > div + div { border-left: 1px solid #eef0fb; padding-left: 12px; }
+#tab-overview > p.hint:last-child { margin-bottom: 0; }
+#btnSaveSubPath { width: 120px; white-space: nowrap; flex: none; } #subPathEdit { width: 200px; flex: none; }
+#tab-outbound .warn { max-width: 720px; }
 </style>
 </head>
 <body>
@@ -254,7 +259,6 @@
         </div>
         <div class="btnrow">
           <button id="btnGoDeploy">去部署</button>
-          <button class="ghost" id="btnGoSub">订阅地址</button>
           <button id="btnRefresh">刷新状态</button><span id="lastRefresh" class="muted" style="margin-left:8px;"></span>
         </div>
         <div id="ovOut" class="status info"></div>
@@ -273,10 +277,8 @@
           <label class="pill"><input type="checkbox" id="modeTunnel" checked> Argo 隧道</label>
           <label class="pill"><input type="checkbox" id="modeDirect"> 直连节点</label>
         </div>
-        </div>
 
         <h3 class="step-h">② 代理客户端</h3>
-        <div class="mode-box tunnel">
         <div class="pills" id="clientPills">
           <label class="pill"><input type="checkbox" name="clientSel" value="v2ray" checked> V2Ray</label>
           <label class="pill"><input type="checkbox" name="clientSel" value="singbox"> Sing-box</label>
@@ -411,8 +413,6 @@
                                 <select id="reality_flow"><option value="xtls-rprx-vision" selected>xtls-rprx-vision</option><option value="none">none</option></select>
                 <label class="f">加密方式 <span class="opt">选填</span></label>
                                 <select id="reality_encryption" class="mono"><option value="mlkem768x25519plus.native" selected>mlkem768x25519plus.native</option><option value="mlkem768x25519plus.xorpub">mlkem768x25519plus.xorpub</option><option value="mlkem768x25519plus.random">mlkem768x25519plus.random</option><option value="none">none</option></select>
-                <label class="f">spiderX <span class="opt">选填</span></label>
-                                <input type="text" id="reality_spiderx" class="mono" value="/">
               </div>
             </div>
         </div>
@@ -436,7 +436,7 @@
           </div>
           </div>
           <div class="sec-card tunnel">
-          <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><textarea id="optAddrSingle" class="mono" rows="6">cloudflare.com</textarea><button class="ghost sm" id="btnOptAddr" type="button" style="align-self:flex-start;">使用优化地址</button><span id="optAddrOut" class="hint" style="margin:0;"></span><p class="hint">点「使用优化地址」自动测速，从优选域名池取延迟最低的 6 个填入。</p></div>
+          <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><div style="display:flex; gap:8px; align-items:flex-start;"><textarea id="optAddrSingle" class="mono" rows="3">cloudflare.com</textarea><button class="ghost sm" id="btnOptAddr" type="button" style="flex:none;">使用优化地址</button></div><span id="optAddrOut" class="hint" style="margin:0;"></span><p class="hint">点「使用优化地址」自动测速，从优选域名池取延迟最低的 6 个填入。</p></div>
           </div>
           </div>
         </div>
@@ -444,7 +444,7 @@
 
         <h3 class="step-h">⑤ 节点与订阅</h3>
         <div class="mode-box tunnel">
-        <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:stretch;">
+        <div style="display:grid; grid-template-columns:minmax(0,0.75fr) minmax(0,1.25fr); gap:12px; align-items:stretch;">
         <div class="sec-card tunnel" style="display:flex; flex-direction:column; justify-content:space-between;">
         <label class="f">节点前缀 <span class="opt">选填</span></label>
         <div class="row2 row-prefix">
@@ -458,7 +458,7 @@
         <p class="hint">订阅统一拉取隧道节点和直连节点，一个订阅里全有，由面板直接提供。</p>
         <label class="f">订阅路径 <span class="opt">选填</span></label>
         <div class="subtpl">
-          <span class="static" id="subTplScheme">https://</span><input type="text" id="subHost" class="mono" style="max-width:300px;text-align:center" placeholder="面板域名或 IP:端口"><span class="static">/</span><span class="static mono" id="subTplUuid">UUID</span><span class="static">/</span><input type="text" id="subPath" value="sub" class="mono"><span class="static" id="subTplSuffix">/raw</span>
+          <span class="static" id="subTplScheme">https://</span><input type="text" id="subHost" class="mono" style="width:260px;max-width:260px;text-align:center" placeholder="面板域名或 IP:端口"><span class="static">/</span><span class="static mono" id="subTplUuid">UUID</span><span class="static">/</span><input type="text" id="subPath" value="sub" class="mono"><span class="static" id="subTplSuffix">/raw</span>
         </div>
         </div>
         </div>
@@ -470,7 +470,7 @@
           <div class="btnrow" style="margin-top:0;">
             <button id="btnSaveCfg" class="ghost">只保存配置</button>
             <button id="btnDeploy">开始部署</button>
-            <button id="btnClear" class="red" style="margin-left:auto;">清除部署</button>
+            <button id="btnClear" class="red">清除部署</button>
           </div>
           <p class="hint">只保存配置：只保存配置，不部署。<br>开始部署：保存配置并开始部署。<br>清除部署：只删除节点容器和生成的配置文件，面板与已保存配置保留；如需连面板一起彻底清理，请在 VPS 上执行一键清理脚本 cleanup.sh。</p>
           <div id="deployOut" class="status info"></div>
@@ -585,6 +585,7 @@
   </div>
 </div>
 
+<div id="confirmModal" class="hidden" style="position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:100; display:flex; align-items:center; justify-content:center;"><div style="background:#fff; border-radius:16px; box-shadow:0 12px 40px rgba(15,23,42,.25); padding:22px 24px; width:min(420px,90vw);"><div id="confirmModalText" style="font-size:15px; color:#1f2937; line-height:1.6;"></div><div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;"><button type="button" class="ghost" id="btnConfirmCancel">取消</button><button type="button" id="btnConfirmOk">确定</button></div></div></div>
 <script>
 const $ = id => document.getElementById(id);
 let authed = false, logTimer = null, statusTimer = null, logOffset = 0;
@@ -639,7 +640,6 @@ function switchTab(name) {
 }
 document.querySelectorAll(".sidebar button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 $("btnGoDeploy").onclick = () => switchTab("deploy");
-$("btnGoSub").onclick = () => switchTab("sub");
 $("btnCopyOvAuto").onclick = () => copyAddr("ovSubAuto", "ovOut");
 $("btnCopyOvV2ray").onclick = () => copyAddr("ovSubV2ray", "ovOut");
 $("btnCopyOvSingbox").onclick = () => copyAddr("ovSubSingbox", "ovOut");
@@ -813,7 +813,6 @@ function collectConfig() {
   cfg.reality_fingerprint = $("reality_fingerprint").value || "chrome";
   cfg.reality_flow = $("reality_flow").value.trim() || "xtls-rprx-vision";
   cfg.reality_encryption = $("reality_encryption").value.trim() || "mlkem768x25519plus.native";
-  cfg.reality_spiderx = $("reality_spiderx").value.trim() || "/";
   cfg.reality_short_ids = getShortIds();
   // 旧字段名兼容 (direct_xray_tls)
   cfg.direct_xray_tls = cfg.direct_vless_tls;
@@ -864,7 +863,6 @@ function fillConfig(c) {
   $("reality_fingerprint").value = c.reality_fingerprint || "chrome";
   $("reality_flow").value = c.reality_flow || "xtls-rprx-vision";
   $("reality_encryption").value = c.reality_encryption || "mlkem768x25519plus.native";
-  $("reality_spiderx").value = c.reality_spiderx || "/";
   if (Array.isArray(c.reality_short_ids) && c.reality_short_ids.length) {
     setShortIds(c.reality_short_ids);
   }
@@ -1136,8 +1134,25 @@ async function pollDeploy() {
     }
   } catch (e) { /* 隧道重启导致短暂断开时, 下次轮询自动恢复 */ }
 }
+function showConfirm(msg) {
+  return new Promise((resolve) => {
+    const m = $("confirmModal");
+    $("confirmModalText").textContent = msg;
+    m.classList.remove("hidden");
+    const done = (v) => {
+      m.classList.add("hidden");
+      $("btnConfirmOk").onclick = null;
+      $("btnConfirmCancel").onclick = null;
+      m.onclick = null;
+      resolve(v);
+    };
+    $("btnConfirmOk").onclick = () => done(true);
+    $("btnConfirmCancel").onclick = () => done(false);
+    m.onclick = (e) => { if (e.target === m) done(false); };
+  });
+}
 $("btnClear").onclick = async () => {
-  if (!confirm("确定清除本次部署吗？节点容器和配置文件会被删除，面板本身保留，部署配置还在，可以一键重新部署。")) return;
+  if (!(await showConfirm("确定清除本次部署吗？节点容器和配置文件会被删除，面板本身保留，部署配置还在，可以一键重新部署。"))) return;
   try {
     const r = await api("/api/clear", {method: "POST"});
     setOut($("deployOut"), r.message, "ok");
@@ -1169,7 +1184,7 @@ async function loadRealityKeys() {
   } catch (e) {}
 }
 $("btnRealityNewKeys").onclick = async () => {
-  if (!confirm("重新生成 Reality 密钥对？旧密钥会失效，已部署的 Reality 节点需要重新部署。")) return;
+  if (!(await showConfirm("重新生成 Reality 密钥对？旧密钥会失效，已部署的 Reality 节点需要重新部署。"))) return;
   try {
     const k = await api("/api/reality-keys", {method: "POST", body: JSON.stringify({action: "regenerate"})});
     $("reality_pubkey").value = k.public_key || "";
@@ -1179,7 +1194,7 @@ $("btnRealityNewKeys").onclick = async () => {
   } catch (e) { setOut($("realityScanOut"), e.message, "err"); }
 };
 $("btnRealityClearKeys").onclick = async () => {
-  if (!confirm("清除 Reality 密钥与 Short IDs？下次部署时会自动重新生成。")) return;
+  if (!(await showConfirm("清除 Reality 密钥与 Short IDs？下次部署时会自动重新生成。"))) return;
   try {
     await api("/api/reality-keys", {method: "POST", body: JSON.stringify({action: "clear"})});
     $("reality_pubkey").value = "";
@@ -1304,15 +1319,20 @@ $("btnModalRescan").onclick = () => runRealityScan(($("realityModalTarget").valu
 
 // ---- 客户端选择: 自动最优 ----
 const CLIENT_PROTOCOLS = {
-  v2ray: { suitable: ["direct_vless_tcp","direct_vless_tls","direct_vless_reality","direct_vless_ws","direct_vless_grpc","direct_trojan","direct_vmess_ws","direct_ss","direct_hy2"], recommended: ["direct_vless_tls","direct_vless_reality","direct_vless_ws","direct_hy2"] },
-  singbox: { suitable: ["direct_vless_tls","direct_vless_reality","direct_vless_ws","direct_vless_grpc","direct_trojan","direct_vmess_ws","direct_sb_trojan","direct_sb_tls","direct_ss","direct_hy2"], recommended: ["direct_sb_tls","direct_vless_reality","direct_hy2"] },
-  clash: { suitable: ["direct_vless_tls","direct_vless_ws","direct_vless_grpc","direct_trojan","direct_vmess_ws","direct_ss","direct_hy2"], recommended: ["direct_vless_tls","direct_trojan","direct_ss"] },
-  ios: { suitable: ["direct_vless_tls","direct_vless_ws","direct_vless_grpc","direct_trojan","direct_vmess_ws","direct_ss","direct_hy2"], recommended: ["direct_vless_tls","direct_vless_ws","direct_ss"] },
+  v2ray: { suitable: ["direct_vless_tcp","direct_vless_tls","direct_vless_reality","direct_vless_ws","direct_vless_grpc","direct_trojan","direct_vmess_ws","direct_ss","direct_hy2"], recommended: ["direct_vless_reality","direct_hy2","direct_trojan","direct_vless_ws"] },
+  singbox: { suitable: ["direct_vless_tls","direct_vless_reality","direct_vless_ws","direct_vless_grpc","direct_trojan","direct_vmess_ws","direct_sb_trojan","direct_sb_tls","direct_ss","direct_hy2"], recommended: ["direct_vless_reality","direct_hy2","direct_sb_trojan","direct_vless_ws"] },
+  clash: { suitable: ["direct_vless_tls","direct_vless_reality","direct_vless_ws","direct_vless_grpc","direct_trojan","direct_vmess_ws","direct_ss","direct_hy2"], recommended: ["direct_vless_reality","direct_hy2","direct_trojan","direct_vless_ws"] },
+  ios: { suitable: ["direct_vless_tls","direct_vless_reality","direct_vless_ws","direct_vless_grpc","direct_trojan","direct_vmess_ws","direct_ss","direct_hy2"], recommended: ["direct_vless_reality","direct_hy2","direct_trojan","direct_vless_ws"] },
 };
 function applyClientSelection() {
   // 代理客户端可多选: 取所有勾上的客户端, 自动最优/全部客户端优先, iOS 按 Clash 订阅格式走
   const sels = [...document.querySelectorAll('input[name="clientSel"]:checked')].map(x => x.value);
-  const sel = sels[0] || "v2ray";
+  if (sels.length === 0) {
+    DIRECT_IDS.forEach(id => { const el = $(id); if (el) el.checked = false; });
+    updateGroupCounts(); updateCertCard(); updateRealityFields(); checkPortConflicts();
+    return;
+  }
+  const sel = sels[0];
   const mode = (document.querySelector('input[name="clientMode"]:checked')||{}).value || "recommended";
   if (sels.length > 1) {
     const keys = mode === "recommended" ? "recommended" : "suitable";
@@ -1343,6 +1363,12 @@ async function loadRoutes() {
     del.onclick = () => { routes.splice(i,1); loadRoutes(); };
     td.appendChild(del); tr.appendChild(td); body.appendChild(tr);
   });
+  if (!routes.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 5; td.textContent = "暂无路由"; td.style.textAlign = "center"; td.style.color = "#94a3b8";
+    tr.appendChild(td); body.appendChild(tr);
+  }
 }
 $("btnAddRoute").onclick = () => { routeEdit = -1; $("routeForm").classList.remove("hidden"); };
 $("btnRtCancel").onclick = () => $("routeForm").classList.add("hidden");
@@ -1355,10 +1381,12 @@ $("btnSaveRoutes").onclick = async () => {
   try { await api("/api/routes", {method:"POST", body: JSON.stringify({routes})}); setOut($("routeOut"), "路由已保存", "ok"); } catch(e) { setOut($("routeOut"), e.message, "err"); }
 };
 
+const COPY_BTN = {ovSubAuto: "btnCopyOvAuto", ovSubV2ray: "btnCopyOvV2ray", ovSubSingbox: "btnCopyOvSingbox", ovSubClash: "btnCopyOvClash", ovSubIos: "btnCopyOvIos", subRaw: "btnCopyRaw", subMerged: "btnCopyMerged"};
 function setAddr(id, url, hint) {
   const el = $(id);
   if (url) { el.textContent = url; el.classList.remove("empty"); el.dataset.url = url; el.title = url; }
   else { el.textContent = hint; el.classList.add("empty"); el.dataset.url = ""; el.title = ""; }
+  const cb = COPY_BTN[id] && $(COPY_BTN[id]); if (cb) cb.disabled = !url;
 }
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); return true; }
@@ -1409,9 +1437,10 @@ function renderOutbounds() {
     edit.onclick = () => openOutboundForm(i);
     const del = document.createElement("button");
     del.type = "button"; del.className = "sm ghost"; del.textContent = "删除"; del.style.color = "#dc2626";
-    del.onclick = () => {
+    del.disabled = (o.tag === "direct" || o.tag === "blocked");
+    del.onclick = async () => {
       if (outbounds.length <= 1) { alert("至少保留一条出站"); return; }
-      if (!confirm("确定删除出站 " + o.tag + " 吗？")) return;
+      if (!(await showConfirm("确定删除出站 " + o.tag + " 吗？"))) return;
       outbounds.splice(i, 1);
       renderOutbounds();
     };
@@ -1419,6 +1448,19 @@ function renderOutbounds() {
     tr.appendChild(td);
     body.appendChild(tr);
   });
+  // 全是"—"的空列(地址/出口/国家/流量/延迟)隐藏, 有值时自动恢复
+  (function () {
+    const tbl = document.querySelector("#tab-outbound .out-table");
+    if (!tbl) return;
+    [4, 5, 6, 7, 8].forEach(function (col) {
+      const cells = Array.from(tbl.querySelectorAll("tbody tr td:nth-child(" + col + ")"));
+      const allEmpty = cells.length > 0 && cells.every(function (td) { return td.textContent.trim() === "—"; });
+      const disp = allEmpty ? "none" : "";
+      const th = tbl.querySelector("thead th:nth-child(" + col + ")");
+      if (th) th.style.display = disp;
+      cells.forEach(function (td) { td.style.display = disp; });
+    });
+  })();
 }
 async function loadOutbounds() {
   try {
