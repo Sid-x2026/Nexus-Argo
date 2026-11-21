@@ -77,7 +77,7 @@
   .proto.off { opacity: .45; }
   .tag { display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; font-weight: 600; }
   .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
-  .proto-wrap { display: grid; grid-template-columns: minmax(460px, 0.8fr) minmax(0, 1.5fr); gap: 8px; align-items: start; margin-top: 10px; }
+  .proto-wrap { display: grid; grid-template-columns: minmax(460px, 0.8fr) minmax(0, 1.5fr); gap: 8px; align-items: stretch; margin-top: 10px; }
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
   .proto-wrap .row2 { grid-template-columns: 0.9fr 1.1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) 120px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
   .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
@@ -274,6 +274,7 @@
 
         <h3 class="step-h">① 部署方式</h3>
         <div class="mode-box tunnel">
+        <div class="sec-card tunnel">
         <div class="pills">
           <label class="pill"><input type="checkbox" id="modeTunnel" checked> Argo 隧道</label>
           <label class="pill"><input type="checkbox" id="modeDirect"> 直连节点</label>
@@ -287,9 +288,11 @@
           <label class="pill"><input type="checkbox" name="clientSel" value="ios"> iOS</label>
         </div>
         </div>
+        </div>
 
         <h3 class="step-h">③ 协议选择 | UUID 生成</h3>
         <div class="mode-box tunnel">
+        <div class="sec-card tunnel">
                 <div class="pills">
           <label class="pill"><input type="radio" name="clientMode" value="recommended" checked> 推荐协议</label>
           <label class="pill"><input type="radio" name="clientMode" value="suitable"> 全部适配协议</label>
@@ -340,6 +343,7 @@
         </details>
         </div>
         <div class="uuid-row" style="margin-top:12px; display:flex; align-items:center; gap:8px;"><label class="f" style="margin:0; white-space:nowrap;">节点 UUID <span class="req">* 必填</span></label><input type="text" id="nodeUuid" class="mono" placeholder="点右侧生成"><button class="ghost sm" id="btnGenUuid" type="button">生成</button></div>
+        </div>
         </div>
 
         <h3 class="step-h">④ 配置参数</h3>
@@ -437,7 +441,7 @@
           </div>
           </div>
           <div class="sec-card tunnel">
-          <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><div style="display:flex; gap:8px; align-items:center;"><textarea id="optAddrSingle" class="mono" rows="7">cloudflare.com</textarea><button class="ghost sm" id="btnOptAddr" type="button" style="flex:none;">使用优化地址</button></div><span id="optAddrOut" class="hint" style="margin:0;"></span><p class="hint">点「使用优化地址」自动测速，从优选域名池取延迟最低的 6 个填入，最多 6 个。</p></div>
+          <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><div style="display:flex; gap:8px; align-items:center;"><textarea id="optAddrSingle" class="mono" rows="7">cloudflare.com</textarea><button class="ghost sm" id="btnOptAddr" type="button" style="flex:none;">使用优化地址</button></div><span id="optAddrOut" class="hint" style="margin:0;"></span><p class="hint">点「使用优化地址」自动测速，从优选域名池取延迟最低的 6 个填入，最多 6 个。测速前请先关闭代理（测本地直连延迟）。</p></div>
           </div>
           </div>
         </div>
@@ -467,6 +471,7 @@
 
         <h3 class="step-h">⑥ 开始部署</h3>
         <div class="mode-box tunnel">
+        <div class="sec-card tunnel">
         <div class="sticky-deploy">
           <div class="btnrow" style="margin-top:0;">
             <button id="btnSaveCfg" class="ghost">只保存配置</button>
@@ -475,6 +480,7 @@
           </div>
           <p class="hint">只保存配置：只保存配置，不部署。<br>开始部署：保存配置并开始部署。<br>清除部署：只删除节点容器和生成的配置文件，面板与已保存配置保留；如需连面板一起彻底清理，请在 VPS 上执行一键清理脚本 cleanup.sh。</p>
           <div id="deployOut" class="status info"></div>
+        </div>
         </div>
         </div>
         <div id="logWrap" class="hidden">
@@ -932,6 +938,7 @@ async function testOptHost(host) {
 async function runOptAddrTest() {
   const btn = $("btnOptAddr"), out = $("optAddrOut");
   if (!btn) return;
+  if (!(await showConfirm("测速前请确认已关闭代理。开着代理时，测到的是代理到 Cloudflare 的延迟，不是本地直连延迟，选出来的地址会不准。确认已关闭代理？"))) return;
   btn.disabled = true;
   if (out) out.textContent = "优选中…";
   try {
