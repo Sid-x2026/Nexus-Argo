@@ -454,7 +454,12 @@ if is_true "$ENABLE_DIRECT"; then
     _cert_ok=true
     [ "$CERT_MODE" = "upload" ] && log "直连证书: 使用已上传的证书 ($WORKDIR/direct/cert.pem)"
   fi
-  if [ "$CERT_MODE" = "acme" ] && [ "$_cert_ok" = "false" ]; then
+  # 只有勾了需证书协议时才跑 ACME (Reality、VLESS+TCP、VLESS+WS、Shadowsocks、Hysteria2 不需要证书)
+  _need_cert=false
+  for _v in "$DIRECT_VLESS_TLS" "$DIRECT_VLESS_GRPC" "$DIRECT_TROJAN" "$DIRECT_VMESS_WS" "$DIRECT_SB_TROJAN" "$DIRECT_SB_TLS"; do
+    if is_true "$_v"; then _need_cert=true; break; fi
+  done
+  if [ "$CERT_MODE" = "acme" ] && [ "$_cert_ok" = "false" ] && [ "$_need_cert" = "true" ]; then
     if ! _is_domain "$DIRECT_DOMAIN"; then
       warn "CERT_MODE=acme 但 DIRECT_DOMAIN 不是域名 ($DIRECT_DOMAIN), 无法申请证书 — 回退到自签名证书"
     else
