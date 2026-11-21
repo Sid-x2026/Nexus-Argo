@@ -24,7 +24,7 @@
 #     要改另一处; 只有开启的协议才渲染、才进订阅):
 #       DIRECT_VLESS_TCP / _PORT (默认 8082, 明文 TCP),
 #       DIRECT_VLESS_REALITY / _PORT (默认 9447, Reality),
-#       DIRECT_VLESS_WS / _PORT (默认 8083, 明文 ws, path /ws),
+#       DIRECT_VLESS_WS / _PORT (默认 8083, 明文 ws, path 每次部署随机生成),
 #       DIRECT_VLESS_GRPC / _PORT (默认 8084, gRPC+TLS),
 #       DIRECT_TROJAN / _PORT (默认 9443, 密码 = NODE_UUID),
 #       DIRECT_VMESS_WS / _PORT (默认 9444, ws+TLS, alterId 0),
@@ -124,6 +124,13 @@ DIRECT_VLESS_WS = os.environ.get("DIRECT_VLESS_WS", "false").lower() in ("true",
 DIRECT_VLESS_WS_PORT = int(os.environ.get("DIRECT_VLESS_WS_PORT", "8083") or 8083)
 DIRECT_VLESS_GRPC = os.environ.get("DIRECT_VLESS_GRPC", "false").lower() in ("true", "1", "yes")
 DIRECT_VLESS_GRPC_PORT = int(os.environ.get("DIRECT_VLESS_GRPC_PORT", "8084") or 8084)
+# 直连 WS path 与 gRPC serviceName: 每次部署由面板随机生成
+# (nx + 10 位字母数字), 经 DIRECT_WS_PATH / DIRECT_GRPC_SERVICE
+# 传进来; 独立部署没传时用公开默认值 /ws、grpc。
+DIRECT_WS_PATH = os.environ.get("DIRECT_WS_PATH", "/ws").strip() or "/ws"
+if not DIRECT_WS_PATH.startswith("/"):
+    DIRECT_WS_PATH = "/ws"
+DIRECT_GRPC_SERVICE = os.environ.get("DIRECT_GRPC_SERVICE", "grpc").strip() or "grpc"
 DIRECT_TROJAN = os.environ.get("DIRECT_TROJAN", "false").lower() in ("true", "1", "yes")
 DIRECT_TROJAN_PORT = int(os.environ.get("DIRECT_TROJAN_PORT", "9443") or 9443)
 DIRECT_VMESS_WS = os.environ.get("DIRECT_VMESS_WS", "false").lower() in ("true", "1", "yes")
@@ -232,7 +239,7 @@ def _ai():
 def _vmess_link():
     cfg = {"v": "2", "ps": f"{PREFIX_DIRECT}丨Xray-VMess-WS", "add": DIRECT_DOMAIN,
            "port": str(DIRECT_VMESS_WS_PORT), "id": UUID, "aid": "0", "net": "ws",
-           "type": "none", "host": DIRECT_DOMAIN, "path": "/ws", "tls": "tls",
+           "type": "none", "host": DIRECT_DOMAIN, "path": DIRECT_WS_PATH, "tls": "tls",
            "sni": DIRECT_DOMAIN}
     return "vmess://" + base64.b64encode(json.dumps(cfg, ensure_ascii=False).encode()).decode()
 
@@ -276,11 +283,11 @@ def direct_links():
         _rlink += f"#{PREFIX_DIRECT}丨Xray-Reality"
         links.append(_rlink)
     if DIRECT_VLESS_WS:
-        links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_WS_PORT}/?encryption=none&type=ws&path=%2Fws"
+        links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_WS_PORT}/?encryption=none&type=ws&path={urllib.parse.quote(DIRECT_WS_PATH, safe='')}"
                      f"#{PREFIX_DIRECT}丨Xray-WS")
     if DIRECT_VLESS_GRPC:
         links.append(f"vless://{UUID}@{dd}:{DIRECT_VLESS_GRPC_PORT}/?encryption=none&security=tls"
-                     f"&sni={dd}&type=grpc&serviceName=grpc{_ai()}"
+                     f"&sni={dd}&type=grpc&serviceName={urllib.parse.quote(DIRECT_GRPC_SERVICE, safe='')}{_ai()}"
                      f"#{PREFIX_DIRECT}丨Xray-gRPC")
     if DIRECT_TROJAN:
         links.append(f"trojan://{UUID}@{dd}:{DIRECT_TROJAN_PORT}?security=tls&sni={dd}{_ai()}"
