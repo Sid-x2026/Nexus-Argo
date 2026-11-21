@@ -242,10 +242,14 @@ DEFAULT_OUTBOUNDS = [
     {"tag": "direct", "type": "freedom", "address": "", "port": None,
      "username": "", "password": "", "uuid": "", "method": "aes-256-gcm",
      "tls": True, "private_key": "", "peer_public_key": "", "local_address": "",
+     "send_through": "", "sni": "", "insecure": False, "security": "none",
+     "transport": "tcp", "mux": False, "reality_public_key": "", "reality_short_id": "",
      "export": "", "country": "", "traffic": "", "latency_ms": None},
     {"tag": "blocked", "type": "blackhole", "address": "", "port": None,
      "username": "", "password": "", "uuid": "", "method": "aes-256-gcm",
      "tls": True, "private_key": "", "peer_public_key": "", "local_address": "",
+     "send_through": "", "sni": "", "insecure": False, "security": "none",
+     "transport": "tcp", "mux": False, "reality_public_key": "", "reality_short_id": "",
      "export": "", "country": "", "traffic": "", "latency_ms": None},
 ]
 
@@ -296,10 +300,39 @@ def _clean_outbound(o):
         return None, f"出站 {tag} 需要填写私钥"
     if otype == "wireguard" and not (o.get("peer_public_key") or "").strip():
         return None, f"出站 {tag} 需要填写对端公钥"
+    send_through = str(o.get("send_through") or "").strip()
+    if send_through:
+        try:
+            ipaddress.ip_address(send_through)
+        except Exception:
+            return None, f"出站 {tag} 的发送通过须为有效 IP 地址"
+    security = str(o.get("security") or "").strip().lower()
+    if not security:
+        security = "tls" if _to_bool(o.get("tls"), True) else "none"
+    if otype not in ("vless", "vmess", "trojan"):
+        security = "none"
+    if security not in ("none", "tls", "reality"):
+        return None, f"出站 {tag} 的安全类型不正确"
+    transport = str(o.get("transport") or "tcp").strip().lower() or "tcp"
+    if transport not in ("tcp", "ws", "grpc"):
+        return None, f"出站 {tag} 的传输类型不正确"
+    sni = str(o.get("sni") or "").strip()
+    insecure = _to_bool(o.get("insecure"), False)
+    mux = _to_bool(o.get("mux"), False)
+    reality_public_key = str(o.get("reality_public_key") or "").strip()
+    reality_short_id = str(o.get("reality_short_id") or "").strip()
+    if security == "reality" and otype in ("vless", "vmess", "trojan") and not reality_public_key:
+        return None, f"出站 {tag} 用 Reality 需要填写公钥"
+    if reality_short_id and not re.fullmatch(r"[0-9a-fA-F]{2,16}", reality_short_id):
+        return None, f"出站 {tag} 的 Reality Short ID 格式不正确"
     return {
         "tag": tag, "type": otype, "address": addr, "port": port,
         "username": username, "password": password, "uuid": uuid,
-        "method": method, "tls": _to_bool(o.get("tls"), True),
+        "method": method,
+        "tls": (security != "none") if otype in ("vless", "vmess", "trojan") else _to_bool(o.get("tls"), True),
+        "send_through": send_through, "sni": sni, "insecure": insecure,
+        "security": security, "transport": transport, "mux": mux,
+        "reality_public_key": reality_public_key, "reality_short_id": reality_short_id,
         "private_key": str(o.get("private_key") or "").strip(),
         "peer_public_key": str(o.get("peer_public_key") or "").strip(),
         "local_address": str(o.get("local_address") or "").strip(),
@@ -326,9 +359,18 @@ def load_outbounds():
         if not tag or tag in seen:
             continue
         seen.add(tag)
+        _otype = str(o.get("type") or "freedom").strip().lower() or "freedom"
+        _sec = str(o.get("security") or "").strip().lower()
+        if not _sec:
+            _sec = "tls" if _to_bool(o.get("tls"), True) else "none"
+        if _otype not in ("vless", "vmess", "trojan"):
+            _sec = "none"
+        _tr = str(o.get("transport") or "tcp").strip().lower() or "tcp"
+        if _tr not in ("tcp", "ws", "grpc"):
+            _tr = "tcp"
         out.append({
             "tag": tag,
-            "type": str(o.get("type") or "freedom").strip().lower() or "freedom",
+            "type": _otype,
             "address": str(o.get("address") or "").strip(),
             "port": _to_port(o.get("port")),
             "username": str(o.get("username") or "").strip(),
@@ -336,6 +378,12 @@ def load_outbounds():
             "uuid": str(o.get("uuid") or "").strip(),
             "method": str(o.get("method") or "aes-256-gcm").strip() or "aes-256-gcm",
             "tls": _to_bool(o.get("tls"), True),
+            "send_through": str(o.get("send_through") or "").strip(),
+            "sni": str(o.get("sni") or "").strip(),
+            "insecure": _to_bool(o.get("insecure"), False),
+            "security": _sec, "transport": _tr, "mux": _to_bool(o.get("mux"), False),
+            "reality_public_key": str(o.get("reality_public_key") or "").strip(),
+            "reality_short_id": str(o.get("reality_short_id") or "").strip(),
             "private_key": str(o.get("private_key") or "").strip(),
             "peer_public_key": str(o.get("peer_public_key") or "").strip(),
             "local_address": str(o.get("local_address") or "").strip(),
@@ -793,7 +841,13 @@ def load_routes():
         if mt in ("domain", "domain_suffix"):
             vals = [v[2:] if v.startswith("*.") else v for v in vals]
         out.append({"match_type": mt, "values": vals,
-                    "outbound": str(r.get("outbound") or "direct").strip() or "direct"})
+                    "outbound": str(r.get("outbound") or "direct").strip() or "direct",
+                    "comment": str(r.get("comment") or "").strip()[:200],
+                    "network": str(r.get("network") or "any").strip().lower() or "any",
+                    "protocol": str(r.get("protocol") or "").strip().lower(),
+                    "source_ip": _split_values(r.get("source_ip")),
+                    "source_port": _split_values(r.get("source_port")),
+                    "inbound": str(r.get("inbound") or "").strip()})
     return out
 
 
@@ -1766,6 +1820,28 @@ class Handler(BaseHTTPRequestHandler):
                         if not _valid_port_value(v):
                             self._send_json({"error": f"端口格式不正确: {v} (填 1-65535 或 80-443)"}, 400)
                             return
+                comment = str(r.get("comment") or "").strip()[:200]
+                network = str(r.get("network") or "any").strip().lower() or "any"
+                if network not in ("any", "tcp", "udp"):
+                    self._send_json({"error": "路由网络只能是 any / tcp / udp"}, 400)
+                    return
+                protocol = str(r.get("protocol") or "").strip().lower()
+                if protocol and not re.fullmatch(r"[a-z0-9_-]+", protocol):
+                    self._send_json({"error": "路由协议格式不正确"}, 400)
+                    return
+                src_ip = _split_values(r.get("source_ip"))
+                for v in src_ip:
+                    try:
+                        ipaddress.ip_network(v, strict=False)
+                    except Exception:
+                        self._send_json({"error": f"源 IP 格式不正确: {v}"}, 400)
+                        return
+                src_port = _split_values(r.get("source_port"))
+                for v in src_port:
+                    if not _valid_port_value(v):
+                        self._send_json({"error": f"源端口格式不正确: {v} (填 1-65535 或 80-443)"}, 400)
+                        return
+                inbound = str(r.get("inbound") or "").strip()
                 target = str(r.get("outbound") or "direct").strip() or "direct"
                 inline = r.get("inline_socks")
                 if isinstance(inline, dict):
@@ -1789,7 +1865,10 @@ class Handler(BaseHTTPRequestHandler):
                 elif target not in tags:
                     self._send_json({"error": f"路由目标出站不存在: {target}"}, 400)
                     return
-                cleaned.append({"match_type": mt, "values": vals, "outbound": target})
+                cleaned.append({"match_type": mt, "values": vals, "outbound": target,
+                                "comment": comment, "network": network, "protocol": protocol,
+                                "source_ip": src_ip, "source_port": src_port,
+                                "inbound": inbound})
             if created:
                 _save_json(OUTBOUNDS_PATH, {"outbounds": outbounds})
             settings = load_route_settings()

@@ -143,7 +143,7 @@
   .muted { color: #64748b; font-size: 12.7px; }
 
 /* 第34步④：除部署页外，其他页字体 +1px */
-#tab-overview h2, #tab-routes h2, #tab-sub h2, #tab-outbound h2 { font-size: 17px; }
+#tab-overview h2, #tab-routes h2, #tab-sub h2, #tab-outbound h2, #tab-fission h2 { font-size: 17px; }
 #tab-overview .card h3, #tab-routes .card h3, #tab-sub .card h3, #tab-outbound .card h3 { font-size: 16.5px; }
 #tab-overview .stat .t, #tab-routes .stat .t, #tab-sub .stat .t, #tab-outbound .stat .t { font-size: 14.5px; }
 #tab-overview .stat .v, #tab-routes .stat .v, #tab-sub .stat .v, #tab-outbound .stat .v { font-size: 23.5px; }
@@ -155,7 +155,7 @@
 #tab-overview .scan-table, #tab-routes .scan-table, #tab-sub .scan-table, #tab-outbound .scan-table, #tab-overview .out-table, #tab-routes .out-table, #tab-sub .out-table, #tab-outbound .out-table { font-size: 14.5px; }
 #tab-overview .scan-table th, #tab-routes .scan-table th, #tab-sub .scan-table th, #tab-outbound .scan-table th, #tab-overview .out-table th, #tab-routes .out-table th, #tab-sub .out-table th, #tab-outbound .out-table th { font-size: 13.5px; }
 #tab-overview label.f, #tab-routes label.f, #tab-sub label.f, #tab-outbound label.f { font-size: 14.5px; }
-#tab-overview .hint, #tab-routes .hint, #tab-sub .hint, #tab-outbound .hint { font-size: 13.7px; }
+#tab-overview .hint, #tab-routes .hint, #tab-sub .hint, #tab-outbound .hint, #tab-fission .hint { font-size: 13.7px; }
 #tab-overview .sm, #tab-routes .sm, #tab-sub .sm, #tab-outbound .sm { font-size: 14.5px; }
 /* 第35步⑤：部署页字体按目前比例 -1px */
 #tab-deploy { font-size: 15px; }
@@ -226,6 +226,7 @@
       <button data-tab="routes"><span class="ic">↗</span>路由</button>
       <button data-tab="outbound"><span class="ic">⇄</span>出站</button>
       <button data-tab="sub"><span class="ic">🔗</span>订阅</button>
+      <button data-tab="fission"><span class="ic">✦</span>优选裂变</button>
     </nav>
     <div class="main">
 
@@ -507,13 +508,23 @@
           </div>
         </div>
         <div class="btnrow"><button id="btnAddRoute">+ 新增路由</button><button class="green" id="btnSaveRoutes">保存路由</button></div>
-        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>#</th><th>条件</th><th>匹配值</th><th>出站</th><th>操作</th></tr></thead><tbody id="routeBody"></tbody></table></div>
+        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>#</th><th>条件</th><th>匹配值</th><th>出站</th><th>评论</th><th>操作</th></tr></thead><tbody id="routeBody"></tbody></table></div>
         <div id="routeForm" class="hidden" style="margin-top:12px;">
           <div class="row2">
             <div><label class="f">条件</label><select id="rtType"><option value="domain">精确域名</option><option value="domain_suffix">域名后缀</option><option value="ip_cidr">IP 段</option><option value="port">端口</option></select></div>
             <div><label class="f">出站</label><select id="rtTarget"></select></div>
           </div>
           <div style="margin-top:8px;"><label class="f">匹配值（一行一个）</label><textarea id="rtValues" rows="3" class="mono" style="max-width:none; width:100%;" placeholder="例如：&#10;google.com&#10;example.com"></textarea></div>
+          <div style="margin-top:8px;"><label class="f">评论 <span class="opt">选填</span></label><input type="text" id="rtComment" class="mono" maxlength="200" placeholder="例如 走家宽"></div>
+          <div class="row2">
+            <div><label class="f">网络 <span class="opt">选填</span></label><select id="rtNetwork"><option value="any">全部</option><option value="tcp">tcp</option><option value="udp">udp</option></select></div>
+            <div><label class="f">协议 <span class="opt">选填</span></label><input type="text" id="rtProtocol" class="mono" placeholder="例如 bittorrent，留空不限"></div>
+          </div>
+          <div class="row2">
+            <div><label class="f">源 IP <span class="opt">选填</span></label><input type="text" id="rtSourceIp" class="mono" placeholder="例如 192.168.1.0/24，多个用逗号分隔"></div>
+            <div><label class="f">源端口 <span class="opt">选填</span></label><input type="text" id="rtSourcePort" class="mono" placeholder="例如 80,443 或 1000-2000"></div>
+          </div>
+          <div style="margin-top:8px;"><label class="f" title="仅当入站打了标签时生效；当前面板生成的入站暂无标签，该条件暂不起作用。">入站标签 <span class="opt">选填</span></label><input type="text" id="rtInbound" class="mono" placeholder="例如 tunnel"></div>
           <div id="rtSocksBox" class="hidden" style="margin-top:8px;">
             <div class="row2">
               <div><label class="f">SOCKS 地址 <span class="req">* 必填</span></label><input type="text" id="rtSocksHost" class="mono" placeholder="例如 127.0.0.1 或 proxy.example.com"></div>
@@ -613,9 +624,47 @@
               <label class="f">UUID <span class="req">* 必填</span></label>
               <input type="text" id="obUuid" class="mono" placeholder="例如 11111111-2222-3333-4444-555555555555">
             </div>
-            <div id="obCellTls">
-              <label class="f">TLS</label>
-              <div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input type="checkbox" id="obTls" checked style="width:18px; height:18px;"> 启用 TLS</div>
+            <div id="obCellSecurity">
+              <label class="f">安全</label>
+              <select id="obSecurity">
+                <option value="none">无</option>
+                <option value="tls">TLS</option>
+                <option value="reality">Reality</option>
+              </select>
+            </div>
+          </div>
+          <div class="row2">
+            <div id="obCellTransport">
+              <label class="f">传输</label>
+              <select id="obTransport">
+                <option value="tcp">TCP</option>
+                <option value="ws">WS</option>
+                <option value="grpc">gRPC</option>
+              </select>
+            </div>
+            <div id="obCellMux">
+              <label class="f">Mux</label>
+              <div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input type="checkbox" id="obMux" style="width:18px; height:18px;"> 启用多路复用</div>
+            </div>
+          </div>
+          <div class="row2">
+            <div id="obCellSni">
+              <label class="f">SNI <span class="opt">选填</span></label>
+              <input type="text" id="obSni" class="mono" placeholder="留空默认用地址">
+            </div>
+            <div id="obCellInsecure">
+              <label class="f">允许不安全证书</label>
+              <div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input type="checkbox" id="obInsecure" style="width:18px; height:18px;"> 允许自签名证书</div>
+            </div>
+          </div>
+          <div class="row2">
+            <div id="obCellRealityPub">
+              <label class="f">Reality 公钥 <span class="req">* 必填</span></label>
+              <input type="text" id="obRealityPub" class="mono" placeholder="中转端的 Reality 公钥">
+            </div>
+            <div id="obCellRealitySid">
+              <label class="f">Reality Short ID <span class="opt">选填</span></label>
+              <input type="text" id="obRealitySid" class="mono" placeholder="留空不用 Short ID">
             </div>
           </div>
           <div id="obCellMethod">
@@ -642,6 +691,10 @@
             <label class="f">本地地址 <span class="opt">选填</span></label>
             <input type="text" id="obLocalAddr" class="mono" placeholder="例如 10.0.0.2/32，留空用默认">
           </div>
+          <div id="obCellSendThrough">
+            <label class="f">发送通过 <span class="opt">选填</span></label>
+            <input type="text" id="obSendThrough" class="mono" placeholder="本地 IP，例如 1.2.3.4；仅 Xray 生效">
+          </div>
           <div class="row2">
             <div id="obCellExport">
               <label class="f">出口 <span class="opt">选填</span></label>
@@ -655,6 +708,14 @@
           <div class="btnrow"><button class="sm" id="btnObConfirm">确定</button><button class="sm ghost" id="btnObCancel">取消</button></div>
         </div>
         <div id="outboundOut" class="status info"></div>
+      </div>
+    </div>
+
+    <!-- 优选裂变（占位） -->
+    <div id="tab-fission" class="hidden">
+      <div class="card">
+        <h2>优选裂变</h2>
+        <p class="hint">优选裂变功能即将推出，逻辑待定。本页先占位。</p>
       </div>
     </div>
     </div>
@@ -709,7 +770,7 @@ function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) 
 
 function switchTab(name) {
   document.querySelectorAll(".sidebar button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
-  ["overview", "deploy", "sub", "outbound", "routes"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
+  ["overview", "deploy", "sub", "outbound", "routes", "fission"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
   if (name === "sub") loadSubscription();
   if (name === "overview") loadStatus();
   if (name === "outbound") loadOutbounds();
@@ -1457,7 +1518,14 @@ function renderRoutes() {
     const vals = (rt.values || (rt.value ? [rt.value] : [])).join(", ");
     const mt = rt.match_type || rt.type || "domain_suffix";
     const ob = rt.outbound || (rt.inline_socks ? "外部 SOCKS（待保存）" : "");
-    tr.innerHTML = "<td>" + (i+1) + "</td><td>" + (RT_TYPE_LABEL[mt] || mt) + "</td><td class='mono'>" + vals + "</td><td class='mono'>" + ob + "</td>";
+    const extra = [];
+    if (rt.network && rt.network !== "any") extra.push("网络:" + rt.network);
+    if (rt.protocol) extra.push("协议:" + rt.protocol);
+    if ((rt.source_ip || []).length) extra.push("源:" + rt.source_ip.join(","));
+    if ((rt.source_port || []).length) extra.push("源端口:" + rt.source_port.join(","));
+    if (rt.inbound) extra.push("入站:" + rt.inbound);
+    const valsShown = vals + (extra.length ? " | " + extra.join(" ") : "");
+    tr.innerHTML = "<td>" + (i+1) + "</td><td>" + (RT_TYPE_LABEL[mt] || mt) + "</td><td class='mono'>" + valsShown + "</td><td class='mono'>" + ob + "</td><td>" + (rt.comment || "—") + "</td>";
     const td = document.createElement("td");
     const up = document.createElement("button"); up.type="button"; up.className="sm ghost"; up.textContent="↑"; up.disabled = (i === 0); up.title = "上移";
     up.onclick = () => { const t = routes[i-1]; routes[i-1] = routes[i]; routes[i] = t; renderRoutes(); };
@@ -1470,7 +1538,7 @@ function renderRoutes() {
   if (!routes.length) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 5; td.textContent = "暂无路由"; td.style.textAlign = "center"; td.style.color = "#94a3b8";
+    td.colSpan = 6; td.textContent = "暂无路由"; td.style.textAlign = "center"; td.style.color = "#94a3b8";
     tr.appendChild(td); body.appendChild(tr);
   }
 }
@@ -1498,7 +1566,7 @@ async function loadRoutes() {
   refreshRouteTargets();
   renderRoutes();
 }
-$("btnAddRoute").onclick = () => { routeEdit = -1; refreshRouteTargets(); $("routeForm").classList.remove("hidden"); };
+$("btnAddRoute").onclick = () => { routeEdit = -1; refreshRouteTargets(); $("rtComment").value = ""; $("rtNetwork").value = "any"; $("rtProtocol").value = ""; $("rtSourceIp").value = ""; $("rtSourcePort").value = ""; $("rtInbound").value = ""; $("routeForm").classList.remove("hidden"); };
 $("btnRtCancel").onclick = () => $("routeForm").classList.add("hidden");
 $("rtTarget").onchange = () => { $("rtSocksBox").classList.toggle("hidden", $("rtTarget").value !== "__socks__"); };
 async function saveRouteSettings() {
@@ -1520,7 +1588,13 @@ $("rtBlockBt").onchange = saveRouteSettings;
 $("btnRtConfirm").onclick = () => {
   const vals = $("rtValues").value.split(/\n|,/).map(s => s.trim()).filter(Boolean);
   if (!vals.length) { alert("匹配值不能为空"); return; }
-  const rec = {match_type: $("rtType").value, values: vals};
+  const rec = {match_type: $("rtType").value, values: vals,
+    comment: $("rtComment").value.trim().slice(0, 200),
+    network: $("rtNetwork").value || "any",
+    protocol: $("rtProtocol").value.trim().toLowerCase(),
+    source_ip: $("rtSourceIp").value.split(/[\n,，]/).map(s => s.trim()).filter(Boolean),
+    source_port: $("rtSourcePort").value.split(/[\n,，]/).map(s => s.trim()).filter(Boolean),
+    inbound: $("rtInbound").value.trim()};
   if ($("rtTarget").value === "__socks__") {
     const host = $("rtSocksHost").value.trim();
     const port = parseInt($("rtSocksPort").value, 10);
@@ -1535,6 +1609,8 @@ $("btnRtConfirm").onclick = () => {
   routes.push(rec);
   $("routeForm").classList.add("hidden");
   $("rtValues").value = "";
+  $("rtComment").value = ""; $("rtNetwork").value = "any"; $("rtProtocol").value = "";
+  $("rtSourceIp").value = ""; $("rtSourcePort").value = ""; $("rtInbound").value = "";
   renderRoutes();
 };
 $("btnSaveRoutes").onclick = async () => {
@@ -1641,20 +1717,31 @@ async function loadOutbounds() {
 }
 function obFieldVisibility() {
   const t = $("obType").value;
+  const sec = $("obSecurity").value;
   const show = (id, on) => { const el = $(id); if (el) el.style.display = on ? "" : "none"; };
   const server = ["socks", "http", "vless", "vmess", "trojan", "shadowsocks", "hysteria2", "wireguard"].indexOf(t) >= 0;
+  const triple = ["vless", "vmess", "trojan"].indexOf(t) >= 0;
+  const muxable = ["socks", "http", "vless", "vmess", "trojan", "shadowsocks"].indexOf(t) >= 0;
   show("obCellAddress", server);
   show("obCellPort", server);
   show("obCellUsername", t === "socks" || t === "http");
   show("obCellPassword", ["socks", "http", "trojan", "shadowsocks", "hysteria2"].indexOf(t) >= 0);
   show("obCellUuid", t === "vless" || t === "vmess");
-  show("obCellTls", t === "vless" || t === "vmess");
+  show("obCellSecurity", triple);
+  show("obCellTransport", triple);
+  show("obCellMux", muxable);
+  show("obCellSni", (triple && sec !== "none") || t === "hysteria2");
+  show("obCellInsecure", (triple && sec === "tls") || t === "hysteria2");
+  show("obCellRealityPub", triple && sec === "reality");
+  show("obCellRealitySid", triple && sec === "reality");
   show("obCellMethod", t === "shadowsocks");
   show("obCellPrivateKey", t === "wireguard");
   show("obCellPeerPub", t === "wireguard");
   show("obCellLocalAddr", t === "wireguard");
+  show("obCellSendThrough", t !== "blackhole" && t !== "dns");
 }
 $("obType").onchange = obFieldVisibility;
+$("obSecurity").onchange = obFieldVisibility;
 function openOutboundForm(i) {
   obEditIndex = i;
   const o = i >= 0 ? outbounds[i] : null;
@@ -1667,7 +1754,14 @@ function openOutboundForm(i) {
   $("obUsername").value = o ? o.username : "";
   $("obPassword").value = o ? o.password : "";
   $("obUuid").value = o ? o.uuid : "";
-  $("obTls").checked = o ? !!o.tls : true;
+  $("obSecurity").value = o ? (o.security || (o.tls ? "tls" : "none")) : "tls";
+  $("obTransport").value = o ? (o.transport || "tcp") : "tcp";
+  $("obSni").value = o ? (o.sni || "") : "";
+  $("obInsecure").checked = o ? !!o.insecure : false;
+  $("obMux").checked = o ? !!o.mux : false;
+  $("obRealityPub").value = o ? (o.reality_public_key || "") : "";
+  $("obRealitySid").value = o ? (o.reality_short_id || "") : "";
+  $("obSendThrough").value = o ? (o.send_through || "") : "";
   $("obMethod").value = o ? (o.method || "aes-256-gcm") : "aes-256-gcm";
   $("obPrivateKey").value = o ? o.private_key : "";
   $("obPeerPub").value = o ? o.peer_public_key : "";
@@ -1691,7 +1785,15 @@ $("btnObConfirm").onclick = () => {
     password: $("obPassword").value,
     uuid: $("obUuid").value.trim(),
     method: $("obMethod").value,
-    tls: $("obTls").checked,
+    tls: $("obSecurity").value !== "none",
+    security: $("obSecurity").value,
+    transport: $("obTransport").value,
+    sni: $("obSni").value.trim(),
+    insecure: $("obInsecure").checked,
+    mux: $("obMux").checked,
+    reality_public_key: $("obRealityPub").value.trim(),
+    reality_short_id: $("obRealitySid").value.trim(),
+    send_through: $("obSendThrough").value.trim(),
     private_key: $("obPrivateKey").value.trim(),
     peer_public_key: $("obPeerPub").value.trim(),
     local_address: $("obLocalAddr").value.trim(),
