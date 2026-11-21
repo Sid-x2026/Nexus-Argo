@@ -508,7 +508,7 @@ def validate_config(raw):
         addrs = [a.strip() for a in addrs.replace("\n", ",").split(",") if a.strip()]
     if not isinstance(addrs, list) or not addrs:
         addrs = ["cloudflare.com"]
-    cfg["opt_addrs"] = [str(a).strip() for a in addrs if str(a).strip()][:20] or ["cloudflare.com"]
+    cfg["opt_addrs"] = [str(a).strip() for a in addrs if str(a).strip()][:6] or ["cloudflare.com"]
 
     cfg["sub_path"] = str(cfg.get("sub_path") or "sub").strip()
     if not SUB_PATH_RE.match(cfg["sub_path"]) or cfg["sub_path"] in RESERVED_SUB_PATH:
@@ -623,10 +623,15 @@ def validate_config(raw):
             if not re.fullmatch(r"[0-9xXyYzZ][0-9xXyYzZ.]*", cfg[_ver_key]):
                 errors.append(f"{_ver_label}格式不正确, 如 1.0.0 或 x.y.z")
 
+    # 需证书的直连协议 (Reality、VLESS+TCP、VLESS+WS、Shadowsocks、Hysteria2 不需要证书);
+    # 只有勾了需证书协议时, 证书模式校验才生效。
+    _need_cert = cfg["enable_direct"] and any(
+        cfg.get(k) for k in ("direct_vless_tls", "direct_vless_grpc", "direct_trojan",
+                             "direct_vmess_ws", "direct_sb_trojan", "direct_sb_tls"))
     # 证书模式: 只在直连开启时校验; 直连没开时证书设置不拦保存。
-    if cfg["enable_direct"] and cfg["cert_mode"] not in ("selfsigned", "upload", "acme"):
+    if _need_cert and cfg["cert_mode"] not in ("selfsigned", "upload", "acme"):
         errors.append("证书模式不正确, 只能选择自签名 / 上传 / ACME")
-    elif cfg["enable_direct"] and cfg["cert_mode"] == "upload":
+    elif _need_cert and cfg["cert_mode"] == "upload":
         if not cfg["cert_pem"].strip():
             errors.append("证书内容未填写, 上传证书模式下请填写证书内容 (PEM)")
         elif "BEGIN CERTIFICATE" not in cfg["cert_pem"]:
@@ -635,7 +640,7 @@ def validate_config(raw):
             errors.append("私钥内容未填写, 上传证书模式下请填写私钥内容 (PEM)")
         elif "BEGIN PRIVATE KEY" not in cfg["cert_key"] and "BEGIN RSA PRIVATE KEY" not in cfg["cert_key"]:
             errors.append("私钥内容格式不正确, 应为 PEM 格式私钥 (包含 BEGIN PRIVATE KEY)")
-    elif cfg["enable_direct"] and cfg["cert_mode"] == "acme":
+    elif _need_cert and cfg["cert_mode"] == "acme":
         if not cfg["direct_domain"]:
             errors.append("直连域名未填写, ACME 模式需要填写直连域名 (不能为空)")
         elif not _is_domain(cfg["direct_domain"]):
@@ -771,6 +776,10 @@ def config_to_env(cfg):
     def _b(v):
         return "true" if v else "false"
     reality = _load_reality_keys()
+    # 需证书的直连协议; 没勾时传 selfsigned 给 install.sh, 不跑 ACME (配置里存的 cert_mode 不动)
+    _need_cert = cfg["enable_direct"] and any(
+        cfg.get(k) for k in ("direct_vless_tls", "direct_vless_grpc", "direct_trojan",
+                             "direct_vmess_ws", "direct_sb_trojan", "direct_sb_tls"))
     env = {
         "NODE_UUID": cfg["node_uuid"],
         "NODE_PREFIX": cfg["argo_prefix"],
@@ -830,7 +839,7 @@ def config_to_env(cfg):
         "DIRECT_SS_PORT": str(cfg["direct_ss_port"]),
         "DIRECT_HY2": _b(cfg["direct_hy2"]),
         "DIRECT_HY2_PORT": str(cfg["direct_hy2_port"]),
-        "CERT_MODE": cfg["cert_mode"],
+        "CERT_MODE": cfg["cert_mode"] if _need_cert else "selfsigned",
         # 旧变量名 (兼容): 和新变量同值
         "DIRECT_XRAY_TLS": _b(cfg["direct_vless_tls"]),
         "DIRECT_XRAY_TLS_PORT": str(cfg["direct_vless_tls_port"]),
