@@ -713,6 +713,9 @@ def _direct_tls():
 # 的配置与旧版一致 (默认 direct, 无路由规则), 只是多一条未被引
 # 用的 blocked 出站 (面板默认就有 direct + blocked, 行为不变)。
 # 路由按面板保存顺序匹配, 先命中先生效; 不匹配的走默认 direct。
+# 默认防护 (阻止私有 IP / 屏蔽 BitTorrent, 路由页开关, 默认全开) 排在
+# 用户规则之前; 开关关掉后对应规则不生成。两个都关且无用户规则时,
+# 生成的配置与旧版一致 (无路由规则)。
 _PANEL_NETS = None
 
 
@@ -953,6 +956,28 @@ def _sb_rules(routes):
             rules.append(rule)
     return rules
 
+
+def _protection_rules_xray():
+    # 默认防护 (面板路由页开关, 默认全开): 只做二条, 阻止私有 IP 与
+    # 屏蔽 BitTorrent, 不做 3X-UI 的 api 规则。缺省环境变量时不生成
+    # (与第 52 步无规则时一致); 面板部署时总会传值。
+    rules = []
+    if _is_true(os.environ.get("NEXUS_BLOCK_PRIVATE")):
+        rules.append({"type": "field", "ip": ["geoip:private"], "outboundTag": "blocked"})
+    if _is_true(os.environ.get("NEXUS_BLOCK_BITTORRENT")):
+        rules.append({"type": "field", "protocol": ["bittorrent"], "outboundTag": "blocked"})
+    return rules
+
+
+def _protection_rules_sb():
+    rules = []
+    if _is_true(os.environ.get("NEXUS_BLOCK_PRIVATE")):
+        rules.append({"geoip": ["private"], "outbound": "blocked"})
+    if _is_true(os.environ.get("NEXUS_BLOCK_BITTORRENT")):
+        rules.append({"protocol": ["bittorrent"], "outbound": "blocked"})
+    return rules
+
+
 def render_xray(port, configs):
     # Inbounds: one unified VLESS/XHTTP tunnel inbound (if any tunnel
     # protocol is selected) + direct inbounds (if direct is on).
@@ -1076,7 +1101,7 @@ def render_xray(port, configs):
         "inbounds": inbounds,
         "outbounds": _build_outbounds(_obs, _xray_outbound)
     }
-    _rules = _xray_rules(_rts)
+    _rules = _protection_rules_xray() + _xray_rules(_rts)
     if _rules:
         _cfg["routing"] = {"domainStrategy": "AsIs", "rules": _rules}
     return _cfg
@@ -1152,7 +1177,7 @@ def render_singbox(port, configs):
         "inbounds": inbounds,
         "outbounds": _build_outbounds(_obs, _sb_outbound)
     }
-    _rules = _sb_rules(_rts)
+    _rules = _protection_rules_sb() + _sb_rules(_rts)
     if _rules:
         _cfg["route"] = {"rules": _rules, "final": "direct"}
     return _cfg
