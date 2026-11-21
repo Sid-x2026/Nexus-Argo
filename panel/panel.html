@@ -498,6 +498,14 @@
         <p class="hint">出站 + 路由成一对：<b>第一步</b>先在「出站」页加一条出站（比如家宽代理）；<b>第二步</b>在这里加一条路由，告诉面板什么流量走它。规则按顺序比对，先命中先生效；不匹配的走默认 direct。</p>
         <p class="hint">举例：条件选「域名后缀」，匹配值填 <span class="mono">google.com</span>，出站选 <span class="mono">home</span>，就是「访问 google 域名走 home 出站」。出站也可以直接选「外部 SOCKS」，填入第三方代理的地址端口，面板会自动生成对应的出站。</p>
         <p class="hint">出站与路由在部署时写进核心配置；改动后需清除部署再重新部署才生效。</p>
+        <div class="mode-box" style="margin-top:8px; padding:8px 10px;">
+          <h3 class="step-h" style="border-top:none; padding-top:0;">基本路由</h3>
+          <p class="hint">默认防护：开启后部署时自动排在自定义规则之前先生效。</p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
+            <label class="pill" title="访问内网地址（10.x / 172.16.x / 192.168.x / 127.0.0.1 等）一律丢弃"><input type="checkbox" id="rtBlockPrivate" checked> 阻止私有 IP</label>
+            <label class="pill" title="BitTorrent 流量一律丢弃"><input type="checkbox" id="rtBlockBt" checked> 屏蔽 BitTorrent</label>
+          </div>
+        </div>
         <div class="btnrow"><button id="btnAddRoute">+ 新增路由</button><button class="green" id="btnSaveRoutes">保存路由</button></div>
         <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>#</th><th>条件</th><th>匹配值</th><th>出站</th><th>操作</th></tr></thead><tbody id="routeBody"></tbody></table></div>
         <div id="routeForm" class="hidden" style="margin-top:12px;">
@@ -1440,6 +1448,7 @@ document.querySelectorAll('input[name="clientSel"], input[name="clientMode"]').f
 
 // ---- 路由规则 ----
 let routes = [], routeEdit = -1;
+let routeSettings = {block_private: true, block_bittorrent: true};
 const RT_TYPE_LABEL = {domain: "精确域名", domain_suffix: "域名后缀", ip_cidr: "IP 段", port: "端口"};
 function renderRoutes() {
   const body = $("routeBody"); body.innerHTML = "";
@@ -1480,7 +1489,9 @@ function refreshRouteTargets() {
   $("rtSocksBox").classList.toggle("hidden", sel.value !== "__socks__");
 }
 async function loadRoutes() {
-  try { const r = await api("/api/routes"); routes = r.routes || []; } catch (e) { routes = []; }
+  try { const r = await api("/api/routes"); routes = r.routes || []; routeSettings = r.settings || {block_private: true, block_bittorrent: true}; } catch (e) { routes = []; }
+  $("rtBlockPrivate").checked = routeSettings.block_private !== false;
+  $("rtBlockBt").checked = routeSettings.block_bittorrent !== false;
   if (!outbounds.length) {
     try { const r = await api("/api/outbounds"); outbounds = r.outbounds || []; } catch (e) {}
   }
@@ -1490,6 +1501,22 @@ async function loadRoutes() {
 $("btnAddRoute").onclick = () => { routeEdit = -1; refreshRouteTargets(); $("routeForm").classList.remove("hidden"); };
 $("btnRtCancel").onclick = () => $("routeForm").classList.add("hidden");
 $("rtTarget").onchange = () => { $("rtSocksBox").classList.toggle("hidden", $("rtTarget").value !== "__socks__"); };
+async function saveRouteSettings() {
+  const next = {block_private: $("rtBlockPrivate").checked, block_bittorrent: $("rtBlockBt").checked};
+  try {
+    const r = await api("/api/routes", {method:"POST", body: JSON.stringify({routes, settings: next})});
+    routes = r.routes || routes;
+    routeSettings = r.settings || next;
+    renderRoutes();
+    setOut($("routeOut"), "防护开关已保存，下次部署时生效", "ok");
+  } catch(e) {
+    $("rtBlockPrivate").checked = routeSettings.block_private !== false;
+    $("rtBlockBt").checked = routeSettings.block_bittorrent !== false;
+    setOut($("routeOut"), e.message, "err");
+  }
+}
+$("rtBlockPrivate").onchange = saveRouteSettings;
+$("rtBlockBt").onchange = saveRouteSettings;
 $("btnRtConfirm").onclick = () => {
   const vals = $("rtValues").value.split(/\n|,/).map(s => s.trim()).filter(Boolean);
   if (!vals.length) { alert("匹配值不能为空"); return; }
@@ -1512,7 +1539,7 @@ $("btnRtConfirm").onclick = () => {
 };
 $("btnSaveRoutes").onclick = async () => {
   try {
-    const r = await api("/api/routes", {method:"POST", body: JSON.stringify({routes})});
+    const r = await api("/api/routes", {method:"POST", body: JSON.stringify({routes, settings: routeSettings})});
     routes = r.routes || routes;
     renderRoutes();
     if ((r.created_outbounds || []).length) {

@@ -797,6 +797,19 @@ def load_routes():
     return out
 
 
+def load_route_settings():
+    """读路由防护开关 (routes.json 的 settings 键), 默认全开。
+    旧文件没有 settings 键时也默认全开。"""
+    data = _load_json(ROUTES_PATH, None)
+    st = {}
+    if isinstance(data, dict) and isinstance(data.get("settings"), dict):
+        st = data["settings"]
+    return {
+        "block_private": _as_bool(st.get("block_private"), True),
+        "block_bittorrent": _as_bool(st.get("block_bittorrent"), True),
+    }
+
+
 def _reality_json_path():
     return os.path.join(WORKDIR, "direct", "reality.json")
 
@@ -912,6 +925,7 @@ def config_to_env(cfg):
     _need_cert = cfg["enable_direct"] and any(
         cfg.get(k) for k in ("direct_vless_tls", "direct_vless_grpc", "direct_trojan",
                              "direct_vmess_ws", "direct_sb_trojan", "direct_sb_tls"))
+    _rs = load_route_settings()
     env = {
         "NODE_UUID": cfg["node_uuid"],
         "NODE_PREFIX": cfg["argo_prefix"],
@@ -980,6 +994,9 @@ def config_to_env(cfg):
         # 出站 / 路由 (面板定义, 部署时写进核心配置)
         "NEXUS_OUTBOUNDS": json.dumps(load_outbounds()),
         "NEXUS_ROUTES": json.dumps(load_routes()),
+        # 默认防护开关 (路由页, 默认全开; 部署时排在自定义规则之前)
+        "NEXUS_BLOCK_PRIVATE": "1" if _rs["block_private"] else "0",
+        "NEXUS_BLOCK_BITTORRENT": "1" if _rs["block_bittorrent"] else "0",
     }
     return env
 
@@ -1525,7 +1542,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/routes":
             if not self._need_auth():
                 return
-            self._send_json({"routes": load_routes()})
+            self._send_json({"routes": load_routes(), "settings": load_route_settings()})
             return
         self._send_json({"error": "未知路径"}, 404)
 
@@ -1775,8 +1792,14 @@ class Handler(BaseHTTPRequestHandler):
                 cleaned.append({"match_type": mt, "values": vals, "outbound": target})
             if created:
                 _save_json(OUTBOUNDS_PATH, {"outbounds": outbounds})
-            _save_json(ROUTES_PATH, {"routes": cleaned})
-            self._send_json({"ok": True, "routes": cleaned, "created_outbounds": created})
+            settings = load_route_settings()
+            if isinstance(body.get("settings"), dict):
+                settings = {
+                    "block_private": _as_bool(body["settings"].get("block_private"), settings["block_private"]),
+                    "block_bittorrent": _as_bool(body["settings"].get("block_bittorrent"), settings["block_bittorrent"]),
+                }
+            _save_json(ROUTES_PATH, {"routes": cleaned, "settings": settings})
+            self._send_json({"ok": True, "routes": cleaned, "settings": settings, "created_outbounds": created})
             return
 
         if path == "/api/outbounds/test":
