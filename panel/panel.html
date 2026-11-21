@@ -495,15 +495,26 @@
     <div id="tab-routes" class="hidden">
       <div class="card">
         <h2>路由规则</h2>
-        <p class="hint">出站 + 路由成一对：<b>第一步</b>先在「出站」页加一条出站（比如 HTTP 代理 127.0.0.1:7928）；<b>第二步</b>在这里加一条路由，告诉面板什么流量走它。匹配到的走选中的出站，不匹配的走默认 direct。</p>
-        <p class="hint">举例：条件选「域名」，匹配值填 <span class="mono">*.google.com</span>，出站标签填 <span class="mono">home</span>，就是「访问 google 域名走 home 出站」。</p>
+        <p class="hint">出站 + 路由成一对：<b>第一步</b>先在「出站」页加一条出站（比如家宽代理）；<b>第二步</b>在这里加一条路由，告诉面板什么流量走它。规则按顺序比对，先命中先生效；不匹配的走默认 direct。</p>
+        <p class="hint">举例：条件选「域名后缀」，匹配值填 <span class="mono">google.com</span>，出站选 <span class="mono">home</span>，就是「访问 google 域名走 home 出站」。出站也可以直接选「外部 SOCKS」，填入第三方代理的地址端口，面板会自动生成对应的出站。</p>
+        <p class="hint">出站与路由在部署时写进核心配置；改动后需清除部署再重新部署才生效。</p>
         <div class="btnrow"><button id="btnAddRoute">+ 新增路由</button><button class="green" id="btnSaveRoutes">保存路由</button></div>
         <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>#</th><th>条件</th><th>匹配值</th><th>出站</th><th>操作</th></tr></thead><tbody id="routeBody"></tbody></table></div>
         <div id="routeForm" class="hidden" style="margin-top:12px;">
-          <div class="row3">
-            <div><label class="f">条件</label><select id="rtType"><option value="domain">域名</option><option value="ip">IP</option><option value="port">端口</option></select></div>
-            <div><label class="f">匹配值</label><input type="text" id="rtValue" class="mono" placeholder="例如 *.google.com 或 1.2.3.4 或 443"></div>
-            <div><label class="f">出站标签</label><input type="text" id="rtOutbound" class="mono" placeholder="例如 home"></div>
+          <div class="row2">
+            <div><label class="f">条件</label><select id="rtType"><option value="domain">精确域名</option><option value="domain_suffix">域名后缀</option><option value="ip_cidr">IP 段</option><option value="port">端口</option></select></div>
+            <div><label class="f">出站</label><select id="rtTarget"></select></div>
+          </div>
+          <div style="margin-top:8px;"><label class="f">匹配值（一行一个）</label><textarea id="rtValues" rows="3" class="mono" style="max-width:none; width:100%;" placeholder="例如：&#10;google.com&#10;example.com"></textarea></div>
+          <div id="rtSocksBox" class="hidden" style="margin-top:8px;">
+            <div class="row2">
+              <div><label class="f">SOCKS 地址 <span class="req">* 必填</span></label><input type="text" id="rtSocksHost" class="mono" placeholder="例如 127.0.0.1 或 proxy.example.com"></div>
+              <div><label class="f">SOCKS 端口 <span class="req">* 必填</span></label><input type="number" id="rtSocksPort" class="mono" placeholder="例如 1080" min="1" max="65535"></div>
+            </div>
+            <div class="row2">
+              <div><label class="f">用户名 <span class="opt">选填</span></label><input type="text" id="rtSocksUser" class="mono" placeholder="没有留空"></div>
+              <div><label class="f">密码 <span class="opt">选填</span></label><input type="password" id="rtSocksPass" class="mono" placeholder="没有留空" autocomplete="off"></div>
+            </div>
           </div>
           <div class="btnrow"><button class="sm" id="btnRtConfirm">确定</button><button class="sm ghost" id="btnRtCancel">取消</button></div>
         </div>
@@ -532,8 +543,8 @@
     <div id="tab-outbound" class="hidden">
       <div class="card">
         <h2>出站管理</h2>
-        <div class="warn">此处的所有更改都需要保存并重启面板才能生效。</div>
-        <p class="hint">统一管理出站流量：默认 direct（直出）和 blocked（拦截）。新增出站以后可以在这里对接家宽；本版只做管理与测速，出站尚未接进核心部署。</p>
+        <div class="warn">出站与路由在部署时写进核心配置；改动后需清除部署再重新部署才生效。</div>
+        <p class="hint">统一管理出站流量：默认 direct（直出）和 blocked（拦截）。新增出站（如家宽代理）后，在「路由」页加规则指定哪些流量走它；部署时同时写进 Xray 与 Sing-box，两个核心一起生效。</p>
         <div class="btnrow">
           <button id="btnAddOutbound">+ 新增出站</button>
           <button class="ghost" id="btnTestAllOutbounds">全部测试</button>
@@ -548,11 +559,11 @@
         <div id="outboundForm" class="hidden" style="margin-top:12px; border-top:1px solid #eef0fb; padding-top:14px;">
           <h3 id="outboundFormTitle">新增出站</h3>
           <div class="row2">
-            <div>
+            <div id="obCellTag">
               <label class="f">标签 <span class="req">* 必填</span></label>
               <input type="text" id="obTag" class="mono" placeholder="例如 home">
             </div>
-            <div>
+            <div id="obCellType">
               <label class="f">类型 <span class="req">* 必填</span></label>
               <select id="obType">
                 <option value="freedom">freedom（直出）</option>
@@ -570,17 +581,69 @@
             </div>
           </div>
           <div class="row2">
-            <div>
-              <label class="f">地址 <span class="opt">选填</span></label>
-              <input type="text" id="obAddress" class="mono" placeholder="例如 1.2.3.4:1080，留空用默认">
+            <div id="obCellAddress">
+              <label class="f">地址 <span class="req">* 必填</span></label>
+              <input type="text" id="obAddress" class="mono" placeholder="例如 127.0.0.1 或 proxy.example.com">
             </div>
-            <div>
+            <div id="obCellPort">
+              <label class="f">端口 <span class="req">* 必填</span></label>
+              <input type="number" id="obPort" class="mono" placeholder="例如 1080" min="1" max="65535">
+            </div>
+          </div>
+          <div class="row2">
+            <div id="obCellUsername">
+              <label class="f">用户名 <span class="opt">选填</span></label>
+              <input type="text" id="obUsername" class="mono" placeholder="代理账号，没有留空">
+            </div>
+            <div id="obCellPassword">
+              <label class="f">密码 <span class="opt">选填</span></label>
+              <input type="password" id="obPassword" class="mono" placeholder="代理密码，没有留空" autocomplete="off">
+            </div>
+          </div>
+          <div class="row2">
+            <div id="obCellUuid">
+              <label class="f">UUID <span class="req">* 必填</span></label>
+              <input type="text" id="obUuid" class="mono" placeholder="例如 11111111-2222-3333-4444-555555555555">
+            </div>
+            <div id="obCellTls">
+              <label class="f">TLS</label>
+              <div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input type="checkbox" id="obTls" checked style="width:18px; height:18px;"> 启用 TLS</div>
+            </div>
+          </div>
+          <div id="obCellMethod">
+            <label class="f">加密方式 <span class="req">* 必填</span></label>
+            <select id="obMethod">
+              <option value="aes-256-gcm">aes-256-gcm</option>
+              <option value="aes-128-gcm">aes-128-gcm</option>
+              <option value="chacha20-ietf-poly1305">chacha20-ietf-poly1305</option>
+              <option value="xchacha20-ietf-poly1305">xchacha20-ietf-poly1305</option>
+              <option value="aes-256-cfb">aes-256-cfb</option>
+            </select>
+          </div>
+          <div class="row2">
+            <div id="obCellPrivateKey">
+              <label class="f">私钥 <span class="req">* 必填</span></label>
+              <input type="text" id="obPrivateKey" class="mono" placeholder="WireGuard 私钥">
+            </div>
+            <div id="obCellPeerPub">
+              <label class="f">对端公钥 <span class="req">* 必填</span></label>
+              <input type="text" id="obPeerPub" class="mono" placeholder="WireGuard 对端公钥">
+            </div>
+          </div>
+          <div id="obCellLocalAddr">
+            <label class="f">本地地址 <span class="opt">选填</span></label>
+            <input type="text" id="obLocalAddr" class="mono" placeholder="例如 10.0.0.2/32，留空用默认">
+          </div>
+          <div class="row2">
+            <div id="obCellExport">
               <label class="f">出口 <span class="opt">选填</span></label>
               <input type="text" id="obExport" class="mono" placeholder="例如 eth0">
             </div>
+            <div id="obCellCountry">
+              <label class="f">国家 <span class="opt">选填</span></label>
+              <input type="text" id="obCountry" class="mono" placeholder="例如 CN">
+            </div>
           </div>
-          <label class="f">国家 <span class="opt">选填</span></label>
-          <input type="text" id="obCountry" class="mono" placeholder="例如 CN">
           <div class="btnrow"><button class="sm" id="btnObConfirm">确定</button><button class="sm ghost" id="btnObCancel">取消</button></div>
         </div>
         <div id="outboundOut" class="status info"></div>
@@ -1377,16 +1440,23 @@ document.querySelectorAll('input[name="clientSel"], input[name="clientMode"]').f
 
 // ---- 路由规则 ----
 let routes = [], routeEdit = -1;
-async function loadRoutes() {
-  try { const r = await api("/api/routes"); routes = r.routes || []; } catch (e) { routes = []; }
+const RT_TYPE_LABEL = {domain: "精确域名", domain_suffix: "域名后缀", ip_cidr: "IP 段", port: "端口"};
+function renderRoutes() {
   const body = $("routeBody"); body.innerHTML = "";
   routes.forEach((rt, i) => {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td>" + (i+1) + "</td><td>" + (rt.type||"") + "</td><td class='mono'>" + (rt.value||"") + "</td><td class='mono'>" + (rt.outbound||"") + "</td>";
+    const vals = (rt.values || (rt.value ? [rt.value] : [])).join(", ");
+    const mt = rt.match_type || rt.type || "domain_suffix";
+    const ob = rt.outbound || (rt.inline_socks ? "外部 SOCKS（待保存）" : "");
+    tr.innerHTML = "<td>" + (i+1) + "</td><td>" + (RT_TYPE_LABEL[mt] || mt) + "</td><td class='mono'>" + vals + "</td><td class='mono'>" + ob + "</td>";
     const td = document.createElement("td");
+    const up = document.createElement("button"); up.type="button"; up.className="sm ghost"; up.textContent="↑"; up.disabled = (i === 0); up.title = "上移";
+    up.onclick = () => { const t = routes[i-1]; routes[i-1] = routes[i]; routes[i] = t; renderRoutes(); };
+    const down = document.createElement("button"); down.type="button"; down.className="sm ghost"; down.textContent="↓"; down.disabled = (i === routes.length - 1); down.title = "下移";
+    down.onclick = () => { const t = routes[i+1]; routes[i+1] = routes[i]; routes[i] = t; renderRoutes(); };
     const del = document.createElement("button"); del.type="button"; del.className="sm ghost"; del.textContent="删除";
-    del.onclick = () => { routes.splice(i,1); loadRoutes(); };
-    td.appendChild(del); tr.appendChild(td); body.appendChild(tr);
+    del.onclick = () => { routes.splice(i,1); renderRoutes(); };
+    td.appendChild(up); td.appendChild(down); td.appendChild(del); tr.appendChild(td); body.appendChild(tr);
   });
   if (!routes.length) {
     const tr = document.createElement("tr");
@@ -1395,15 +1465,63 @@ async function loadRoutes() {
     tr.appendChild(td); body.appendChild(tr);
   }
 }
-$("btnAddRoute").onclick = () => { routeEdit = -1; $("routeForm").classList.remove("hidden"); };
+function refreshRouteTargets() {
+  const sel = $("rtTarget"); if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = "";
+  outbounds.forEach(o => {
+    const op = document.createElement("option"); op.value = o.tag; op.textContent = o.tag + "（" + o.type + "）";
+    sel.appendChild(op);
+  });
+  const op = document.createElement("option"); op.value = "__socks__"; op.textContent = "外部 SOCKS（直接填）";
+  sel.appendChild(op);
+  if (cur) sel.value = cur;
+  if (!sel.value) sel.value = "direct";
+  $("rtSocksBox").classList.toggle("hidden", sel.value !== "__socks__");
+}
+async function loadRoutes() {
+  try { const r = await api("/api/routes"); routes = r.routes || []; } catch (e) { routes = []; }
+  if (!outbounds.length) {
+    try { const r = await api("/api/outbounds"); outbounds = r.outbounds || []; } catch (e) {}
+  }
+  refreshRouteTargets();
+  renderRoutes();
+}
+$("btnAddRoute").onclick = () => { routeEdit = -1; refreshRouteTargets(); $("routeForm").classList.remove("hidden"); };
 $("btnRtCancel").onclick = () => $("routeForm").classList.add("hidden");
+$("rtTarget").onchange = () => { $("rtSocksBox").classList.toggle("hidden", $("rtTarget").value !== "__socks__"); };
 $("btnRtConfirm").onclick = () => {
-  const v = $("rtValue").value.trim(); if (!v) { alert("匹配值不能为空"); return; }
-  routes.push({type: $("rtType").value, value: v, outbound: $("rtOutbound").value.trim() || "direct"});
-  $("routeForm").classList.add("hidden"); $("rtValue").value = ""; loadRoutes();
+  const vals = $("rtValues").value.split(/\n|,/).map(s => s.trim()).filter(Boolean);
+  if (!vals.length) { alert("匹配值不能为空"); return; }
+  const rec = {match_type: $("rtType").value, values: vals};
+  if ($("rtTarget").value === "__socks__") {
+    const host = $("rtSocksHost").value.trim();
+    const port = parseInt($("rtSocksPort").value, 10);
+    if (!host || !(port >= 1 && port <= 65535)) { alert("请填写外部 SOCKS 的地址和有效端口"); return; }
+    rec.inline_socks = {address: host, port: port,
+      username: $("rtSocksUser").value.trim(),
+      password: $("rtSocksPass").value};
+    rec.outbound = "";
+  } else {
+    rec.outbound = $("rtTarget").value || "direct";
+  }
+  routes.push(rec);
+  $("routeForm").classList.add("hidden");
+  $("rtValues").value = "";
+  renderRoutes();
 };
 $("btnSaveRoutes").onclick = async () => {
-  try { await api("/api/routes", {method:"POST", body: JSON.stringify({routes})}); setOut($("routeOut"), "路由已保存", "ok"); } catch(e) { setOut($("routeOut"), e.message, "err"); }
+  try {
+    const r = await api("/api/routes", {method:"POST", body: JSON.stringify({routes})});
+    routes = r.routes || routes;
+    renderRoutes();
+    if ((r.created_outbounds || []).length) {
+      await loadOutbounds();
+      setOut($("routeOut"), "路由已保存，已自动生成出站：" + r.created_outbounds.join("、"), "ok");
+    } else {
+      setOut($("routeOut"), "路由已保存", "ok");
+    }
+  } catch(e) { setOut($("routeOut"), e.message, "err"); }
 };
 
 const COPY_BTN = {ovSubAuto: "btnCopyOvAuto", ovSubV2ray: "btnCopyOvV2ray", ovSubSingbox: "btnCopyOvSingbox", ovSubClash: "btnCopyOvClash", ovSubIos: "btnCopyOvIos", subRaw: "btnCopyRaw", subMerged: "btnCopyMerged"};
@@ -1455,7 +1573,7 @@ function renderOutbounds() {
   body.innerHTML = "";
   outbounds.forEach((o, i) => {
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td>" + (i + 1) + "</td><td><b>" + o.tag + "</b><br><span class=\"muted\">" + o.type + "</span></td><td>" + o.type + "</td><td>" + (o.address || "—") + "</td><td>" + (o.export || "—") + "</td><td>" + (o.country || "—") + "</td><td>" + (o.traffic || "—") + "</td><td>" + (o.latency_ms == null ? "—" : o.latency_ms + " ms") + "</td>";
+    tr.innerHTML = "<td>" + (i + 1) + "</td><td><b>" + o.tag + "</b><br><span class=\"muted\">" + o.type + "</span></td><td>" + o.type + "</td><td>" + (o.address ? o.address + (o.port ? ":" + o.port : "") : "—") + "</td><td>" + (o.export || "—") + "</td><td>" + (o.country || "—") + "</td><td>" + (o.traffic || "—") + "</td><td>" + (o.latency_ms == null ? "—" : o.latency_ms + " ms") + "</td>";
     const td = document.createElement("td");
     const edit = document.createElement("button");
     edit.type = "button"; edit.className = "sm ghost"; edit.textContent = "编辑";
@@ -1494,6 +1612,22 @@ async function loadOutbounds() {
     renderOutbounds();
   } catch (e) {}
 }
+function obFieldVisibility() {
+  const t = $("obType").value;
+  const show = (id, on) => { const el = $(id); if (el) el.style.display = on ? "" : "none"; };
+  const server = ["socks", "http", "vless", "vmess", "trojan", "shadowsocks", "hysteria2", "wireguard"].indexOf(t) >= 0;
+  show("obCellAddress", server);
+  show("obCellPort", server);
+  show("obCellUsername", t === "socks" || t === "http");
+  show("obCellPassword", ["socks", "http", "trojan", "shadowsocks", "hysteria2"].indexOf(t) >= 0);
+  show("obCellUuid", t === "vless" || t === "vmess");
+  show("obCellTls", t === "vless" || t === "vmess");
+  show("obCellMethod", t === "shadowsocks");
+  show("obCellPrivateKey", t === "wireguard");
+  show("obCellPeerPub", t === "wireguard");
+  show("obCellLocalAddr", t === "wireguard");
+}
+$("obType").onchange = obFieldVisibility;
 function openOutboundForm(i) {
   obEditIndex = i;
   const o = i >= 0 ? outbounds[i] : null;
@@ -1502,8 +1636,18 @@ function openOutboundForm(i) {
   $("obTag").disabled = !!o;
   $("obType").value = o ? o.type : "freedom";
   $("obAddress").value = o ? o.address : "";
+  $("obPort").value = o && o.port ? o.port : "";
+  $("obUsername").value = o ? o.username : "";
+  $("obPassword").value = o ? o.password : "";
+  $("obUuid").value = o ? o.uuid : "";
+  $("obTls").checked = o ? !!o.tls : true;
+  $("obMethod").value = o ? (o.method || "aes-256-gcm") : "aes-256-gcm";
+  $("obPrivateKey").value = o ? o.private_key : "";
+  $("obPeerPub").value = o ? o.peer_public_key : "";
+  $("obLocalAddr").value = o ? o.local_address : "";
   $("obExport").value = o ? o.export : "";
   $("obCountry").value = o ? o.country : "";
+  obFieldVisibility();
   $("outboundForm").classList.remove("hidden");
   $("outboundForm").scrollIntoView({block: "center", behavior: "smooth"});
 }
@@ -1512,7 +1656,19 @@ $("btnObCancel").onclick = () => $("outboundForm").classList.add("hidden");
 $("btnObConfirm").onclick = () => {
   const tag = $("obTag").value.trim();
   if (!tag) { alert("标签不能为空"); return; }
-  const rec = {tag: tag, type: $("obType").value, address: $("obAddress").value.trim(), export: $("obExport").value.trim(), country: $("obCountry").value.trim(), traffic: "", latency_ms: null};
+  const _port = parseInt($("obPort").value, 10);
+  const rec = {tag: tag, type: $("obType").value,
+    address: $("obAddress").value.trim(),
+    port: (_port >= 1 && _port <= 65535) ? _port : null,
+    username: $("obUsername").value.trim(),
+    password: $("obPassword").value,
+    uuid: $("obUuid").value.trim(),
+    method: $("obMethod").value,
+    tls: $("obTls").checked,
+    private_key: $("obPrivateKey").value.trim(),
+    peer_public_key: $("obPeerPub").value.trim(),
+    local_address: $("obLocalAddr").value.trim(),
+    export: $("obExport").value.trim(), country: $("obCountry").value.trim(), traffic: "", latency_ms: null};
   if (obEditIndex >= 0) {
     rec.traffic = outbounds[obEditIndex].traffic || "";
     rec.latency_ms = outbounds[obEditIndex].latency_ms;
@@ -1529,7 +1685,7 @@ $("btnSaveOutbounds").onclick = async () => {
     const r = await api("/api/outbounds", {method: "POST", body: JSON.stringify({outbounds: outbounds})});
     outbounds = r.outbounds || outbounds;
     renderOutbounds();
-    setOut($("outboundOut"), "出站已保存，重启面板后生效", "ok");
+    setOut($("outboundOut"), "出站已保存，下次部署时生效", "ok");
   } catch (e) { setOut($("outboundOut"), e.message, "err"); }
 };
 $("btnTestAllOutbounds").onclick = async () => {

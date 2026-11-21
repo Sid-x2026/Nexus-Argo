@@ -230,19 +230,84 @@ _DIRECT_ALIASES = (
 
 # ---- 出站 (3X-UI 式统一管理, 第一版只做管理 + 测速) ----
 # 默认两条: direct 直出 (freedom)、blocked 拦截 (blackhole)。
-# 出站只存放在面板里 (PANEL_DIR/outbounds.json), 本版不接进
-# install.sh 的核心渲染 (家宽对接是下一步), 部署不受影响。
+# 出站 / 路由存在面板里 (PANEL_DIR/outbounds.json, routes.json),
+# 部署时经 config_to_env 以 NEXUS_OUTBOUNDS / NEXUS_ROUTES (JSON)
+# 传给 install.sh, 由核心渲染写进 Xray 与 Sing-box 配置。
 OUTBOUNDS_PATH = os.path.join(PANEL_DIR, "outbounds.json")
 ROUTES_PATH = os.path.join(PANEL_DIR, "routes.json")
 OUTBOUND_TYPES = {"freedom", "blackhole", "socks", "http", "vless",
                   "vmess", "trojan", "shadowsocks", "hysteria2",
                   "wireguard", "dns"}
 DEFAULT_OUTBOUNDS = [
-    {"tag": "direct", "type": "freedom", "address": "", "export": "",
-     "country": "", "traffic": "", "latency_ms": None},
-    {"tag": "blocked", "type": "blackhole", "address": "", "export": "",
-     "country": "", "traffic": "", "latency_ms": None},
+    {"tag": "direct", "type": "freedom", "address": "", "port": None,
+     "username": "", "password": "", "uuid": "", "method": "aes-256-gcm",
+     "tls": True, "private_key": "", "peer_public_key": "", "local_address": "",
+     "export": "", "country": "", "traffic": "", "latency_ms": None},
+    {"tag": "blocked", "type": "blackhole", "address": "", "port": None,
+     "username": "", "password": "", "uuid": "", "method": "aes-256-gcm",
+     "tls": True, "private_key": "", "peer_public_key": "", "local_address": "",
+     "export": "", "country": "", "traffic": "", "latency_ms": None},
 ]
+
+
+def _to_bool(v, default=True):
+    if v is None:
+        return default
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return str(v).strip().lower() in ("true", "1", "yes", "on")
+
+
+def _to_port(v):
+    try:
+        p = int(v)
+    except Exception:
+        return None
+    return p if 1 <= p <= 65535 else None
+
+
+def _clean_outbound(o):
+    """校验并规范一条出站; 返回 (cleaned, error)。error 非空时拒绝整表。"""
+    tag = str(o.get("tag") or "").strip()
+    if not tag:
+        return None, "出站标签不能为空"
+    otype = str(o.get("type") or "freedom").strip().lower()
+    if otype not in OUTBOUND_TYPES:
+        return None, f"出站 {tag} 的类型不正确"
+    addr = str(o.get("address") or "").strip()
+    port = _to_port(o.get("port"))
+    username = str(o.get("username") or "").strip()
+    password = str(o.get("password") or "")
+    uuid = str(o.get("uuid") or "").strip()
+    method = str(o.get("method") or "aes-256-gcm").strip() or "aes-256-gcm"
+    need_addr = otype in ("socks", "http", "vless", "vmess", "trojan",
+                          "shadowsocks", "hysteria2", "wireguard")
+    if need_addr and not addr:
+        return None, f"出站 {tag} 需要填写地址"
+    if need_addr and port is None:
+        return None, f"出站 {tag} 需要填写有效端口 (1-65535)"
+    if otype in ("vless", "vmess") and not uuid:
+        return None, f"出站 {tag} 需要填写 UUID"
+    if otype in ("trojan", "shadowsocks", "hysteria2") and not password:
+        return None, f"出站 {tag} 需要填写密码"
+    if otype == "wireguard" and not (o.get("private_key") or "").strip():
+        return None, f"出站 {tag} 需要填写私钥"
+    if otype == "wireguard" and not (o.get("peer_public_key") or "").strip():
+        return None, f"出站 {tag} 需要填写对端公钥"
+    return {
+        "tag": tag, "type": otype, "address": addr, "port": port,
+        "username": username, "password": password, "uuid": uuid,
+        "method": method, "tls": _to_bool(o.get("tls"), True),
+        "private_key": str(o.get("private_key") or "").strip(),
+        "peer_public_key": str(o.get("peer_public_key") or "").strip(),
+        "local_address": str(o.get("local_address") or "").strip(),
+        "export": str(o.get("export") or "").strip(),
+        "country": str(o.get("country") or "").strip(),
+        "traffic": str(o.get("traffic") or "").strip(),
+        "latency_ms": o.get("latency_ms"),
+    }, ""
 
 
 def load_outbounds():
@@ -265,6 +330,15 @@ def load_outbounds():
             "tag": tag,
             "type": str(o.get("type") or "freedom").strip().lower() or "freedom",
             "address": str(o.get("address") or "").strip(),
+            "port": _to_port(o.get("port")),
+            "username": str(o.get("username") or "").strip(),
+            "password": str(o.get("password") or ""),
+            "uuid": str(o.get("uuid") or "").strip(),
+            "method": str(o.get("method") or "aes-256-gcm").strip() or "aes-256-gcm",
+            "tls": _to_bool(o.get("tls"), True),
+            "private_key": str(o.get("private_key") or "").strip(),
+            "peer_public_key": str(o.get("peer_public_key") or "").strip(),
+            "local_address": str(o.get("local_address") or "").strip(),
             "export": str(o.get("export") or "").strip(),
             "country": str(o.get("country") or "").strip(),
             "traffic": str(o.get("traffic") or "").strip(),
@@ -652,7 +726,48 @@ def validate_config(raw):
     return cfg, errors
 
 
+# 旧路由 {type, value} -> 新路由 {match_type, values} 的迁移:
+# domain -> domain_suffix (按域名分流一般指该域名及其子域名),
+# ip -> ip_cidr, port -> port。
+_ROUTE_TYPE_MAP = {"domain": "domain_suffix", "ip": "ip_cidr", "port": "port"}
+ROUTE_MATCH_TYPES = ("domain", "domain_suffix", "ip_cidr", "port")
+
+
+def _split_values(v):
+    """匹配值拆成列表: 支持换行 / 逗号分隔, 去空去重保序。"""
+    if isinstance(v, list):
+        parts = []
+        for x in v:
+            parts.extend(str(x).replace(",", "\n").splitlines())
+    else:
+        parts = str(v or "").replace(",", "\n").splitlines()
+    out, seen = [], set()
+    for p in parts:
+        p = p.strip()
+        if p and p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def _valid_port_value(v):
+    v = str(v).strip()
+    if "-" in v:
+        a, _, b = v.partition("-")
+        try:
+            a, b = int(a), int(b)
+        except Exception:
+            return False
+        return 1 <= a < b <= 65535
+    try:
+        return 1 <= int(v) <= 65535
+    except Exception:
+        return False
+
+
 def load_routes():
+    """读路由规则 (按保存顺序 = 匹配优先级, 先命中先生效)。
+    返回 [{match_type, values, outbound}]。"""
     data = _load_json(ROUTES_PATH, None)
     if isinstance(data, dict) and isinstance(data.get("routes"), list):
         data = data["routes"]
@@ -662,7 +777,23 @@ def load_routes():
     for r in data:
         if not isinstance(r, dict):
             continue
-        out.append({"type": str(r.get("type") or "domain"), "value": str(r.get("value") or ""), "outbound": str(r.get("outbound") or "direct")})
+        if "match_type" in r:
+            mt = str(r.get("match_type") or "domain_suffix").strip().lower()
+            if mt not in ROUTE_MATCH_TYPES:
+                mt = "domain_suffix"
+        else:
+            # 旧格式只有 type, 按迁移表走 (domain 当初指域名及其子域名)
+            mt = _ROUTE_TYPE_MAP.get(str(r.get("type") or "").strip().lower(), "domain_suffix")
+        if "values" in r:
+            vals = _split_values(r.get("values"))
+        else:
+            vals = _split_values(r.get("value"))
+        if not vals:
+            continue
+        if mt in ("domain", "domain_suffix"):
+            vals = [v[2:] if v.startswith("*.") else v for v in vals]
+        out.append({"match_type": mt, "values": vals,
+                    "outbound": str(r.get("outbound") or "direct").strip() or "direct"})
     return out
 
 
@@ -846,6 +977,9 @@ def config_to_env(cfg):
         "DIRECT_XRAY_TLS_PORT": str(cfg["direct_vless_tls_port"]),
         "DIRECT_SB_TLS": _b(cfg["direct_sb_tls"]),
         "DIRECT_SB_TLS_PORT": str(cfg["direct_sb_tls_port"]),
+        # 出站 / 路由 (面板定义, 部署时写进核心配置)
+        "NEXUS_OUTBOUNDS": json.dumps(load_outbounds()),
+        "NEXUS_ROUTES": json.dumps(load_routes()),
     }
     return env
 
@@ -1542,8 +1676,9 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/outbounds":
-            # 出站管理: 整表保存。标签唯一、类型在白名单内才收。
-            # 本版只存面板里, 不接进 install.sh 渲染 (见文件头注释)。
+            # 出站管理: 整表保存。标签唯一、类型在白名单内才收;
+            # 各类型必填字段见 _clean_outbound。部署时经
+            # NEXUS_OUTBOUNDS 传给 install.sh 写进核心配置。
             raw_list = body.get("outbounds")
             if not isinstance(raw_list, list):
                 self._send_json({"error": "outbounds 须为列表"}, 400)
@@ -1556,18 +1691,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not tag or tag in seen:
                     continue
                 seen.add(tag)
-                otype = str(o.get("type") or "freedom").strip().lower()
-                if otype not in OUTBOUND_TYPES:
-                    self._send_json({"error": f"出站 {tag} 的类型不正确"}, 400)
+                rec, err = _clean_outbound(o)
+                if err:
+                    self._send_json({"error": err}, 400)
                     return
-                cleaned.append({
-                    "tag": tag, "type": otype,
-                    "address": str(o.get("address") or "").strip(),
-                    "export": str(o.get("export") or "").strip(),
-                    "country": str(o.get("country") or "").strip(),
-                    "traffic": str(o.get("traffic") or "").strip(),
-                    "latency_ms": o.get("latency_ms"),
-                })
+                cleaned.append(rec)
             if not cleaned:
                 self._send_json({"error": "至少保留一条出站"}, 400)
                 return
@@ -1576,24 +1704,79 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/routes":
+            # 路由规则: 按保存顺序匹配, 先命中先生效。目标出站须已存在
+            # (direct/blocked 永远存在); inline_socks 表示在规则里直
+            # 接填外部 SOCKS, 后端自动生成一个命名的 socks 出站。
             raw_list = body.get("routes")
             if not isinstance(raw_list, list):
                 self._send_json({"error": "routes 须为列表"}, 400)
                 return
+            outbounds = load_outbounds()
+            tags = {o["tag"] for o in outbounds}
+            created = []
             cleaned = []
             for r in raw_list:
                 if not isinstance(r, dict):
                     continue
-                v = str(r.get("value") or "").strip()
-                if not v:
+                if "match_type" in r:
+                    mt = str(r.get("match_type") or "").strip().lower()
+                    if mt not in ROUTE_MATCH_TYPES:
+                        self._send_json({"error": "路由匹配类型只能是 domain / domain_suffix / ip_cidr / port"}, 400)
+                        return
+                else:
+                    mt = _ROUTE_TYPE_MAP.get(str(r.get("type") or "").strip().lower())
+                    if mt not in ROUTE_MATCH_TYPES:
+                        self._send_json({"error": "路由匹配类型只能是 domain / domain_suffix / ip_cidr / port"}, 400)
+                        return
+                vals = _split_values(r.get("values") if "values" in r else r.get("value"))
+                if not vals:
                     continue
-                t = str(r.get("type") or "domain").strip().lower()
-                if t not in ("domain", "ip", "port"):
-                    self._send_json({"error": "路由条件只能是 domain / ip / port"}, 400)
+                if mt in ("domain", "domain_suffix"):
+                    vals = [v[2:] if v.startswith("*.") else v for v in vals]
+                    bad = [v for v in vals if not v or any(c.isspace() for c in v) or "/" in v]
+                    if bad:
+                        self._send_json({"error": f"域名格式不正确: {bad[0]}"}, 400)
+                        return
+                elif mt == "ip_cidr":
+                    for v in vals:
+                        try:
+                            ipaddress.ip_network(v, strict=False)
+                        except Exception:
+                            self._send_json({"error": f"IP 段格式不正确: {v}"}, 400)
+                            return
+                elif mt == "port":
+                    for v in vals:
+                        if not _valid_port_value(v):
+                            self._send_json({"error": f"端口格式不正确: {v} (填 1-65535 或 80-443)"}, 400)
+                            return
+                target = str(r.get("outbound") or "direct").strip() or "direct"
+                inline = r.get("inline_socks")
+                if isinstance(inline, dict):
+                    addr = str(inline.get("address") or "").strip()
+                    port = _to_port(inline.get("port"))
+                    if not addr or port is None:
+                        self._send_json({"error": "外部 SOCKS 需要填写地址和有效端口"}, 400)
+                        return
+                    n = 1
+                    while f"socks{n}" in tags:
+                        n += 1
+                    target = f"socks{n}"
+                    rec, _err = _clean_outbound({
+                        "tag": target, "type": "socks", "address": addr, "port": port,
+                        "username": str(inline.get("username") or "").strip(),
+                        "password": str(inline.get("password") or ""),
+                    })
+                    outbounds.append(rec)
+                    tags.add(target)
+                    created.append(target)
+                elif target not in tags:
+                    self._send_json({"error": f"路由目标出站不存在: {target}"}, 400)
                     return
-                cleaned.append({"type": t, "value": v, "outbound": str(r.get("outbound") or "direct").strip()})
+                cleaned.append({"match_type": mt, "values": vals, "outbound": target})
+            if created:
+                _save_json(OUTBOUNDS_PATH, {"outbounds": outbounds})
             _save_json(ROUTES_PATH, {"routes": cleaned})
-            self._send_json({"ok": True, "routes": cleaned})
+            self._send_json({"ok": True, "routes": cleaned, "created_outbounds": created})
             return
 
         if path == "/api/outbounds/test":
