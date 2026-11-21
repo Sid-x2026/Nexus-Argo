@@ -36,7 +36,7 @@
 #   GET  /api/cert               证书状态 (是否已部署 / 颁发给谁 / 到期时间 / 续期方式)
 #   POST /api/reality-scan       3X-UI 式 Reality 目标扫描 (域名/IP/CIDR, 返回
 #                                 目标/状态/TLS/ALPN/密钥交换/证书/延迟表)
-#   GET  /api/reality-keys       公钥 + Short IDs (私钥绝不返回)
+#   GET  /api/reality-keys       公钥 + 私钥 + Short IDs
 #   POST /api/reality-keys       {action: regenerate|clear} 重新生成 / 清空密钥
 #   GET  /api/outbounds          出站列表 (默认 direct + blocked)
 #   POST /api/outbounds          整表保存出站 (本版只存面板, 不接进核心渲染)
@@ -177,6 +177,10 @@ DEFAULT_CONFIG = {
     "direct_vless_ws_port": 8083,
     "direct_vless_grpc": False,
     "direct_vless_grpc_port": 8084,
+    # 直连 WS path 与 gRPC serviceName: 每次部署随机生成一对, 不放
+    # 面板里给用户填。隧道不用 path (默认配好, 分发器靠固定 path 路由)。
+    "direct_ws_path": "/ws",
+    "direct_grpc_service": "grpc",
     # 直连其它协议
     "direct_trojan": False,
     "direct_trojan_port": 9443,
@@ -814,6 +818,8 @@ def config_to_env(cfg):
         "DIRECT_VLESS_WS_PORT": str(cfg["direct_vless_ws_port"]),
         "DIRECT_VLESS_GRPC": _b(cfg["direct_vless_grpc"]),
         "DIRECT_VLESS_GRPC_PORT": str(cfg["direct_vless_grpc_port"]),
+        "DIRECT_WS_PATH": cfg.get("direct_ws_path") or "/ws",
+        "DIRECT_GRPC_SERVICE": cfg.get("direct_grpc_service") or "grpc",
         "DIRECT_TROJAN": _b(cfg["direct_trojan"]),
         "DIRECT_TROJAN_PORT": str(cfg["direct_trojan_port"]),
         "DIRECT_VMESS_WS": _b(cfg["direct_vmess_ws"]),
@@ -958,6 +964,19 @@ def subscription_urls(cfg, host=None, scheme=None):
         "merged_count": _count_lines(os.path.join(WORKDIR, "sub", "merged.txt")),
     }
     return out
+
+
+_PATH_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+
+def _gen_direct_paths():
+    """直连 WS path 与 gRPC serviceName: 每次部署随机生成一对
+    (nx + 10 位字母数字, WS 带 / 前缀), 与隧道默认值区分开,
+    避免用公开的 /ws、grpc 特征。返回 (ws_path, grpc_service)。
+    生成后存进部署配置, inbound 与订阅链接同读此值。"""
+    rand = "".join(secrets.choice(_PATH_ALPHABET) for _ in range(10))
+    rand2 = "".join(secrets.choice(_PATH_ALPHABET) for _ in range(10))
+    return "/nx" + rand, "nx" + rand2
 
 
 def _deploy_worker(cfg):
@@ -1345,6 +1364,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             keys = _load_reality_keys()
             self._send_json({"public_key": keys["public_key"],
+                             "private_key": keys["private_key"],
                              "short_ids": keys["short_ids"],
                              "has_private_key": bool(keys["private_key"])})
             return
@@ -1403,6 +1423,8 @@ class Handler(BaseHTTPRequestHandler):
             if errors:
                 self._send_json({"error": "；".join(errors)}, 400)
                 return
+            # 直连 WS path 与 gRPC serviceName 每次部署重新随机生成
+            cfg["direct_ws_path"], cfg["direct_grpc_service"] = _gen_direct_paths()
             _save_json(CONFIG_PATH, cfg)
             # 上传证书模式: 部署开始前先把证书写到磁盘 (只在这里写,
             # 保存配置时不写, 避免没部署的配置覆盖线上证书)
@@ -1463,7 +1485,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/reality-keys":
-            # 公钥 / Short IDs 查询与密钥管理。私钥绝不返回前端。
+            # 公钥 / 私钥 / Short IDs 查询与密钥管理。私钥随公钥一同返回前端 (仅登录后可见)。
             # body: {} 查询; {action:"regenerate"} 重新生成密钥对
             # (Short IDs 不变, 没有就生成一个); {action:"clear"} 清空
             # 密钥与 Short IDs (下次部署时 install.sh 会重新生成)。
@@ -1493,6 +1515,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             keys = _load_reality_keys()
             self._send_json({"public_key": keys["public_key"],
+                             "private_key": keys["private_key"],
                              "short_ids": keys["short_ids"],
                              "has_private_key": bool(keys["private_key"])})
             return
