@@ -576,7 +576,11 @@ PYEOF
       [ -n "$REALITY_PUBLIC_KEY" ] || die "Reality 公钥派生失败"
     fi
     [ -n "$REALITY_SHORT_ID" ] || REALITY_SHORT_ID="$(openssl rand -hex 4)"
-    [ -n "$REALITY_SHORT_IDS" ] || REALITY_SHORT_IDS="$REALITY_SHORT_ID"
+    if [ -z "$REALITY_SHORT_IDS" ]; then
+      _sid2="$(openssl rand -hex 4)"; while [ "$_sid2" = "$REALITY_SHORT_ID" ]; do _sid2="$(openssl rand -hex 4)"; done
+      _sid3="$(openssl rand -hex 4)"; while [ "$_sid3" = "$REALITY_SHORT_ID" ] || [ "$_sid3" = "$_sid2" ]; do _sid3="$(openssl rand -hex 4)"; done
+      REALITY_SHORT_IDS="$REALITY_SHORT_ID,$_sid2,$_sid3"
+    fi
     # VLESS 加密层 (mlkem768x25519plus, 见文件头 REALITY_ENCRYPTION
     # 说明): 与 Reality 密钥分开的另一对 X25519 密钥, openssl 生成、
     # reality.json 持久化、重部署复用。"none" = 不开加密层。
