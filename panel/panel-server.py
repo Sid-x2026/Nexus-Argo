@@ -1479,6 +1479,9 @@ def _node_deploy_worker(node, cfg):
         if cfg.get("cert_mode") == "upload" and cfg.get("cert_pem") and cfg.get("cert_key"):
             _node_upload_cert(node, cfg)
         env = config_to_env(cfg)
+        # SSH 端口按节点传给远端 install.sh, 供防火墙同步做永久白名单;
+        # 本地部署没有节点, install.sh 自己探测本机 sshd 端口。
+        env["NEXUS_SSH_PORT"] = str(node.get("ssh_port") or 22)
         env_str = " ".join(f"{k}={shlex.quote(str(v))}" for k, v in env.items())
         launch = (f"{env_str} nohup bash -c 'bash {_NODE_INSTALL_SH}; echo $? > {_NODE_EXIT}' "
                   f"> {_NODE_LOG} 2>&1 &")
