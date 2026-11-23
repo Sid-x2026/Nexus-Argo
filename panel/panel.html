@@ -81,7 +81,7 @@
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
   .proto-wrap .row2 { grid-template-columns: 0.9fr 1.1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) 120px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
   .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
-  #directFields .proto-wrap { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  #directFields .proto-wrap { grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); gap: 12px; }
   @media (max-width: 900px) { #directFields .proto-wrap { grid-template-columns: 1fr; } .reality-cols { grid-template-columns: 1fr; } }
 
   .direct-cols { grid-template-columns: minmax(200px, 1.2fr) minmax(170px, 1fr) minmax(170px, 1fr) !important; gap: 8px !important; }
@@ -362,15 +362,7 @@
         <div id="directFields" class="mode-box direct hidden">
           <h4>直连安全配置 <span class="warn-inline">直连将暴露 VPS 真实 IP，仅作备用；须与隧道节点使用不同子域名。</span></h4>
           <div class="proto-wrap">
-            <div class="sec-card direct">
-              <h4>直连域名与前缀</h4>
-              <label class="f">直连地址 address <span class="opt">选填</span></label>
-              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP">
-              <p class="hint">留空用 VPS 公网 IP；ACME 须填域名并解析至 VPS IP（DNS only）。</p>
-              <label class="f">直连 SNI <span class="opt">选填</span></label>
-              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同">
-              <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
-            </div>
+            <div style="display:flex; flex-direction:column; gap:12px; min-width:0;">
             <div class="sec-card direct">
               <h4>直连订阅</h4>
               <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
@@ -417,6 +409,16 @@
               </div>
               <p id="certNotNeeded" class="hint">当前选中的协议不需要证书，无需配置。</p>
             </div>
+            </div>
+            <div class="sec-card direct">
+              <h4>直连域名与前缀</h4>
+              <label class="f">直连地址 address <span class="opt">选填</span></label>
+              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP">
+              <p class="hint">留空用 VPS 公网 IP；ACME 须填域名并解析至 VPS IP（DNS only）。</p>
+              <label class="f">直连 SNI <span class="opt">选填</span></label>
+              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同">
+              <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
+            </div>
           </div>
           </div>
         <div id="realitySection">
@@ -459,7 +461,7 @@
         </div>
         <div id="tunnelFields" class="mode-box tunnel">
           <h4>Argo 安全配置</h4>
-          <div style="display:grid; grid-template-columns:minmax(0,0.75fr) minmax(0,1.25fr); gap:12px; align-items:stretch;">
+          <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:stretch;">
           <div class="sec-card tunnel">
           <label class="f">cloudflare Argo Tunnel Token <span class="req">* 必填</span></label>
           <textarea id="argoToken" class="mono" rows="2" placeholder="粘贴 cloudflare Argo Tunnel Token" autocomplete="off"></textarea>
@@ -487,19 +489,19 @@
           <div style="margin-top:10px; border-top:1px solid #c7d2fe; padding-top:10px;">
             <div>
               <label class="pill"><input type="checkbox" id="subPanelEnabled" checked> 面板订阅</label>
+              <div id="argoSubPreview" class="hidden" style="margin-top:6px;">
+                <div class="addr-row"><div class="addr" id="argoSubPreviewAddr"></div><button class="sm" id="btnCopyArgoPreview" type="button">复制</button></div>
+                <p class="hint">前面是 Argo 面板地址，后缀是 Argo 订阅卡里的订阅名称与订阅路径，改了实时更新。</p>
+              </div>
+            </div>
+            <div style="margin-top:8px;">
               <label class="pill"><input type="checkbox" id="subIpEnabled" checked> IP域名订阅</label>
+              <div id="ipSubPreview" class="hidden" style="margin-top:6px;">
+                <div class="addr-row"><div class="addr" id="ipSubPreviewAddr"></div><button class="sm" id="btnCopyIpPreview" type="button">复制</button></div>
+                <p class="hint">从直连 VPS 的域名或 IP 上拉，端口见直连订阅卡的订阅端口。</p>
+              </div>
             </div>
             <p class="hint">两个开关可同时开。面板订阅须先配置 ARGO 面板。</p>
-            <div id="argoSubPreview" class="hidden" style="margin-top:8px;">
-              <label class="f">ARGO 订阅地址</label>
-              <div class="addr-row"><div class="addr" id="argoSubPreviewAddr"></div><button class="sm" id="btnCopyArgoPreview" type="button">复制</button></div>
-              <p class="hint">前面是 Argo 面板地址，后缀是 Argo 订阅卡里的订阅名称与订阅路径，改了实时更新。</p>
-            </div>
-            <div id="ipSubPreview" class="hidden" style="margin-top:8px;">
-              <label class="f">IP域名订阅地址</label>
-              <div class="addr-row"><div class="addr" id="ipSubPreviewAddr"></div><button class="sm" id="btnCopyIpPreview" type="button">复制</button></div>
-              <p class="hint">从直连 VPS 的域名或 IP 上拉，端口见直连订阅卡的订阅端口。</p>
-            </div>
             <p id="subPreviewHint" class="hint hidden">未开启任何订阅，或订阅地址未填。</p>
             <span id="subPreviewOut" class="hint"></span>
           </div>
