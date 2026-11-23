@@ -49,6 +49,7 @@
 #   POST /api/nodes/<id>/test     测试 SSH 连通 (密钥方式)
 #   POST /api/nodes/<id>/bootstrap {password} 密码接入一次, 写入面板公钥后改密钥
 #   POST /api/nodes/<id>/deploy   远程部署 (与本地 /api/deploy 同形 body, 按节点 409)
+#   POST /api/nodes/<id>/clear    清除远程部署 (SSH 跑 install.sh uninstall, 部署中返回 409)
 #   GET  /api/nodes/<id>/deploy/status  节点部署状态
 #   GET  /api/nodes/<id>/deploy/log?offset=N  节点部署日志增量
 #
@@ -1434,6 +1435,26 @@ def _node_upload_cert(node, cfg):
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def _node_clear(node):
+    """清掉远程节点的部署: 传 install.sh 过去跑 uninstall, 只清该节点。
+    install.sh 的 uninstall 会保留 $WORKDIR/panel (面板自身), 且不碰 ~/.ssh。
+    返回 (ok, message)。"""
+    nid = node["id"]
+    rc, _, err = _scp_put(node, INSTALL_SH, _NODE_INSTALL_SH, timeout=120)
+    if rc != 0:
+        return False, "传 install.sh 到节点失败: " + (err.decode(errors="replace").strip() or "scp 失败")
+    rc, out, err = _ssh_cmd(node, f"bash {_NODE_INSTALL_SH} uninstall; rm -f {_NODE_INSTALL_SH} {_NODE_LOG} {_NODE_EXIT}", timeout=120)
+    if rc != 0:
+        detail = ((out or b"") + (err or b"")).decode(errors="replace").strip()
+        return False, "远程清理失败: " + (detail[-300:] if detail else "ssh 失败")
+    _set_node_deploy_status(nid, "idle")
+    try:
+        os.remove(_node_log_path(nid))
+    except OSError:
+        pass
+    return True, "节点「" + (node.get("name") or "") + "」的远程部署已清除"
+
+
 def _node_deploy_worker(node, cfg):
     """远程部署: scp install.sh -> 后台 nohup 跑 -> 轮询日志与退出码。
     状态与日志按节点 id 分开存, 与本地 _deploy_worker 同形状。"""
@@ -2369,6 +2390,32 @@ class Handler(BaseHTTPRequestHandler):
             _save_nodes(nodes)
             self._send_json({"ok": True, "message": "密码接入完成, 以后用密钥连接, 密码已丢弃"})
             return
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)/clear$", path)
+        if _m:
+            node = _find_node(_m.group(1))
+            if not node:
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            if node.get("auth") == "password":
+                self._send_json({"error": "该节点尚未完成密钥接入, 请先用密码接入 (bootstrap)"}, 400)
+                return
+            nid = node["id"]
+            lock = _node_lock(nid)
+            with lock:
+                th = _node_deploy_threads.get(nid)
+                if th is not None and th.is_alive():
+                    self._send_json({"error": "该节点正在部署, 请等它完成再清除"}, 409)
+                    return
+                if not os.path.isfile(INSTALL_SH):
+                    self._send_json({"error": "install.sh 不存在, 面板安装不完整"}, 500)
+                    return
+                ok, msg = _node_clear(node)
+            if ok:
+                self._send_json({"ok": True, "message": msg})
+            else:
+                self._send_json({"error": msg}, 500)
+            return
+
         _m = re.match(r"^/api/nodes/([0-9a-f]+)/deploy$", path)
         if _m:
             node = _find_node(_m.group(1))

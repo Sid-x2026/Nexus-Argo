@@ -224,6 +224,7 @@
       <button data-tab="overview" class="on"><span class="ic">◈</span>总览</button>
       <button data-tab="deploy"><span class="ic">⬆</span>部署</button>
       <button data-tab="nodes"><span class="ic">▣</span>节点管理</button>
+      <button data-tab="sshdeploy"><span class="ic">⇪</span>SSH 部署</button>
       <button data-tab="routes"><span class="ic">↗</span>路由</button>
       <button data-tab="outbound"><span class="ic">⇄</span>出站</button>
       <button data-tab="sub"><span class="ic">🔗</span>订阅</button>
@@ -396,19 +397,17 @@
             <h4>Reality 配置 <span class="reality-note">Reality 无需证书</span></h4>
             <div class="reality-cols" style="display:grid; grid-template-columns:minmax(0,0.75fr) minmax(0,1.25fr); gap:12px; align-items:stretch;">
               <div class="sec-card direct">
-                <h4>目标与证书</h4>
-                <label class="f">目标 <span class="req">* 必填</span></label>
-                <div style="display:flex; gap:8px; align-items:center;"><input type="text" id="reality_dest" class="mono" placeholder="例如 www.microsoft.com:443"><button type="button" class="sm ghost scan-btn" id="btnRealityScan" style="flex-shrink:0;">扫描</button><button type="button" class="sm ghost scan-btn" id="btnRealityFind" style="flex-shrink:0;">查找目标</button></div>
-                <p class="hint">扫描：检测输入框域名；查找目标：打开扫描器，选一行点「使用」自动填入。</p>
+                <h4>目标与密钥</h4>
                 <div id="realityScanOut" class="status info"></div>
                 <div id="realityResultCard" class="hidden" style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; padding:10px 12px; margin:12px 0; font-size:12.5px; line-height:1.8;"></div>
                 <div id="realityScanModal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:99; display:flex; align-items:center; justify-content:center;"><div style="background:#fff; border-radius:12px; padding:16px; width:min(1200px,94vw); max-height:80vh; overflow:auto;"><div style="display:flex; justify-content:space-between; align-items:center;"><h3 style="margin:0;">REALITY 目标扫描器</h3><button type="button" class="sm ghost" id="btnCloseRealityModal">关闭</button></div><div style="display:flex; gap:8px; margin:10px 0 4px;"><input type="text" id="realityModalTarget" class="mono" placeholder="IP、CIDR 或域名 — 留空使用常用候选"><button type="button" class="sm" id="btnModalScan" style="flex-shrink:0;">扫描</button></div><div id="realityScanModalOut" class="status info" style="margin:8px 0;">正在扫描…</div><div style="overflow-x:auto;"><table class="scan-table"><thead><tr><th>目标</th><th>状态</th><th>TLS</th><th>ALPN</th><th>密钥交换</th><th>证书</th><th>证书有效期</th><th>证书链</th><th>延迟</th><th>操作</th></tr></thead><tbody id="realityScanBody"></tbody></table></div><div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;"><button type="button" class="sm ghost" id="btnModalRescan">重新扫描</button><button type="button" class="sm" id="btnModalClose2">关闭</button></div></div></div>
-                <label class="f">SNI <span class="opt">选填</span></label>
-                <div style="display:flex; gap:8px; align-items:center;"><input type="text" id="reality_sni" class="mono" placeholder="默认与目标域名相同"><button type="button" class="sm ghost" id="btnRealityNewKeys">获取新证书</button><button type="button" class="sm ghost" id="btnRealityClearKeys" style="color:#dc2626; border-color:#fecaca;">清除</button></div>
+                <label class="f">目标/SNI <span class="req">* 必填</span></label>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;"><input type="text" id="reality_sni" class="mono" placeholder="例如 www.cloudflare.com" style="flex:1; min-width:160px;"><button type="button" class="sm ghost scan-btn" id="btnRealityScan" style="flex-shrink:0;">扫描</button><button type="button" class="sm ghost scan-btn" id="btnRealityFind" style="flex-shrink:0;">查找目标</button><button type="button" class="sm ghost" id="btnRealityNewKeys">生成密钥对</button><button type="button" class="sm ghost" id="btnRealityClearKeys" style="color:#dc2626; border-color:#fecaca;">清除</button></div>
+                <p class="hint">目标/SNI 即 Reality 伪装域名（大厂域名）；扫描：检测是否可用；查找目标：打开扫描器，选一行点「使用」自动填入。扫描成功后自动生成 Short ID 与密钥对。</p>
                 <label class="f">公钥 <span class="opt">只读</span></label>
-                <input type="text" id="reality_pubkey" class="mono" readonly placeholder="未生成，点下方获取新证书">
+                <input type="text" id="reality_pubkey" class="mono" readonly placeholder="未生成，点下方生成密钥对">
                 <label class="f">私钥 <span class="opt">只读</span></label>
-                <input type="text" id="reality_privkey" class="mono" readonly placeholder="未生成，点下方获取新证书">
+                <input type="text" id="reality_privkey" class="mono" readonly placeholder="未生成，点下方生成密钥对">
                 <p class="hint">私钥与公钥均保存于服务器 reality.json，请妥善保管，切勿外泄。</p>
               </div>
               <div class="sec-card direct">
@@ -756,6 +755,28 @@
       </div>
     </div>
 
+    <!-- SSH 部署 -->
+    <div id="tab-sshdeploy" class="hidden">
+      <div class="card">
+        <h2>SSH 部署</h2>
+        <p class="hint">批量部署与清除 SSH 远程节点：勾选一个或多个节点，一次部署多台。节点在「节点管理」里添加；本地清除仍在部署页的「清除部署」。</p>
+        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th style="width:36px;"><input type="checkbox" id="sshCheckAll" title="全选"></th><th>名称</th><th>地址</th><th>认证</th><th>连通</th><th>部署状态</th></tr></thead><tbody id="sshBody"><tr><td colspan="6" class="muted">暂无节点，先去「节点管理」添加。</td></tr></tbody></table></div>
+        <div class="btnrow"><button id="btnSshBatchDeploy">批量部署</button><button id="btnSshBatchClear" class="ghost">批量清除</button><button id="btnSshRefresh" class="ghost">刷新列表</button></div>
+        <div id="sshOut" class="status info"></div>
+        <div id="sshLogWrap" class="hidden" style="margin-top:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:700;">部署日志</span><button class="sm ghost" id="btnCloseSshLogs" type="button">关闭</button>
+          </div>
+          <div id="sshLogs" style="margin-top:8px;"></div>
+        </div>
+        <div id="sshDoneWrap" class="hidden" style="margin-top:12px;">
+          <h3 class="step-h">已完成部署记录</h3>
+          <p class="hint">只删这里的记录，不删节点本身、不清部署；节点仍在「节点管理」里。</p>
+          <div id="sshDoneList"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- 优选裂变（占位） -->
     <div id="tab-fission" class="hidden">
       <div class="card">
@@ -811,16 +832,17 @@ function showApp() {
   Promise.allSettled([loadStatus(), loadConfig(), loadSubscription(), loadCert(), loadRealityKeys()]);
   statusTimer = setInterval(() => { if (authed) loadStatus(); }, 15000);
 }
-function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) clearInterval(statusTimer); if (nodeLogTimer) clearInterval(nodeLogTimer); logTimer = statusTimer = nodeLogTimer = null; }
+function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) clearInterval(statusTimer); if (nodeLogTimer) clearInterval(nodeLogTimer); Object.values(sshLogTimers || {}).forEach(t => clearInterval(t)); logTimer = statusTimer = nodeLogTimer = null; }
 
 function switchTab(name) {
   document.querySelectorAll(".sidebar button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
-  ["overview", "deploy", "nodes", "sub", "outbound", "routes", "fission"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
+  ["overview", "deploy", "nodes", "sshdeploy", "sub", "outbound", "routes", "fission"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
   if (name === "sub") loadSubscription();
   if (name === "overview") loadStatus();
   if (name === "outbound") loadOutbounds();
   if (name === "routes") loadRoutes();
   if (name === "nodes") loadNodes();
+  if (name === "sshdeploy") { renderSshDeploy(); loadNodes().then(renderSshDeploy); }
 }
 document.querySelectorAll(".sidebar button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 $("btnGoDeploy").onclick = () => switchTab("deploy");
@@ -999,9 +1021,9 @@ function collectConfig() {
     cfg[id + "_port"] = dport(id);
     cfg[shortPort[id]] = dport(id);
   });
-  cfg.reality_dest = $("reality_dest").value.trim();
-  const _destHost = cfg.reality_dest.split(":")[0];
-  cfg.reality_sni = $("reality_sni").value.trim() || _destHost;
+  const _sni = $("reality_sni").value.trim();
+  cfg.reality_dest = _sni ? (_sni.includes(":") ? _sni : _sni + ":443") : "";
+  cfg.reality_sni = _sni.split(":")[0];
   cfg.reality_fingerprint = $("reality_fingerprint").value || "chrome";
   cfg.reality_flow = $("reality_flow").value.trim() || "xtls-rprx-vision";
   cfg.reality_encryption = $("reality_encryption").value.trim() || "mlkem768x25519plus.native";
@@ -1050,8 +1072,7 @@ function fillConfig(c) {
     $(id).checked = pick(id, legacy);
     $(id + "_port").value = pickPort(id, legacyPort, shortPort);
   });
-  $("reality_dest").value = c.reality_dest || "";
-  $("reality_sni").value = c.reality_sni || "";
+  $("reality_sni").value = c.reality_sni || (c.reality_dest ? c.reality_dest.split(":")[0] : "");
   $("reality_fingerprint").value = c.reality_fingerprint || "chrome";
   $("reality_flow").value = c.reality_flow || "xtls-rprx-vision";
   $("reality_encryption").value = c.reality_encryption || "mlkem768x25519plus.native";
@@ -1272,7 +1293,7 @@ function validateDeploy() {
         if (p && !portOk(p)) mark(p, $(id).closest(".proto").querySelector("label").textContent.trim() + " 端口");
       }
     });
-    if ($("direct_vless_reality").checked && !$("reality_dest").value.trim()) mark($("reality_dest"), "大厂域名（Reality）");
+    if ($("direct_vless_reality").checked && !$("reality_sni").value.trim()) mark($("reality_sni"), "大厂域名（Reality）");
     if (certNeeded()) {
       const m = certMode();
       if (m === "upload") {
@@ -1302,6 +1323,7 @@ $("btnDeploy").onclick = async () => {
     }
     return;
   }
+  if (!(await showConfirm("确认部署到本机（本地）吗？将在面板所在机上安装节点，订阅自动生成。"))) return;
   $("btnDeploy").disabled = true;
   setOut($("deployOut"), "正在启动部署…", "info");
   $("logWrap").classList.remove("hidden");
@@ -1310,6 +1332,7 @@ $("btnDeploy").onclick = async () => {
   try {
     await api("/api/deploy", {method: "POST", body: JSON.stringify(collectConfig())});
     setOut($("deployOut"), "部署已开始，下方查看安装日志", "info");
+    $("deployOut").scrollIntoView({block: "center", behavior: "smooth"});
     if (logTimer) clearInterval(logTimer);
     logTimer = setInterval(pollDeploy, 1500);
     pollDeploy();
@@ -1388,13 +1411,17 @@ async function loadRealityKeys() {
     fillShortIdsTo(3);
   } catch (e) {}
 }
+async function regenRealityKeys() {
+  const k = await api("/api/reality-keys", {method: "POST", body: JSON.stringify({action: "regenerate"})});
+  $("reality_pubkey").value = k.public_key || "";
+  $("reality_privkey").value = k.private_key || "";
+  if (Array.isArray(k.short_ids) && k.short_ids.length) { setShortIds(k.short_ids); }
+  return k;
+}
 $("btnRealityNewKeys").onclick = async () => {
   if (!(await showConfirm("重新生成 Reality 密钥对？旧密钥会失效，已部署的 Reality 节点需要重新部署。"))) return;
   try {
-    const k = await api("/api/reality-keys", {method: "POST", body: JSON.stringify({action: "regenerate"})});
-    $("reality_pubkey").value = k.public_key || "";
-    $("reality_privkey").value = k.private_key || "";
-    if (Array.isArray(k.short_ids) && k.short_ids.length) { setShortIds(k.short_ids); }
+    await regenRealityKeys();
     setOut($("realityScanOut"), "已生成新的 Reality 密钥对", "ok");
   } catch (e) { setOut($("realityScanOut"), e.message, "err"); }
 };
@@ -1411,15 +1438,24 @@ $("btnRealityClearKeys").onclick = async () => {
 
 const REALITY_CANDIDATES = ["www.samsung.com", "www.amd.com", "www.intel.com", "www.microsoft.com", "aws.amazon.com", "www.nvidia.com", "www.amazon.com", "www.sony.com", "www.cloudflare.com"];
 function applyRealityTarget(r) {
-  $("reality_dest").value = r.target;
   $("reality_sni").value = r.domain || r.target.split(":")[0];
-  $("reality_dest").classList.remove("field-err");
+  $("reality_sni").classList.remove("field-err");
   $("realityScanModal").classList.add("hidden");
   ensureShortIds(3);
-  const card = $("realityResultCard");
-  card.innerHTML = "<b style=\"color:#16a34a;\">✓ 可用</b>　SNI：" + (r.domain||"") + "　TLS：" + (r.tls||"—") + "　ALPN：" + (r.alpn||"—") + "　密钥交换：" + (r.key_exchange||"—") + "<br>证书：" + (r.cert||"—") + "　证书有效期：" + (r.cert_expiry||"—") + "　证书链：" + (r.cert_chain||"—") + "　延迟：" + (r.latency_ms==null?"—":r.latency_ms+" ms") + "<br>已填入目标栏和 SNI 栏，并自动生成 3 个 Short ID，请点「获取新证书」。";
-  card.classList.remove("hidden");
-  setOut($("realityScanOut"), "已选择目标：" + r.target + "，请点「获取新证书」。", "ok");
+  (async () => {
+    let keysOk = !!($("reality_pubkey").value.trim() && $("reality_privkey").value.trim());
+    if (!keysOk) {
+      try { await loadRealityKeys(); } catch (e) {}
+      keysOk = !!($("reality_pubkey").value.trim() && $("reality_privkey").value.trim());
+    }
+    if (!keysOk) {
+      try { await regenRealityKeys(); keysOk = true; } catch (e) { keysOk = false; }
+    }
+    const card = $("realityResultCard");
+    card.innerHTML = "<b style=\"color:#16a34a;\">✓ 可用</b>　SNI：" + (r.domain||"") + "　TLS：" + (r.tls||"—") + "　ALPN：" + (r.alpn||"—") + "　密钥交换：" + (r.key_exchange||"—") + "<br>证书：" + (r.cert||"—") + "　证书有效期：" + (r.cert_expiry||"—") + "　证书链：" + (r.cert_chain||"—") + "　延迟：" + (r.latency_ms==null?"—":r.latency_ms+" ms") + "<br>已填入目标/SNI 栏，并自动生成 3 个 Short ID" + (keysOk ? "与 Reality 密钥对。" : "；密钥对生成失败，请点「生成密钥对」手动生成，部署时也会自动生成。");
+    card.classList.remove("hidden");
+    setOut($("realityScanOut"), "已选择目标：" + r.target + (keysOk ? "，Reality 密钥对已就绪。" : "，密钥对未生成，请点「生成密钥对」。"), "ok");
+  })();
 }
 function showRealityResultCard(r) {
   const card = $("realityResultCard");
@@ -1472,7 +1508,7 @@ function renderRealityScanTable(list) {
   });
   wrap.classList.remove("hidden");
   const modal = $("realityScanModal"); if (modal) modal.classList.remove("hidden");
-  const mout = $("realityScanModalOut"); if (mout) mout.textContent = "扫描完成，点一行「使用」填入目标栏和 SNI 栏。";
+  const mout = $("realityScanModalOut"); if (mout) mout.textContent = "扫描完成，点一行「使用」填入 SNI 栏（目标自动同步）。";
 }
 async function runRealityScan(target, toModal) {
   const out = $("realityScanOut");
@@ -1494,7 +1530,7 @@ async function runRealityScan(target, toModal) {
     } else {
       renderRealityScanTable(list);
       const best = list.find(x => x.status === "可用");
-      out.textContent = best ? ("已找到可用目标，最低延迟：" + best.target + " " + best.latency_ms + "ms，点「使用」填入目标栏和 SNI 栏。不填目标时，默认用自己的域名。") : "扫描完成，但没有可用目标，请换个目标再试。不填目标时，默认用自己的域名。";
+      out.textContent = best ? ("已找到可用目标，最低延迟：" + best.target + " " + best.latency_ms + "ms，点「使用」填入 SNI 栏。不填目标时，默认用自己的域名。") : "扫描完成，但没有可用目标，请换个目标再试。不填目标时，默认用自己的域名。";
       out.className = "status ok";
     }
   } catch (e) {
@@ -1506,8 +1542,8 @@ async function runRealityScan(target, toModal) {
   }
 }
 $("btnRealityScan").onclick = () => {
-  const d = $("reality_dest").value.trim();
-  if (!d) { setOut($("realityScanOut"), "请先在目标栏填一个域名再扫描。", "err"); return; }
+  const d = $("reality_sni").value.trim();
+  if (!d) { setOut($("realityScanOut"), "请先在 SNI 栏填一个域名再扫描。", "err"); return; }
   runRealityScan(d.split(":")[0], false);
 };
 $("btnRealityFind").onclick = () => {
@@ -1879,7 +1915,7 @@ $("btnTestAllOutbounds").onclick = async () => {
 };
 
 // ---- 节点管理 (SSH 远程部署 Phase 1) ----
-let nodes = [], nodeLogTimer = null, nodeLogOffset = 0, nodeLogId = null;
+let nodes = [], nodeLogTimer = null, nodeLogOffset = 0, nodeLogId = null, sshLogTimers = {}, sshLogOffsets = {}, sshDone = [];
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c])); }
 function nodeDeployLabel(st) {
   return {idle: "未部署", running: "部署中…", ok: "已部署", failed: "部署失败"}[st] || st || "—";
@@ -1904,7 +1940,7 @@ function renderNodes() {
     const dep = n.deploy || {};
     let ops = "<button type='button' class='sm' data-act='deploy'>部署</button> <button type='button' class='sm ghost' data-act='log'>日志</button> <button type='button' class='sm ghost' data-act='test'>测试连接</button> ";
     if (n.auth === "password") ops += "<button type='button' class='sm' data-act='bootstrap'>密码接入</button> ";
-    ops += "<button type='button' class='sm ghost' data-act='del'>删除</button>";
+    ops += "<button type='button' class='sm ghost' data-act='clear'>清除部署</button> <button type='button' class='sm ghost' data-act='del'>删除</button>";
     tr.innerHTML = "<td>" + esc(n.name) + "</td><td class='mono'>" + esc(n.host) + ":" + (n.ssh_port || 22) + "</td><td>" + esc(n.ssh_user || "") + "</td><td>" + (n.auth === "key" ? "密钥" : "密码接入") + "</td><td>" + esc(n.status || "—") + "</td><td>" + nodeDeployLabel(dep.state) + "</td><td>" + ops + "</td>";
     tr.querySelectorAll("button").forEach(b => b.onclick = () => nodeAction(n, b.dataset.act));
     body.appendChild(tr);
@@ -1940,6 +1976,14 @@ async function nodeAction(n, act) {
     showBootstrapBox(n);
   } else if (act === "log") {
     showNodeLog(n.id, n.name);
+  } else if (act === "clear") {
+    if (!(await showConfirm("确定清除节点「" + n.name + "」的远程部署吗？将删除该节点上的节点容器与配置文件，只清这一个节点，不影响其他节点与本机面板。"))) return;
+    setOut($("nodeOut"), "正在清除节点「" + n.name + "」的远程部署…", "info");
+    try {
+      const r = await api("/api/nodes/" + n.id + "/clear", {method: "POST"});
+      setOut($("nodeOut"), r.message || ("节点「" + n.name + "」的远程部署已清除"), "ok");
+      loadNodes();
+    } catch (e) { setOut($("nodeOut"), e.message, "err"); }
   } else if (act === "deploy") {
     deployNode(n);
   }
@@ -1997,11 +2041,13 @@ async function deployNode(n) {
     if (first) first.scrollIntoView({block: "center", behavior: "smooth"});
     return;
   }
+  if (!(await showConfirm("确认部署到节点「" + n.name + "」（SSH 远程）吗？将在远程节点 " + n.host + " 上安装节点。"))) return;
   setOut($("nodeOut"), "正在启动远程部署…", "info");
   try {
     await api("/api/nodes/" + n.id + "/deploy", {method: "POST", body: JSON.stringify(collectConfig())});
     setOut($("nodeOut"), "远程部署已开始，下方查看日志", "info");
     showNodeLog(n.id, n.name);
+    $("nodeLogWrap").scrollIntoView({block: "start", behavior: "smooth"});
   } catch (e) { setOut($("nodeOut"), e.message, "err"); }
 }
 function showNodeLog(id, name) {
@@ -2033,6 +2079,125 @@ $("btnCloseNodeLog").onclick = () => {
   if (nodeLogTimer) clearInterval(nodeLogTimer);
   nodeLogTimer = null; nodeLogId = null;
   $("nodeLogWrap").classList.add("hidden");
+};
+
+// ---- SSH 部署（独立版块：批量部署/批量清除，多节点） ----
+function sshSelected() {
+  return (nodes || []).filter(n => {
+    const c = document.querySelector('.ssh-check[data-id="' + n.id + '"]');
+    return c && c.checked;
+  });
+}
+function sshSelectedNames(list) { return list.map(n => n.name).join("、"); }
+function renderSshDeploy() {
+  const body = $("sshBody");
+  if (!body) return;
+  body.innerHTML = "";
+  if (!nodes.length) { body.innerHTML = '<tr><td colspan="6" class="muted">暂无节点，先去「节点管理」添加。</td></tr>'; return; }
+  nodes.forEach(n => {
+    const dep = n.deploy || {};
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td><input type='checkbox' class='ssh-check' data-id='" + n.id + "'></td><td>" + esc(n.name) + "</td><td class='mono'>" + esc(n.host) + ":" + (n.ssh_port || 22) + "</td><td>" + (n.auth === "key" ? "密钥" : "密码接入") + "</td><td>" + esc(n.status || "—") + "</td><td>" + nodeDeployLabel(dep.state) + "</td>";
+    body.appendChild(tr);
+  });
+  const all = $("sshCheckAll");
+  if (all) { all.checked = false; all.onchange = () => { document.querySelectorAll(".ssh-check").forEach(c => c.checked = all.checked); }; }
+}
+function sshLogBlock(n) {
+  const div = document.createElement("div");
+  div.id = "sshlog-" + n.id;
+  div.style.marginTop = "8px";
+  div.innerHTML = "<div style='display:flex; justify-content:space-between; align-items:center;'><span style='font-weight:700;'>节点「" + esc(n.name) + "」</span><span class='muted' data-role='state'>部署中…</span></div><div class='log' data-role='log'></div>";
+  $("sshLogs").appendChild(div);
+  return div;
+}
+async function pollSshLog(id) {
+  const box = $("sshlog-" + id);
+  if (!box) { if (sshLogTimers[id]) { clearInterval(sshLogTimers[id]); delete sshLogTimers[id]; } return; }
+  const logEl = box.querySelector("[data-role='log']");
+  const stateEl = box.querySelector("[data-role='state']");
+  try {
+    const s = await api("/api/nodes/" + id + "/deploy/status");
+    stateEl.textContent = nodeDeployLabel(s.state) + (s.message ? " — " + s.message : "");
+    const l = await api("/api/nodes/" + id + "/deploy/log?offset=" + (sshLogOffsets[id] || 0));
+    if (l.log) { logEl.textContent += l.log; logEl.scrollTop = logEl.scrollHeight; }
+    sshLogOffsets[id] = l.offset;
+    if (s.state === "ok" || s.state === "failed") {
+      clearInterval(sshLogTimers[id]); delete sshLogTimers[id];
+      sshDone.unshift({nodeId: id, name: (nodes.find(x => x.id === id) || {}).name || id, state: s.state, time: new Date().toLocaleString()});
+      renderSshDone();
+      loadNodes().then(renderSshDeploy);
+    }
+  } catch (e) { /* 隧道重启导致短暂断开时, 下次轮询自动恢复 */ }
+}
+function renderSshDone() {
+  const wrap = $("sshDoneWrap"), list = $("sshDoneList");
+  if (!wrap || !list) return;
+  wrap.classList.toggle("hidden", !sshDone.length);
+  list.innerHTML = "";
+  sshDone.forEach((r, i) => {
+    const div = document.createElement("div");
+    div.style.cssText = "display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--bd);";
+    div.innerHTML = "<span>节点「" + esc(r.name) + "」— " + (r.state === "ok" ? "已部署" : "部署失败") + " <span class='muted'>" + esc(r.time) + "</span></span>";
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "sm ghost"; b.textContent = "删除";
+    b.onclick = () => { sshDone.splice(i, 1); renderSshDone(); };
+    div.appendChild(b);
+    list.appendChild(div);
+  });
+}
+$("btnSshBatchDeploy").onclick = async () => {
+  const errs = validateDeploy();
+  if (errs.length) {
+    setOut($("deployOut"), "请先补全部署表单必填项：" + errs.map(e => e.name).join("、"), "err");
+    switchTab("deploy");
+    const first = errs[0].el;
+    if (first) first.scrollIntoView({block: "center", behavior: "smooth"});
+    return;
+  }
+  const sel = sshSelected();
+  if (!sel.length) { setOut($("sshOut"), "请先勾选要部署的节点", "err"); return; }
+  if (!(await showConfirm("确认批量部署到以下 " + sel.length + " 个节点（SSH 远程）吗？节点：" + sshSelectedNames(sel) + "。将在各远程节点上安装节点。"))) return;
+  const cfg = collectConfig();
+  $("sshLogs").innerHTML = "";
+  $("sshLogWrap").classList.remove("hidden");
+  setOut($("sshOut"), "正在启动 " + sel.length + " 个节点的远程部署…", "info");
+  sel.forEach(n => {
+    sshLogBlock(n);
+    sshLogOffsets[n.id] = 0;
+    api("/api/nodes/" + n.id + "/deploy", {method: "POST", body: JSON.stringify(cfg)}).then(() => {
+      if (sshLogTimers[n.id]) clearInterval(sshLogTimers[n.id]);
+      sshLogTimers[n.id] = setInterval(() => pollSshLog(n.id), 2000);
+      pollSshLog(n.id);
+    }).catch(e => {
+      const box = $("sshlog-" + n.id);
+      if (box) {
+        box.querySelector("[data-role='state']").textContent = "部署失败 — " + e.message;
+        box.querySelector("[data-role='log']").textContent += "启动失败：" + e.message + "\n";
+      }
+      sshDone.unshift({nodeId: n.id, name: n.name, state: "failed", time: new Date().toLocaleString()});
+      renderSshDone();
+      loadNodes().then(renderSshDeploy);
+    });
+  });
+  $("sshLogWrap").scrollIntoView({block: "start", behavior: "smooth"});
+};
+$("btnSshBatchClear").onclick = async () => {
+  const sel = sshSelected();
+  if (!sel.length) { setOut($("sshOut"), "请先勾选要清除的节点", "err"); return; }
+  if (!(await showConfirm("确认清除以下 " + sel.length + " 个节点的 SSH 远程部署吗？节点：" + sshSelectedNames(sel) + "。将删除这些节点上的节点容器与配置文件，只清选中的节点，不影响其他节点与本机面板。本地清除请去部署页的「清除部署」。"))) return;
+  setOut($("sshOut"), "正在清除 " + sel.length + " 个节点的远程部署…", "info");
+  const rs = await Promise.allSettled(sel.map(n => api("/api/nodes/" + n.id + "/clear", {method: "POST"})));
+  const okN = rs.filter(r => r.status === "fulfilled").length;
+  const fails = rs.map((r, i) => (r.status === "rejected" ? sel[i].name + "：" + (r.reason && r.reason.message ? r.reason.message : r.reason) : null)).filter(Boolean);
+  setOut($("sshOut"), "批量清除完成：成功 " + okN + " 个" + (fails.length ? "，失败 " + fails.length + " 个：" + fails.join("；") : ""), fails.length ? "err" : "ok");
+  loadNodes().then(renderSshDeploy);
+};
+$("btnSshRefresh").onclick = () => { loadNodes().then(renderSshDeploy); };
+$("btnCloseSshLogs").onclick = () => {
+  Object.keys(sshLogTimers).forEach(id => clearInterval(sshLogTimers[id]));
+  sshLogTimers = {};
+  $("sshLogWrap").classList.add("hidden");
 };
 
 // 进页面先试一次登录态, 已登录直接进, 否则显示登录
