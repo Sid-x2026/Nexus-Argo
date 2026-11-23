@@ -301,7 +301,22 @@ banner
 step "步骤 1/5  检查配置"
 # ---- validation (mirrors the frontend's validatePort, plus the checks it lacks) ----
 [ "$(id -u)" = "0" ] || die "run as root"
-command -v docker >/dev/null 2>&1 || die "docker not found — install Docker first (see README)"
+if ! command -v docker >/dev/null 2>&1; then
+  log "未检测到 Docker，正在自动安装…"
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -qq >/dev/null 2>&1 || true
+    apt-get install -y docker.io || die "Docker 自动安装失败，请手动安装后重试 (apt install -y docker.io)"
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y docker || die "Docker 自动安装失败，请手动安装后重试 (dnf install -y docker)"
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y docker || die "Docker 自动安装失败，请手动安装后重试 (yum install -y docker)"
+  else
+    die "docker not found — 未找到 apt/dnf/yum，请手动安装 Docker 后重试 (see README)"
+  fi
+  command -v docker >/dev/null 2>&1 || die "Docker 安装后仍未找到 docker 命令，请手动检查"
+  systemctl enable --now docker >/dev/null 2>&1 || warn "docker 服务自启设置失败，请手动执行 systemctl enable --now docker"
+  log "Docker 已安装"
+fi
 command -v python3 >/dev/null 2>&1 || die "python3 not found — needed for JSON rendering"
 check_port "XRAY_PORT" "$XRAY_PORT"
 check_port "SINGBOX_PORT" "$SINGBOX_PORT"
