@@ -33,9 +33,14 @@
 #   GET  /<name>/<sub_path>/raw|merged  面板订阅 (公开, 免登录):
 #        <name> 是订阅地址里的固定名 (默认 nexus, 旧的 UUID 也认),
 #        ?only=argo 隧道节点 / ?only=direct 直连节点 (含 Reality)
-#        面板收到后转发给本机 nexus-sub, 订阅不再需要单独的域名/端口/路由,
-#        地址就是面板自己的域名或 IP:端口 + UUID + 订阅路径。
+#        面板收到后转发给本机 nexus-sub; ARGO 订阅地址 = ARGO 面板
+#        域名 + 固定名 + 订阅路径 (须先配 ARGO 面板并开面板订阅),
+#        直连订阅地址 = 直连 VPS 域名或 IP + 订阅端口 + 固定名 + 路径。
 #   GET  /api/cert               证书状态 (是否已部署 / 颁发给谁 / 到期时间 / 续期方式)
+#        ?target=<node_id> 看远程节点的证书, 不带看本机
+#   GET  /api/cert/task?target=  证书生成任务状态 + 日志 (后 8KB)
+#   POST /api/cert/generate      {target: local|<node_id>} 提前生成证书
+#   POST /api/cert/clear         {target: local|<node_id>} 清除已部署的证书
 #   POST /api/reality-scan       3X-UI 式 Reality 目标扫描 (域名/IP/CIDR, 返回
 #                                 目标/状态/TLS/ALPN/密钥交换/证书/延迟表)
 #   GET  /api/reality-keys       公钥 + 私钥 + Short IDs
@@ -171,9 +176,20 @@ DEFAULT_CONFIG = {
     # 订阅地址里的固定名字 (路径名, 默认 nexus): 代替原来放在地址里的 UUID,
     # 固定不变; 节点 UUID 只留在订阅内容里的节点链接中。
     "sub_name": "nexus",
-    # 直连订阅地址: 用户填的直连 VPS 域名或 IP, 可带端口 (默认 18080)。
-    # 直连订阅从这台 VPS 上直接拉, 不走面板; 为空则不显示直连订阅。
+    # 直连订阅地址: 用户填的直连 VPS 域名或 IP (端口统一走订阅端口
+    # sub_port, 地址里不再带端口); 直连订阅从这台 VPS 上直接拉,
+    # 不走面板; 为空则不显示直连订阅。
     "direct_sub_host": "",
+    # ARGO 面板: 可选, 用户自主选择要不要建。打开后填隧道绑定的面板
+    # 域名与端口 (端口默认面板自己的端口); 只有配了 ARGO 面板, 才能
+    # 用 ARGO 订阅。面板不接 Cloudflare API, Zero Trust 路由仍需手动加。
+    "argo_panel_enabled": False,
+    "argo_panel_domain": "",
+    "argo_panel_port": PANEL_PORT,
+    # 订阅开关: 面板订阅 / IP域名订阅, 各自独立, 可同时开。
+    # 面板订阅须先配 ARGO 面板 (没配时开关不可用)。
+    "sub_panel_enabled": True,
+    "sub_ip_enabled": True,
     "enable_direct": False,
     "direct_domain": "",
     "direct_address": "",
@@ -717,7 +733,9 @@ def validate_config(raw):
 
     cfg["xray_port"] = _as_int(cfg.get("xray_port"), 8001)
     cfg["singbox_port"] = _as_int(cfg.get("singbox_port"), 8002)
-    cfg["sub_port"] = 18080  # 订阅服务内部端口, 不再由用户填, 面板代理到本机 nexus-sub
+    # 订阅端口 (nexus-sub 监听端口, ARGO 订阅与直连订阅共用):
+    # 用户可改, 默认 18080; 改后需重新部署 (节点侧) 才生效。
+    cfg["sub_port"] = _as_int(cfg.get("sub_port"), 18080)
     # 订阅地址主机: 域名或 IP, 可带端口 (面板域名 / IP:面板端口); 为空则用请求时的 Host
     # (sub_host 为空不再回退到 sub_domain, 否则旧的 sub 域名会被复活成订阅地址)。
     _sh = str(cfg.get("sub_host") or "").strip()
@@ -812,14 +830,30 @@ def validate_config(raw):
     if not SUB_PATH_RE.match(cfg["sub_name"]) or cfg["sub_name"] in RESERVED_SUB_PATH:
         errors.append("订阅名称只能是字母/数字/._- (1-32 个字符), 不能是 api / config.json / help.txt")
         cfg["sub_name"] = "nexus"
-    # 直连订阅地址: 用户填的直连 VPS 域名或 IP, 可带端口; 为空则不显示直连订阅。
+    # 直连订阅地址: 用户填的直连 VPS 域名或 IP; 端口统一走订阅端口
+    # (sub_port), 地址里带了端口也只取主机部分。
     _dsh = str(cfg.get("direct_sub_host") or "").strip()
     if _dsh:
         _dh_host, _dh_port = _split_host_port(_dsh)
         if not (_is_domain(_dh_host) or _is_ipv4(_dh_host)) or not _port_ok(_dh_port):
-            errors.append("直连订阅地址格式不正确, 请填域名或 IP, 可带端口")
+            errors.append("直连订阅地址格式不正确, 请填域名或 IP")
             _dsh = ""
+        else:
+            _dsh = _dh_host
     cfg["direct_sub_host"] = _dsh
+    # ARGO 面板 (可选): 打开时域名与端口必填; 域名须是域名 (隧道域名),
+    # 端口 1-65535。没打开时只保留已保存的值, 不校验。
+    cfg["argo_panel_enabled"] = _as_bool(cfg.get("argo_panel_enabled"), False)
+    cfg["argo_panel_domain"] = str(cfg.get("argo_panel_domain") or "").strip()
+    cfg["argo_panel_port"] = _as_int(cfg.get("argo_panel_port"), PANEL_PORT)
+    if cfg["argo_panel_enabled"]:
+        if not _is_domain(cfg["argo_panel_domain"]):
+            errors.append("ARGO 面板域名格式不正确, 请填隧道绑定的面板域名")
+        if not _port_ok(cfg["argo_panel_port"]):
+            errors.append("ARGO 面板端口必须是 1-65535 的端口")
+    # 订阅开关: 各自独立, 可同时开; 默认全开 (与旧行为一致)。
+    cfg["sub_panel_enabled"] = _as_bool(cfg.get("sub_panel_enabled"), True)
+    cfg["sub_ip_enabled"] = _as_bool(cfg.get("sub_ip_enabled"), True)
 
     # ---- 直连 ----
     cfg["enable_direct"] = _as_bool(cfg.get("enable_direct"), False)
@@ -1330,30 +1364,10 @@ def _public_ip():
     return ip
 
 
-def _sub_base(cfg, host=None, scheme=None):
-    """面板订阅 base: 优先用配置里的 sub_host (面板域名 / IP:端口),
-    没配就用请求时的 Host; 域名默认 https, IP 默认 http (带面板端口)。"""
-    _h = (cfg.get("sub_host") or "").strip() or (host or "").strip()
-    if not _h:
-        return None
-    _hh, _pp = _split_host_port(_h)
-    if not _hh:
-        return None
-    _sc = (scheme or "").strip().lower()
-    if _sc not in ("http", "https"):
-        _sc = "http" if _is_ipv4(_hh) else "https"
-    if _pp == 443 and _is_ipv4(_hh):
-        _hp = f"{_hh}:{PANEL_PORT}"
-    elif _pp == 443:
-        _hp = _hh
-    else:
-        _hp = f"{_hh}:{_pp}"
-    return f"{_sc}://{_hp}"
-
-
 def _direct_sub_base(cfg):
-    """直连订阅 base: 用户填的直连 VPS 域名或 IP (可带端口)。
-    直连订阅从 VPS 上直接拉, 固定走 http + 订阅端口 (默认 18080)。
+    """直连订阅 base: 用户填的直连 VPS 域名或 IP。
+    直连订阅从 VPS 上直接拉, 固定走 http + 订阅端口 (默认 18080,
+    地址里带了端口的旧配置仍认那个端口)。
     为空返回 None (不显示直连订阅)。"""
     _h = (cfg.get("direct_sub_host") or "").strip()
     if not _h:
@@ -1361,21 +1375,34 @@ def _direct_sub_base(cfg):
     _hh, _pp = _split_host_port(_h)
     if not _hh or not (_is_domain(_hh) or _is_ipv4(_hh)):
         return None
-    _port = _pp if ":" in _h else 18080
+    _port = _pp if ":" in _h else (cfg.get("sub_port") or 18080)
     return f"http://{_hh}:{_port}"
+
+
+def _argo_sub_on(cfg):
+    """ARGO 订阅可用: 配了 ARGO 面板 (域名非空) 且面板订阅开关开了。"""
+    return (bool(cfg.get("argo_panel_enabled"))
+            and bool((cfg.get("argo_panel_domain") or "").strip())
+            and _as_bool(cfg.get("sub_panel_enabled"), True))
 
 
 def subscription_urls(cfg, host=None, scheme=None):
     """订阅地址 (按当前配置算, 改订阅路径后实时变)。
-    Argo 订阅由面板提供: 面板地址 + 固定名 + 订阅路径, 只含隧道节点
-    (原生 raw / 动态 merged, 裂变后也在里面)。
-    直连订阅由直连 VPS 提供: 用户填的域名或 IP + 固定名 + 订阅路径,
-    只含直连节点 (Reality 也在直连里)。
-    订阅地址里不再放节点 UUID (固定名代替), UUID 只留在订阅内容里。"""
+    ARGO 订阅由面板提供: ARGO 面板域名 + 固定名 + 订阅路径, 只含隧道
+    节点 (原生 raw / 动态 merged, 裂变后也在里面); 没配 ARGO 面板
+    或没开面板订阅时不提供。
+    直连订阅由直连 VPS 提供: 用户填的域名或 IP + 订阅端口 + 固定名
+    + 订阅路径, 只含直连节点 (Reality 也在直连里); 没开 IP域名订阅
+    时不提供。
+    订阅地址里不再放节点 UUID (固定名代替), UUID 只留在订阅内容里。
+    host / scheme 保留兼容 (旧版按访问地址推导面板地址, 现改用配置
+    里的 ARGO 面板域名)。"""
     sub_name = cfg.get("sub_name") or "nexus"
     sub_path = cfg.get("sub_path") or "sub"
-    base = _sub_base(cfg, host, scheme)
-    direct_base = _direct_sub_base(cfg)
+    argo_on = _argo_sub_on(cfg)
+    ip_on = _as_bool(cfg.get("sub_ip_enabled"), True)
+    base = f"https://{(cfg.get('argo_panel_domain') or '').strip()}" if argo_on else ""
+    direct_base = _direct_sub_base(cfg) if ip_on else None
     out = {
         "sub_host": cfg.get("sub_host") or "",
         "sub_domain": cfg.get("sub_domain") or "",
@@ -1383,6 +1410,13 @@ def subscription_urls(cfg, host=None, scheme=None):
         "sub_name": sub_name,
         "sub_port": cfg.get("sub_port") or 18080,
         "direct_sub_host": cfg.get("direct_sub_host") or "",
+        "argo_panel_enabled": bool(cfg.get("argo_panel_enabled")),
+        "argo_panel_domain": (cfg.get("argo_panel_domain") or "").strip(),
+        "argo_panel_port": cfg.get("argo_panel_port") or PANEL_PORT,
+        "sub_panel_enabled": _as_bool(cfg.get("sub_panel_enabled"), True),
+        "sub_ip_enabled": ip_on,
+        "argo_sub_enabled": argo_on,
+        "ip_sub_enabled": ip_on,
         "raw_url": f"{base}/{sub_name}/{sub_path}/raw?only=argo" if base else "",
         "merged_url": f"{base}/{sub_name}/{sub_path}/merged?only=argo" if base else "",
         "direct_url": f"{direct_base}/{sub_name}/{sub_path}/raw?only=direct" if direct_base else "",
@@ -1627,30 +1661,23 @@ def _parse_openssl_date(s):
         return None
 
 
-def cert_info(cfg):
-    """证书状态。证书内容本身绝不返回, 只返回主题、到期日和续期方式。"""
-    mode = cfg.get("cert_mode") or "selfsigned"
-    cert_path = os.path.join(WORKDIR, "direct", "cert.pem")
+def _cert_renew_note(mode):
     if mode == "selfsigned":
-        renew_note = "无需续期 (10年)"
-    elif mode == "acme":
-        renew_note = "ACME 自动续期 (90天)"
-    else:
-        renew_note = "到期前请重新上传"
-    base = {"installed": False, "mode": mode, "message": "未部署"}
-    if not os.path.isfile(cert_path):
-        return base
+        return "无需续期 (10年)"
+    if mode == "acme":
+        return "ACME 自动续期 (90天)"
+    return "到期前请重新上传"
+
+
+def _parse_cert_openssl(mode, out):
+    """openssl x509 -subject -enddate 的输出 -> cert_info 同形状的 dict。
+    证书文件已确认存在 (installed=True); 到期时间解析失败也返回
+    installed=True + message, 由调用方展示。"""
     base = {"installed": True, "mode": mode,
-            "auto_renew": mode == "acme", "renew_note": renew_note}
-    out, code = _run(["openssl", "x509", "-in", cert_path, "-noout",
-                      "-subject", "-enddate"], timeout=5)
-    if code != 0 or not out:
-        base.update({"subject": "", "expiry": "", "days_left": None,
-                     "message": "证书信息读取失败, 请检查证书文件"})
-        return base
+            "auto_renew": mode == "acme", "renew_note": _cert_renew_note(mode)}
     subject = ""
     expiry_raw = ""
-    for line in out.splitlines():
+    for line in (out or "").splitlines():
         line = line.strip()
         if line.startswith("subject="):
             raw_subj = line[len("subject="):].strip()
@@ -1666,6 +1693,120 @@ def cert_info(cfg):
     base.update({"subject": subject, "expiry": exp_date.isoformat(),
                  "days_left": (exp_date - datetime.date.today()).days})
     return base
+
+
+def cert_info(cfg):
+    """证书状态 (本机)。证书内容本身绝不返回, 只返回主题、到期日和续期方式。"""
+    mode = cfg.get("cert_mode") or "selfsigned"
+    cert_path = os.path.join(WORKDIR, "direct", "cert.pem")
+    if not os.path.isfile(cert_path):
+        return {"installed": False, "mode": mode, "message": "未部署"}
+    out, code = _run(["openssl", "x509", "-in", cert_path, "-noout",
+                      "-subject", "-enddate"], timeout=5)
+    if code != 0 or not out:
+        return {"installed": True, "mode": mode,
+                "auto_renew": mode == "acme", "renew_note": _cert_renew_note(mode),
+                "subject": "", "expiry": "", "days_left": None,
+                "message": "证书信息读取失败, 请检查证书文件"}
+    return _parse_cert_openssl(mode, out)
+
+
+def _node_cert_info(node, cfg):
+    """远程节点的证书状态 (SSH 读节点上的 $WORKDIR/direct/cert.pem)。
+    节点连不上 / 没装证书时返回 installed=False + message。"""
+    mode = cfg.get("cert_mode") or "selfsigned"
+    cmd = ("if [ -f /opt/nexus-argo/direct/cert.pem ] && "
+           "[ -f /opt/nexus-argo/direct/key.pem ]; then "
+           "openssl x509 -in /opt/nexus-argo/direct/cert.pem -noout "
+           "-subject -enddate; else echo NO_CERT; fi")
+    rc, out, _ = _ssh_cmd(node, cmd, timeout=15)
+    if rc in (-1, 255):
+        return {"installed": False, "mode": mode, "message": "节点无法连接"}
+    text = (out or b"").decode("utf-8", "replace")
+    if rc != 0 or "NO_CERT" in text:
+        return {"installed": False, "mode": mode, "message": "未部署"}
+    return _parse_cert_openssl(mode, text)
+
+
+# ---- 证书预生成任务 (面板「生成证书」按钮) ----
+CERT_TASKS = {}  # target("local" | node_id) -> {running, ok, log, message}
+_CERT_TASKS_LOCK = threading.Lock()
+
+
+def _cert_log_path(target):
+    return os.path.join(PANEL_DIR, "cert.log" if target == "local"
+                        else f"cert-{target}.log")
+
+
+def _install_supports_cert():
+    """本机 install.sh 是否支持 cert / clear-cert 子命令 (旧版会把
+    cert 当成部署跑, 必须先拦住)。"""
+    try:
+        with open(INSTALL_SH, "r", encoding="utf-8") as f:
+            return "_cert_standalone" in f.read()
+    except OSError:
+        return False
+
+
+def _cert_need(cfg):
+    """当前选中的直连协议里有没有需要证书的 (与 validate_config 同口径)。"""
+    return bool(cfg.get("enable_direct")) and any(
+        cfg.get(k) for k in ("direct_vless_tls", "direct_vless_grpc", "direct_trojan",
+                             "direct_vmess_ws", "direct_sb_trojan", "direct_sb_tls"))
+
+
+def _cert_gen_worker(target, node, cfg):
+    """后台跑 `install.sh cert` (本机直接跑, 远程 scp 后 SSH 跑),
+    日志写 cert.log / cert-<node_id>.log, 300 秒超时。
+    ACME 失败时 install.sh 不回退自签名 (strict), 日志里看得到原因。"""
+    log_path = _cert_log_path(target)
+    target_name = "本机" if target == "local" else (node.get("name") or target)
+    with _CERT_TASKS_LOCK:
+        CERT_TASKS[target] = {"running": True, "ok": None, "log": log_path,
+                              "message": "生成中…"}
+    def _append(text):
+        try:
+            with open(log_path, "ab") as f:
+                f.write(text.encode("utf-8", "replace"))
+        except OSError:
+            pass
+    try:
+        with open(log_path, "wb") as f:
+            f.write(f"[nexus-panel] 开始生成证书 (目标: {target_name})\n".encode())
+    except OSError:
+        pass
+    code = -1
+    try:
+        env = dict(os.environ)
+        env.update(config_to_env(cfg))
+        with open(log_path, "ab") as lf:
+            if target == "local":
+                proc = subprocess.Popen(["bash", INSTALL_SH, "cert"], env=env,
+                                        cwd=WORKDIR, stdout=lf, stderr=subprocess.STDOUT)
+            else:
+                rc, _, err = _scp_put(node, INSTALL_SH, _NODE_INSTALL_SH, timeout=120)
+                if rc != 0:
+                    raise RuntimeError(f"传 install.sh 失败: {err.decode('utf-8', 'replace').strip() or 'scp 退出码 ' + str(rc)}")
+                env_str = " ".join(f"{k}={shlex.quote(str(v))}" for k, v in env.items())
+                argv = ["ssh"] + _ssh_base_args(node) + [_ssh_target(node),
+                        f"{env_str} bash {_NODE_INSTALL_SH} cert"]
+                proc = subprocess.Popen(argv, stdout=lf, stderr=subprocess.STDOUT)
+            try:
+                code = proc.wait(timeout=300)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                code = -1
+                _append("\n[nexus-panel] 生成超时 (300 秒)\n")
+    except RuntimeError as e:
+        code = -1
+        _append(f"\n[nexus-panel] {e}\n")
+    except Exception as e:
+        code = -1
+        _append(f"\n[nexus-panel] 证书生成异常: {e}\n")
+    with _CERT_TASKS_LOCK:
+        CERT_TASKS[target] = {"running": False, "ok": code == 0, "log": log_path,
+                              "message": "证书已生成" if code == 0 else
+                              f"证书生成失败 (退出码 {code}), 看日志找原因"}
 
 
 # ---- Reality 目标扫描 (3X-UI 式) ----
@@ -1825,6 +1966,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "订阅服务未运行, 请先部署"}, 502)
                 return
             path = f"/{node_uuid}/{sub_path}/{m.group(2)}"
+        # 订阅开关门控 (只拦新地址带的 ?only=, 不带 only 的旧组合地址仍放行,
+        # 已导入客户端的旧订阅不断): ARGO 订阅须配 ARGO 面板且开面板订阅,
+        # IP域名订阅须开 IP域名订阅开关。
+        _only = (urllib.parse.parse_qs(url.query or "").get("only") or [""])[0]
+        if _only == "argo" and not _argo_sub_on(cfg):
+            self._send_json({"error": "ARGO 订阅未启用 (请先配置 ARGO 面板并开启面板订阅)"}, 404)
+            return
+        if _only == "direct" and not _as_bool(cfg.get("sub_ip_enabled"), True):
+            self._send_json({"error": "IP域名订阅未开启"}, 404)
+            return
         target = f"http://127.0.0.1:{cfg.get('sub_port') or 18080}{path}"
         if url.query:
             target += "?" + url.query
@@ -1892,6 +2043,12 @@ class Handler(BaseHTTPRequestHandler):
             # 面板订阅 (公开, 免登录): 转发给本机 nexus-sub
             self._proxy_sub(url)
             return
+        # 固定名订阅地址 /<name>/<sub_path>/raw|merged (与 UUID 地址同路由;
+        # 订阅轮改成固定名后, 只认 UUID 的旧路由会让新地址 404, 这里补上)。
+        # 口令 (固定名或 UUID) 在 _proxy_sub 里校验, 这里只认订阅路径。
+        if re.match(r"^/[^/]+/" + re.escape(load_config().get("sub_path") or "sub") + r"/(raw|merged)$", path):
+            self._proxy_sub(url)
+            return
         if path == "/api/status":
             if not self._need_auth():
                 return
@@ -1956,7 +2113,36 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/cert":
             if not self._need_auth():
                 return
-            self._send_json(cert_info(load_config()))
+            cfg = load_config()
+            query = urllib.parse.parse_qs(url.query)
+            target = (query.get("target", [""])[0] or "").strip()
+            if target and target != "local":
+                node = _find_node(target)
+                if not node:
+                    self._send_json({"error": "节点不存在"}, 404)
+                    return
+                self._send_json(_node_cert_info(node, cfg))
+                return
+            self._send_json(cert_info(cfg))
+            return
+        if path == "/api/cert/task":
+            if not self._need_auth():
+                return
+            query = urllib.parse.parse_qs(url.query)
+            target = (query.get("target", ["local"])[0] or "local").strip()
+            with _CERT_TASKS_LOCK:
+                task = dict(CERT_TASKS.get(target) or {"running": False, "ok": None, "message": ""})
+            log_text = ""
+            try:
+                with open(_cert_log_path(target), "rb") as f:
+                    f.seek(0, os.SEEK_END)
+                    size = f.tell()
+                    f.seek(max(0, size - 8192))
+                    log_text = f.read().decode("utf-8", "replace")
+            except OSError:
+                pass
+            task["log"] = log_text
+            self._send_json(task)
             return
         if path == "/api/reality-keys":
             if not self._need_auth():
@@ -2121,6 +2307,70 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "message": msg, "subscription": subscription_urls(cfg)})
             else:
                 self._send_json({"ok": True, "message": "已保存, 下次部署时生效", "subscription": subscription_urls(cfg)})
+            return
+
+        if path == "/api/cert/generate":
+            target = str(body.get("target") or "local").strip() or "local"
+            cfg = load_config()
+            if not _install_supports_cert():
+                self._send_json({"error": "install.sh 还是旧版, 请先更新 install.sh 再生成证书"}, 400)
+                return
+            if cfg.get("cert_mode") == "upload":
+                self._send_json({"error": "上传模式无需生成证书, 请直接填写证书内容"}, 400)
+                return
+            if not _cert_need(cfg):
+                self._send_json({"error": "当前选中的协议不需要证书"}, 400)
+                return
+            node = None
+            if target != "local":
+                node = _find_node(target)
+                if not node:
+                    self._send_json({"error": "节点不存在"}, 404)
+                    return
+                if node.get("auth") != "key":
+                    self._send_json({"error": "该节点尚未完成密码接入, 请先用密码接入 (bootstrap)"}, 400)
+                    return
+                th = _node_deploy_threads.get(target)
+                if th is not None and th.is_alive():
+                    self._send_json({"error": "该节点正在部署, 请等它完成再生成证书"}, 409)
+                    return
+            with _CERT_TASKS_LOCK:
+                cur = CERT_TASKS.get(target)
+                if cur and cur.get("running"):
+                    self._send_json({"error": "该目标正在生成证书, 请等它完成"}, 409)
+                    return
+            th = threading.Thread(target=_cert_gen_worker, args=(target, node, cfg), daemon=True)
+            th.start()
+            self._send_json({"ok": True, "message": "证书生成已开始, 请查看日志"})
+            return
+
+        if path == "/api/cert/clear":
+            target = str(body.get("target") or "local").strip() or "local"
+            cfg = load_config()
+            if cfg.get("cert_mode") == "upload":
+                self._send_json({"error": "上传模式的证书由配置里的证书内容决定, 清除部署文件后下次部署会重新写回, 请直接改证书内容"}, 400)
+                return
+            if target == "local":
+                for _f in ("cert.pem", "key.pem"):
+                    try:
+                        os.remove(os.path.join(WORKDIR, "direct", _f))
+                    except OSError:
+                        pass
+                self._send_json({"ok": True, "message": "本机已部署的证书已清除, 下次部署时重新生成/签发"})
+                return
+            node = _find_node(target)
+            if not node:
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            if node.get("auth") != "key":
+                self._send_json({"error": "该节点尚未完成密码接入, 请先用密码接入 (bootstrap)"}, 400)
+                return
+            rc, out, err = _ssh_cmd(node, "rm -f /opt/nexus-argo/direct/cert.pem /opt/nexus-argo/direct/key.pem", timeout=30)
+            if rc != 0:
+                detail = ((out or b"") + (err or b"")).decode("utf-8", "replace").strip()
+                self._send_json({"error": "清除失败: " + (detail[-200:] if detail else "ssh 失败")}, 500)
+                return
+            self._send_json({"ok": True, "message": "节点「" + (node.get("name") or "") + "」已部署的证书已清除, 下次部署时重新生成/签发"})
             return
 
         if path == "/api/reality-scan":
@@ -2541,11 +2791,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "节点不存在"}, 404)
                 return
             _save_nodes(kept)
-            for p in (_node_status_path(nid), _node_log_path(nid)):
+            for p in (_node_status_path(nid), _node_log_path(nid), _cert_log_path(nid)):
                 try:
                     os.remove(p)
                 except OSError:
                     pass
+            with _CERT_TASKS_LOCK:
+                CERT_TASKS.pop(nid, None)
         self._send_json({"ok": True, "message": "节点已删除"})
         return
 
