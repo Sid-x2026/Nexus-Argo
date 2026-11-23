@@ -58,6 +58,13 @@
 #     failure warn and fall back to selfsigned, never fail the deploy;
 #     on success add a daily `acme.sh --cron` crontab entry (idempotent,
 #     only if crontab exists).
+#   证书复用规则 (部署与预生成共用): 已有证书剩余 > 30 天直接复用;
+#   剩余 ≤ 30 天重新签发 (ACME) 或重新生成 (自签名); upload 模式只
+#   复用已上传的证书, 到期前请重新上传。复用 ACME 证书时也会补写
+#   续期 cron (以前只在签发成功那次写)。
+#   子命令: install.sh cert — 只签证书不部署 (面板「生成证书」按钮,
+#   ACME 失败直接报错不回退); install.sh clear-cert — 删已部署的
+#   证书, 下次部署时重新生成/签发。
 #   REALITY_DEST (required when DIRECT_VLESS_REALITY=true): the big
 #   domain used as Reality dest/SNI, may carry a port (3X-UI style,
 #   e.g. www.microsoft.com:443) — the port is stripped before use;
@@ -451,7 +458,142 @@ uninstall() {
   exit 0
 }
 
+# ---- 证书预生成 (面板「生成证书 / 清除证书」按钮用) ----
+# _issue_cert [strict]: 只处理证书, 不碰其它部署步骤; 部署流程与
+# `install.sh cert` 共用这一份逻辑。strict=1 (面板预生成) 时 ACME
+# 签发失败直接返回 1, 不回退自签名, 让调用方看到真实失败原因
+# (域名未解析到本机 / 80 端口未放行); 为空 (部署流程) 时 ACME 失败
+# 只警告并回退自签名, 部署不失败。
+_cert_is_domain() { # 与 _is_domain 同规则 (有域名点、不是纯 IPv4);
+  # _is_domain 定义在文件后部, 这里不依赖它, 避免子命令分发时未定义。
+  case "$1" in *:*|*/*) return 1;; esac
+  [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$ ]] || return 1
+  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && return 1
+  return 0
+}
+_cert_days_left() { # 已部署证书剩余天数, 读不到返回空 (调用方按复用处理)
+  local _end _now _diff
+  _end="$(openssl x509 -in "$WORKDIR/direct/cert.pem" -noout -enddate 2>/dev/null | sed 's/^notAfter=//')"
+  [ -n "$_end" ] || return 1
+  _now="$(date +%s 2>/dev/null || echo 0)"
+  _diff="$(( $(date -d "$_end" +%s 2>/dev/null || echo 0) - _now ))"
+  [ "$_diff" -gt 0 ] 2>/dev/null || { echo 0; return 0; }
+  echo $(( _diff / 86400 ))
+}
+_ensure_acme_cron() { # $1: acme.sh 路径 (可空, 自动找); 续期 cron 存在即跳过
+  local _a="${1:-}"
+  if [ -z "$_a" ]; then
+    if [ -x "$HOME/.acme.sh/acme.sh" ]; then _a="$HOME/.acme.sh/acme.sh";
+    elif command -v acme.sh >/dev/null 2>&1; then _a="$(command -v acme.sh)"; fi
+  fi
+  [ -n "$_a" ] || return 0
+  command -v crontab >/dev/null 2>&1 || return 0
+  if ! crontab -l 2>/dev/null | grep -Fq "acme.sh --cron"; then
+    _cron="0 0 * * * $_a --cron --home $HOME/.acme.sh > /dev/null 2>&1"
+    (crontab -l 2>/dev/null; echo "$_cron") | crontab - 2>/dev/null \
+      && log "ACME 自动续期已加入 crontab (每日检查)" \
+      || warn "crontab 写入失败 — ACME 证书不会自动续期, 请手动续期"
+  fi
+}
+_issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
+  local _strict="${1:-}" _cert_ok=false _need_cert=false _days="" _acme="" _issue_log=""
+  mkdir -p "$WORKDIR/direct"
+  if [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
+    if [ "$CERT_MODE" = "upload" ]; then
+      log "直连证书: 使用已上传的证书 ($WORKDIR/direct/cert.pem)"
+      _days="$(_cert_days_left)" || _days=""
+      [ -n "$_days" ] && [ "$_days" -le 30 ] && warn "已上传的证书剩余 $_days 天, 到期前请重新上传"
+      return 0
+    fi
+    _days="$(_cert_days_left)" || _days=""
+    if [ -z "$_days" ]; then
+      warn "已有证书到期时间读不到, 直接复用 ($WORKDIR/direct/cert.pem)"
+      [ "$CERT_MODE" = "acme" ] && _ensure_acme_cron
+      return 0
+    fi
+    if [ "$_days" -gt 30 ]; then
+      log "直连证书: 使用已有证书 (剩余 $_days 天)"
+      [ "$CERT_MODE" = "acme" ] && _ensure_acme_cron
+      return 0
+    fi
+    log "直连证书: 已有证书剩余 $_days 天 (≤ 30 天), 重新签发"
+  fi
+  # 只有勾了需证书协议时才跑 ACME (Reality、VLESS+TCP、VLESS+WS、Shadowsocks、Hysteria2 不需要证书)
+  for _v in "$DIRECT_VLESS_TLS" "$DIRECT_VLESS_GRPC" "$DIRECT_TROJAN" "$DIRECT_VMESS_WS" "$DIRECT_SB_TROJAN" "$DIRECT_SB_TLS"; do
+    if is_true "$_v"; then _need_cert=true; break; fi
+  done
+  if [ "$CERT_MODE" = "acme" ] && [ "$_need_cert" = "true" ]; then
+    if ! _cert_is_domain "$DIRECT_DOMAIN"; then
+      warn "CERT_MODE=acme 但 DIRECT_DOMAIN 不是域名 ($DIRECT_DOMAIN), 无法申请证书"
+      [ -n "$_strict" ] && return 1
+    else
+      if [ -x "$HOME/.acme.sh/acme.sh" ]; then _acme="$HOME/.acme.sh/acme.sh";
+      elif command -v acme.sh >/dev/null 2>&1; then _acme="$(command -v acme.sh)"; fi
+      if [ -z "$_acme" ]; then
+        if command -v timeout >/dev/null 2>&1; then
+          timeout 180 curl -fsSL https://get.acme.sh -o /tmp/get.acme.sh 2>/dev/null && sh /tmp/get.acme.sh --install-online >/dev/null 2>&1
+        else
+          curl -fsSL https://get.acme.sh 2>/dev/null | sh -s -- --install-online >/dev/null 2>&1
+        fi
+        if [ -x "$HOME/.acme.sh/acme.sh" ]; then _acme="$HOME/.acme.sh/acme.sh"; else warn "acme.sh 安装失败 — 回退到自签名证书"; fi
+      fi
+      if [ -n "$_acme" ]; then
+        _issue_log="/tmp/nexus-acme-issue.log"
+        if "$_acme" --issue -d "$DIRECT_DOMAIN" --standalone > "$_issue_log" 2>&1 \
+           && "$_acme" --install-cert -d "$DIRECT_DOMAIN" \
+                --key-file "$WORKDIR/direct/key.pem" \
+                --fullchain-file "$WORKDIR/direct/cert.pem" >/dev/null 2>&1 \
+           && [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
+          _cert_ok=true
+          log "ACME 证书已签发 ($DIRECT_DOMAIN)"
+          _ensure_acme_cron "$_acme"
+          return 0
+        else
+          warn "ACME 签发失败 (域名 $DIRECT_DOMAIN 需解析到本机且 80 端口可达) — 详情:"
+          tail -n 15 "$_issue_log" 2>/dev/null || true
+          [ -n "$_strict" ] && return 1
+        fi
+      elif [ -n "$_strict" ]; then
+        return 1
+      fi
+    fi
+  fi
+  if [ "$CERT_MODE" = "upload" ]; then
+    warn "CERT_MODE=upload 但未找到已上传的证书 — 回退到自签名证书"
+    [ -n "$_strict" ] && return 1
+  fi
+  openssl req -x509 -newkey rsa:2048 -keyout "$WORKDIR/direct/key.pem" \
+    -out "$WORKDIR/direct/cert.pem" -days 3650 -nodes \
+    -subj "/CN=$DIRECT_DOMAIN" >/dev/null 2>&1 \
+    || die "自签名证书生成失败 (需要 openssl)"
+  log "直连自签名证书已生成 ($WORKDIR/direct/cert.pem, CN=$DIRECT_DOMAIN)"
+  return 0
+}
+_cert_standalone() { # install.sh cert: 只签证书, 不部署 (面板「生成证书」按钮用)
+  [ "$(id -u)" = "0" ] || die "run as root"
+  command -v openssl >/dev/null 2>&1 || die "openssl not found — needed for the direct-mode cert"
+  if [ -z "$DIRECT_DOMAIN" ]; then
+    DIRECT_DOMAIN="$(curl -fsS --max-time 5 https://ifconfig.me/ip 2>/dev/null || curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
+    [ -n "$DIRECT_DOMAIN" ] || die "DIRECT_DOMAIN 为空且无法自动探测公网 IP — 请设置 DIRECT_DOMAIN"
+    log "DIRECT_DOMAIN auto-detected: $DIRECT_DOMAIN"
+  fi
+  mkdir -p "$WORKDIR/direct"
+  if _issue_cert 1; then
+    log "证书已就绪 ($WORKDIR/direct/cert.pem)"
+    exit 0
+  else
+    die "证书生成失败 (见上方日志)"
+  fi
+}
+_cert_clear() { # install.sh clear-cert: 删已部署的证书, 下次部署时重新生成/签发
+  rm -f "$WORKDIR/direct/cert.pem" "$WORKDIR/direct/key.pem"
+  log "已清除部署的证书 ($WORKDIR/direct/cert.pem / key.pem); 下次部署时重新生成/签发"
+  exit 0
+}
+
 [ "${1:-install}" = "uninstall" ] && uninstall
+[ "${1:-install}" = "cert" ] && _cert_standalone
+[ "${1:-install}" = "clear-cert" ] && _cert_clear
 
 banner
 step "步骤 1/5  检查配置"
@@ -611,73 +753,17 @@ mkdir -p "$WORKDIR"/{xray,singbox,web,sub}
 # 白名单按本次最终配置算; SSH 永久白名单永不关闭。
 _fw_sync
 # Direct mode: TLS cert + Reality keys, before render.
-# Cert (CERT_MODE): selfsigned — generate a 10-year cert only if
-# missing, never overwrite; upload — the panel already wrote
-# cert.pem/key.pem, never overwrite/regenerate when present, missing
-# files warn and fall back to selfsigned; acme — try acme.sh
-# standalone http-01 on port 80, on any failure warn and fall back
-# to selfsigned, never fail the deploy; on success add a daily
-# `acme.sh --cron` crontab entry (idempotent, only if crontab exists).
+# Cert 见 _issue_cert (部署与 `install.sh cert` 共用): 已有证书剩余
+# > 30 天复用, ≤ 30 天重签/重生成, ACME 失败回退自签名, 复用 ACME
+# 证书时补写续期 cron。upload 模式只复用已上传的证书。
 # Reality keys persist in $WORKDIR/direct/reality.json and are reused
 # across redeploys when REALITY_PRIVATE_KEY / REALITY_SHORT_ID are empty.
 _b64url() { python3 -c "import sys,base64; sys.stdout.write(base64.urlsafe_b64encode(sys.stdin.buffer.read()).decode().rstrip('='))"; }
 if is_true "$ENABLE_DIRECT"; then
   mkdir -p "$WORKDIR/direct"
-  _cert_ok=false
-  if [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
-    _cert_ok=true
-    [ "$CERT_MODE" = "upload" ] && log "直连证书: 使用已上传的证书 ($WORKDIR/direct/cert.pem)"
-  fi
-  # 只有勾了需证书协议时才跑 ACME (Reality、VLESS+TCP、VLESS+WS、Shadowsocks、Hysteria2 不需要证书)
-  _need_cert=false
-  for _v in "$DIRECT_VLESS_TLS" "$DIRECT_VLESS_GRPC" "$DIRECT_TROJAN" "$DIRECT_VMESS_WS" "$DIRECT_SB_TROJAN" "$DIRECT_SB_TLS"; do
-    if is_true "$_v"; then _need_cert=true; break; fi
-  done
-  if [ "$CERT_MODE" = "acme" ] && [ "$_cert_ok" = "false" ] && [ "$_need_cert" = "true" ]; then
-    if ! _is_domain "$DIRECT_DOMAIN"; then
-      warn "CERT_MODE=acme 但 DIRECT_DOMAIN 不是域名 ($DIRECT_DOMAIN), 无法申请证书 — 回退到自签名证书"
-    else
-      _acme=""
-      if [ -x "$HOME/.acme.sh/acme.sh" ]; then _acme="$HOME/.acme.sh/acme.sh";
-      elif command -v acme.sh >/dev/null 2>&1; then _acme="$(command -v acme.sh)"; fi
-      if [ -z "$_acme" ]; then
-        if command -v timeout >/dev/null 2>&1; then
-          timeout 180 curl -fsSL https://get.acme.sh -o /tmp/get.acme.sh 2>/dev/null && sh /tmp/get.acme.sh --install-online >/dev/null 2>&1
-        else
-          curl -fsSL https://get.acme.sh 2>/dev/null | sh -s -- --install-online >/dev/null 2>&1
-        fi
-        if [ -x "$HOME/.acme.sh/acme.sh" ]; then _acme="$HOME/.acme.sh/acme.sh"; else warn "acme.sh 安装失败 — 回退到自签名证书"; fi
-      fi
-      if [ -n "$_acme" ]; then
-        if "$_acme" --issue -d "$DIRECT_DOMAIN" --standalone >/dev/null 2>&1 \
-           && "$_acme" --install-cert -d "$DIRECT_DOMAIN" \
-                --key-file "$WORKDIR/direct/key.pem" \
-                --fullchain-file "$WORKDIR/direct/cert.pem" >/dev/null 2>&1 \
-           && [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
-          _cert_ok=true
-          log "ACME 证书已签发 ($DIRECT_DOMAIN)"
-          if command -v crontab >/dev/null 2>&1; then
-            _cron="0 0 * * * $_acme --cron --home $HOME/.acme.sh > /dev/null 2>&1"
-            if ! crontab -l 2>/dev/null | grep -Fq "acme.sh --cron"; then
-              (crontab -l 2>/dev/null; echo "$_cron") | crontab - 2>/dev/null \
-                && log "ACME 自动续期已加入 crontab (每日检查)" \
-                || warn "crontab 写入失败 — ACME 证书不会自动续期, 请手动续期"
-            fi
-          fi
-        else
-          warn "ACME 签发失败 (域名 $DIRECT_DOMAIN 需解析到本机且 80 端口可达) — 回退到自签名证书"
-        fi
-      fi
-    fi
-  fi
-  if [ "$_cert_ok" = "false" ]; then
-    [ "$CERT_MODE" = "upload" ] && warn "CERT_MODE=upload 但未找到已上传的证书 — 回退到自签名证书"
-    openssl req -x509 -newkey rsa:2048 -keyout "$WORKDIR/direct/key.pem" \
-      -out "$WORKDIR/direct/cert.pem" -days 3650 -nodes \
-      -subj "/CN=$DIRECT_DOMAIN" >/dev/null 2>&1 \
-      || die "自签名证书生成失败 (需要 openssl)"
-    log "直连自签名证书已生成 ($WORKDIR/direct/cert.pem, CN=$DIRECT_DOMAIN)"
-  fi
+  # 证书逻辑在 _issue_cert (部署与 `install.sh cert` 共用):
+  # 已有证书剩余 > 30 天复用, ≤ 30 天重签/重生成, ACME 失败回退自签名。
+  _issue_cert
   # Reality X25519 keypair (only when the Reality inbound is on).
   # Private key = last 32 bytes of the PKCS#8 DER, public key = last
   # 32 bytes of the SubjectPublicKeyInfo DER, both base64url, no padding.
@@ -2057,7 +2143,7 @@ if [ -n "${SUB_DOMAIN:-}" ]; then
 else
   echo ""
   echo "${C_YELLOW}⚠ 订阅 (公网): 未设置 SUB_DOMAIN, 只有本地订阅可用${C_RESET}"
-  echo "  如需公网订阅, 重新部署时加上 SUB_DOMAIN=<订阅子域名> SUB_PORT=18080"
+  echo "  如需公网订阅, 重新部署时加上 SUB_DOMAIN=<订阅子域名> SUB_PORT=$SUB_PORT"
   echo "  例如: SUB_DOMAIN=sub.ahstshu.eu.cc"
 fi
 if is_true "$ENABLE_DIRECT"; then
