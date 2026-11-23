@@ -297,7 +297,9 @@ function setAddr(id, url) {
 function getAddr(id) { return ($(id).dataset.url || "").trim(); }
 
 // --- 初始化：从 /config.json 拿部署时的 UUID 和默认优选地址 ---
-fetch("/config.json").then(r => r.json()).then(c => {
+// /config.json 只认订阅口令: 地址栏 ?token= 优先, 否则默认固定名 nexus
+const _cfgTok = new URLSearchParams(location.search).get("token") || "nexus";
+fetch("/config.json?token=" + encodeURIComponent(_cfgTok)).then(r => r.json()).then(c => {
   cfg = c;
   if (c.uuid) setAddr("rawUrl", location.origin + "/sub/raw/" + c.uuid);
   if (c.opt_addrs && c.opt_addrs.length) $("addrs").value = c.opt_addrs.join("\n");

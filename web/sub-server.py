@@ -47,11 +47,13 @@
 # 路由 (输出一律标准 base64, 和 Worker / v3 静态文件格式一致,
 # 客户端不用改设置; SUB_PATH 默认 sub, 可改):
 #   GET /                              订阅生成器面板 (sub-generator.html)
-#   GET /config.json                   部署时的 UUID / 默认优选地址, 供面板用
+#   GET /config.json?token=<name>      部署时的 UUID / 默认优选地址, 供面板用
 #   GET /help.txt                      纯文本说明
-#   GET /<uuid>/<SUB_PATH>/raw         原生订阅, 1 协议 = 1 节点 (隧道 + 直连, UUID 在前)
+#   GET /<name>/<SUB_PATH>/raw         原生订阅, 1 协议 = 1 节点
+#       <name> 是订阅地址里的固定名字 (默认 nexus), 旧的 UUID 也认;
+#       ?only=argo 只取隧道节点, ?only=direct 只取直连节点 (含 Reality)
 #   GET /<SUB_PATH>/raw/<uuid>         旧地址, 兼容保留
-#   GET /<uuid>/<SUB_PATH>/merged?addrs=a,b
+#   GET /<name>/<SUB_PATH>/merged?addrs=a,b
 #   GET /<SUB_PATH>/merged/<uuid>?addrs=a,b   旧地址, 兼容保留
 #       动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上;
 #       不带 addrs 就用部署时的 OPT_ADDRS
@@ -66,8 +68,9 @@
 #   GET /<SUB_PATH>/merged?url=<外部订阅地址>&addrs=a,b
 #       外部订阅裂变 (Worker v2 就有这个路由, v3 静态文件做不到),
 #       同样支持 &format=singbox / clash
-#   GET /<SUB_PATH>/raw.txt /<SUB_PATH>/merged.txt   明文版, 排查用
-#   uuid 不对 -> 404 (v3 的 nginx 不校验 uuid, 这里补上了)
+#   GET /<SUB_PATH>/raw.txt?token=<name> /<SUB_PATH>/merged.txt?token=<name>
+#       明文版, 排查用 (同样只认订阅口令)
+#   口令不对 -> 404 (v3 的 nginx 不校验 uuid, 这里补上了)
 #
 # 安全边界: 只做 GET, 只认这几个路径, 只换 vless 链接里的 host
 # (其余部分原样保留, SNI 不变), addrs 最多 20 个且只接受
@@ -88,6 +91,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 _GENERATOR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sub-generator.html")
 
 UUID = os.environ.get("NODE_UUID", "").strip()
+# 订阅地址里的固定名字 (路径名): 代替原来放在地址里的 UUID, 固定不变。
+# 面板与订阅地址用它, 节点 UUID 只留在订阅内容里的节点链接中。
+# 旧的 UUID 地址仍认 (兼容已导入的订阅)。
+SUB_NAME = os.environ.get("SUB_NAME", "nexus").strip() or "nexus"
 # 节点前缀分开 (Part A/B 合同): 隧道节点用 Argo 前缀, 直连节点用
 # 直连前缀。旧单前缀 NODE_PREFIX 只作回退 (新变量为空时用它)。
 _NODE_PREFIX_RAW = os.environ.get("NODE_PREFIX", "").strip()
@@ -159,9 +166,11 @@ REALITY_ENC_CLIENT = os.environ.get("REALITY_ENC_CLIENT", "").strip() or "none"
 
 HELP = (
     "Nexus-Argo 动态订阅\n\n"
-    f"GET /<uuid>/{SUB_PATH}/raw\n"
-    "    原生订阅 (隧道 + 直连)\n\n"
-    f"GET /<uuid>/{SUB_PATH}/merged?addrs=a,b,c\n"
+    "订阅地址里用固定名字 (默认 nexus, 代替原来的 UUID; 旧的 UUID 地址仍认)。\n\n"
+    f"GET /<name>/{SUB_PATH}/raw\n"
+    "    原生订阅 (隧道 + 直连); ?only=argo 只取隧道节点,\n"
+    "    ?only=direct 只取直连节点 (含 Reality)\n\n"
+    f"GET /<name>/{SUB_PATH}/merged?addrs=a,b,c\n"
     "    动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上\n"
     "    不带 addrs: 用部署时的优选地址\n\n"
     f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=singbox\n"
@@ -655,6 +664,45 @@ def fission(lines, addrs):
 _ADDR_RE = re.compile(r"^[A-Za-z0-9._-]+(:\d+)?$")
 
 
+def _tok_ok(tok):
+    """订阅口令: 固定名字或节点 UUID 都认 (UUID 是旧地址的兼容)。"""
+    return bool(tok) and tok in (UUID, SUB_NAME)
+
+
+def _only_of(query):
+    """?only=argo 只取隧道节点, ?only=direct 只取直连节点 (含 Reality), 否则全取。"""
+    return (query.get("only", [""])[0] or "").strip().lower()
+
+
+def _raw_links(query):
+    only = _only_of(query)
+    if only == "argo":
+        return tunnel_links()
+    if only == "direct":
+        return direct_links()
+    return native_links()
+
+
+def _merged_links(query):
+    only = _only_of(query)
+    addrs = parse_addrs(query)
+    if only == "argo":
+        return fission(tunnel_links(), addrs)
+    if only == "direct":
+        # 直连节点不裂变, 原样跟上 (Reality 也在直连里)
+        return direct_links()
+    return fission(tunnel_links(), addrs) + direct_links()
+
+
+def _empty_msg(query):
+    only = _only_of(query)
+    if only == "direct":
+        return "未配置直连节点"
+    if only == "argo":
+        return "未配置隧道节点"
+    return "未配置任何核心"
+
+
 def parse_addrs(query):
     raw = (query.get("addrs", [""])[0] or "")
     addrs = [a.strip() for a in raw.split(",") if a.strip()]
@@ -682,6 +730,51 @@ class Handler(BaseHTTPRequestHandler):
     def _sub(self, body):
         self._send(encode_subscription(body))
 
+    def _send_links(self, links, query):
+        """按 ?format= 返回对应格式: auto 按 UA 自适应, singbox / clash
+        过滤转换, 默认 base64。raw 与 merged 共用这一套。"""
+        if not links:
+            self._send("订阅为空", 502)
+            return
+        fmt = (query.get("format", [""])[0] or "").strip().lower()
+        if fmt == "auto":
+            # 通用自适应: 按拉取的客户端 User-Agent 返回对应格式
+            ua = (self.headers.get("User-Agent") or "").lower()
+            if "clash" in ua or "mihomo" in ua:
+                yaml = clash_yaml(links)
+                if not yaml:
+                    self._send("订阅为空: 没有可转换的节点", 502)
+                    return
+                self._send(yaml, ctype="text/yaml; charset=utf-8")
+            elif any(k in ua for k in ("sing-box", "singbox", "nekobox", "hiddify", "sfi")):
+                links = [l for l in links
+                         if _vless_type(l) != "xhttp" and not _has_vless_encryption(l)]
+                if not links:
+                    self._send("订阅为空: 没有 Sing-box 支持的节点", 502)
+                    return
+                self._sub(links)
+            else:
+                self._sub(links)
+        elif fmt == "singbox":
+            # Sing-box 没有 xhttp 传输, 也不支持 VLESS Encryption:
+            # 只去掉 xhttp 与带加密层的节点, 其余都留着
+            links = [l for l in links
+                     if _vless_type(l) != "xhttp" and not _has_vless_encryption(l)]
+            if not links:
+                self._send("订阅为空: 没有 Sing-box 支持的节点", 502)
+                return
+            self._sub(links)
+        elif fmt == "clash":
+            yaml = clash_yaml(links)
+            if not yaml:
+                self._send("订阅为空: 没有可转换的节点", 502)
+                return
+            self._send(yaml, ctype="text/yaml; charset=utf-8")
+        elif fmt:
+            self._send("format 只支持 singbox / clash / auto", 400)
+        else:
+            self._sub(links)
+
     def _generator(self):
         try:
             with open(_GENERATOR_PATH, "rb") as f:
@@ -699,7 +792,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _config(self):
         self._send(json.dumps({
-            "uuid": UUID, "prefix": PREFIX, "prefix_argo": PREFIX_ARGO,
+            "uuid": UUID, "sub_name": SUB_NAME, "prefix": PREFIX, "prefix_argo": PREFIX_ARGO,
             "prefix_direct": PREFIX_DIRECT, "opt_addrs": OPT_ADDRS,
             "xray_domain": XRAY_DOMAIN, "singbox_domain": SINGBOX_DOMAIN,
             "sub_path": SUB_PATH,
@@ -719,6 +812,10 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/config.json":
+            # 含节点 UUID, 只认订阅口令 (固定名或 UUID), 否则不给
+            if not _tok_ok((query.get("token", [""])[0] or "").strip()):
+                self._send("token 不对", 404)
+                return
             self._config()
             return
 
@@ -727,47 +824,49 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == f"/{SUB_PATH}/raw.txt":
-            self._send("\n".join(native_links()) + "\n")
+            # 明文版 (排查用): 同样只认订阅口令
+            if not _tok_ok((query.get("token", [""])[0] or "").strip()):
+                self._send("token 不对", 404)
+                return
+            self._send("\n".join(_raw_links(query)) + "\n")
             return
         if path == f"/{SUB_PATH}/merged.txt":
-            self._send("\n".join(fission(tunnel_links(), list(OPT_ADDRS)) + direct_links()) + "\n")
+            if not _tok_ok((query.get("token", [""])[0] or "").strip()):
+                self._send("token 不对", 404)
+                return
+            self._send("\n".join(_merged_links(query)) + "\n")
             return
 
         raw_m = re.match(r"^/([^/]+)/" + re.escape(SUB_PATH) + r"/raw$", path)
         if raw_m:
-            if raw_m.group(1) != UUID:
-                self._send("uuid 不匹配", 404)
+            if not _tok_ok(raw_m.group(1)):
+                self._send("口令不匹配", 404)
                 return
-            links = native_links()
+            links = _raw_links(query)
             if not links:
-                self._send("未配置任何核心", 500)
+                self._send(_empty_msg(query), 500)
                 return
-            self._sub(links)
+            self._send_links(links, query)
             return
 
         raw_m = re.match(r"^/" + re.escape(SUB_PATH) + r"/raw/(.+)$", path)
         if raw_m:
-            if raw_m.group(1) != UUID:
-                self._send("uuid 不匹配", 404)
+            if not _tok_ok(raw_m.group(1)):
+                self._send("口令不匹配", 404)
                 return
-            links = native_links()
+            links = _raw_links(query)
             if not links:
-                self._send("未配置任何核心", 500)
+                self._send(_empty_msg(query), 500)
                 return
-            self._sub(links)
+            self._send_links(links, query)
             return
 
         merged_m = re.match(r"^/([^/]+)/" + re.escape(SUB_PATH) + r"/merged$", path)
         if merged_m:
-            if merged_m.group(1) != UUID:
-                self._send(f"uuid 不匹配: /<uuid>/{SUB_PATH}/merged?addrs=a,b,c", 404)
+            if not _tok_ok(merged_m.group(1)):
+                self._send(f"口令不匹配: /<name>/{SUB_PATH}/merged?addrs=a,b,c", 404)
                 return
-            addrs = parse_addrs(query)
-            merged = fission(tunnel_links(), addrs) + direct_links()
-            if not merged:
-                self._send("订阅为空", 502)
-                return
-            self._sub(merged)
+            self._send_links(_merged_links(query), query)
             return
 
         merged_m = re.match(r"^/" + re.escape(SUB_PATH) + r"/merged(?:/(.+))?$", path)
@@ -787,52 +886,12 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 merged = fission(lines, addrs)
             else:
-                if not merged_m.group(1) or merged_m.group(1) != UUID:
-                    self._send(f"uuid 不匹配: /{SUB_PATH}/merged/<uuid>?addrs=a,b,c", 404)
+                if not merged_m.group(1) or not _tok_ok(merged_m.group(1)):
+                    self._send(f"口令不匹配: /{SUB_PATH}/merged/<uuid>?addrs=a,b,c", 404)
                     return
                 # 只有隧道节点裂变, 直连节点原样跟上
-                merged = fission(tunnel_links(), addrs) + direct_links()
-            if not merged:
-                self._send("订阅为空", 502)
-                return
-            fmt = (query.get("format", [""])[0] or "").strip().lower()
-            if fmt == "auto":
-                # 通用自适应: 按拉取的客户端 User-Agent 返回对应格式
-                ua = (self.headers.get("User-Agent") or "").lower()
-                if "clash" in ua or "mihomo" in ua:
-                    yaml = clash_yaml(merged)
-                    if not yaml:
-                        self._send("订阅为空: 没有可转换的节点", 502)
-                        return
-                    self._send(yaml, ctype="text/yaml; charset=utf-8")
-                elif any(k in ua for k in ("sing-box", "singbox", "nekobox", "hiddify", "sfi")):
-                    merged = [l for l in merged
-                              if _vless_type(l) != "xhttp" and not _has_vless_encryption(l)]
-                    if not merged:
-                        self._send("订阅为空: 没有 Sing-box 支持的节点", 502)
-                        return
-                    self._sub(merged)
-                else:
-                    self._sub(merged)
-            elif fmt == "singbox":
-                # Sing-box 没有 xhttp 传输, 也不支持 VLESS Encryption:
-                # 只去掉 xhttp 与带加密层的节点, 其余都留着
-                merged = [l for l in merged
-                          if _vless_type(l) != "xhttp" and not _has_vless_encryption(l)]
-                if not merged:
-                    self._send("订阅为空: 没有 Sing-box 支持的节点", 502)
-                    return
-                self._sub(merged)
-            elif fmt == "clash":
-                yaml = clash_yaml(merged)
-                if not yaml:
-                    self._send("订阅为空: 没有可转换的节点", 502)
-                    return
-                self._send(yaml, ctype="text/yaml; charset=utf-8")
-            elif fmt:
-                self._send("format 只支持 singbox / clash / auto", 400)
-            else:
-                self._sub(merged)
+                merged = _merged_links(query)
+            self._send_links(merged, query)
             return
 
         self._send("404: 未知路径, 访问 / 看说明", 404)
