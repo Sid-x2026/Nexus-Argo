@@ -229,6 +229,10 @@ DIRECT_SS_PORT="${DIRECT_SS_PORT:-8388}"
 DIRECT_HY2="${DIRECT_HY2:-false}"
 DIRECT_HY2_PORT="${DIRECT_HY2_PORT:-9446}"
 CERT_MODE="${CERT_MODE:-selfsigned}"
+# 面板远程部署时传进来的节点 SSH 端口 (panel-server.py 按节点填);
+# 本地部署没传时, 防火墙同步里自动探测本机 sshd 端口, 兜底 22。
+# SSH 端口是永久白名单: 只确保放行, 同步关端口时永不关闭。
+NEXUS_SSH_PORT="${NEXUS_SSH_PORT:-}"
 # 直连 WS path 与 gRPC serviceName: 面板部署时由 panel-server.py
 # 每次随机生成经环境变量传进来; 独立部署没传时用公开默认值。
 DIRECT_WS_PATH="${DIRECT_WS_PATH:-/ws}"
@@ -270,8 +274,152 @@ check_port() {
   (( val >= 1 && val <= 65535 )) || die "$name out of range 1-65535: $val"
 }
 
+# ---- 防火墙同步 (部署步骤 1/5 用) ----
+# 白名单 = SSH 端口 (永久, 永不关闭) + 本次已勾选的直连端口
+#         + CERT_MODE=acme 且需证书时加 80/tcp (签发与续期都要用)。
+# 只动清单里的端口: 本次要开的放行; 上次清单里有、本次不要的
+# 关闭; 清单外的其它放行规则一律不动。SSH 端口不进清单。
+# 没有 ufw / firewalld 时只警告、跳过, 不中断部署 (云控制台
+# 的安全组脚本够不着, 需手动放行)。所有防火墙操作失败只警告。
+# SSH 端口表: 面板传来的节点 SSH 端口 + 本机 sshd_config 里所有
+# Port + 兜底 22, 去重后存进 _FW_SSH_PORTS 数组。永久白名单。
+_fw_load_ssh_ports() {
+  _FW_SSH_PORTS=()
+  local _p _q _seen
+  if [[ "${NEXUS_SSH_PORT:-}" =~ ^[0-9]+$ ]] && (( NEXUS_SSH_PORT >= 1 && NEXUS_SSH_PORT <= 65535 )); then
+    _FW_SSH_PORTS+=("$NEXUS_SSH_PORT")
+  fi
+  while IFS= read -r _p; do
+    [[ "$_p" =~ ^[0-9]+$ ]] && (( _p >= 1 && _p <= 65535 )) || continue
+    _seen=false
+    for _q in "${_FW_SSH_PORTS[@]}"; do [ "$_q" = "$_p" ] && _seen=true && break; done
+    [ "$_seen" = "false" ] && _FW_SSH_PORTS+=("$_p")
+  done < <(grep -h -i '^[[:space:]]*Port[[:space:]]' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null | awk '{print $2}')
+  [ "${#_FW_SSH_PORTS[@]}" -gt 0 ] || _FW_SSH_PORTS=(22)
+}
+
+_fw_backend() {
+  if command -v ufw >/dev/null 2>&1; then echo ufw; return 0; fi
+  if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state 2>/dev/null | grep -q "running"; then echo firewalld; return 0; fi
+  echo none
+}
+
+_fw_is_allowed() { # _fw_is_allowed <port/proto> <backend>
+  if [ "$2" = "ufw" ]; then
+    ufw status 2>/dev/null | grep -Eq "^$1[[:space:]]+ALLOW"
+  elif [ "$2" = "firewalld" ]; then
+    firewall-cmd --list-ports 2>/dev/null | tr ' ' '\n' | grep -qx "$1"
+  else
+    return 1
+  fi
+}
+
+_fw_allow() { # _fw_allow <port/proto> <label> <backend>
+  if _fw_is_allowed "$1" "$3"; then log "防火墙: $1 已放行，跳过 ($2)"; return 0; fi
+  if [ "$3" = "ufw" ]; then
+    ufw allow "$1" >/dev/null 2>&1 && log "防火墙: 已放行 $1 ($2)" || warn "防火墙: 放行 $1 失败，请手动执行 ufw allow $1"
+  elif [ "$3" = "firewalld" ]; then
+    firewall-cmd --permanent --add-port="$1" >/dev/null 2>&1 && firewall-cmd --reload >/dev/null 2>&1 \
+      && log "防火墙: 已放行 $1 ($2)" || warn "防火墙: 放行 $1 失败，请手动放行"
+  fi
+}
+
+_fw_delete() { # _fw_delete <port/proto> <backend> — 只删清单里的端口
+  if ! _fw_is_allowed "$1" "$2"; then log "防火墙: 旧端口 $1 已不在规则中，跳过"; return 0; fi
+  if [ "$2" = "ufw" ]; then
+    ufw --force delete allow "$1" >/dev/null 2>&1 && log "防火墙: 已关闭旧端口 $1" || warn "防火墙: 关闭旧端口 $1 失败，请手动执行 ufw delete allow $1"
+  elif [ "$2" = "firewalld" ]; then
+    firewall-cmd --permanent --remove-port="$1" >/dev/null 2>&1 && firewall-cmd --reload >/dev/null 2>&1 \
+      && log "防火墙: 已关闭旧端口 $1" || warn "防火墙: 关闭旧端口 $1 失败，请手动处理"
+  fi
+}
+
+_fw_is_domain() { # 仅防火墙块内用: 有点、不是纯 IPv4
+  case "$1" in *:*|*/*) return 1;; esac
+  [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$ ]] || return 1
+  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && return 1
+  return 0
+}
+
+_fw_close_stale() { # _fw_close_stale <backend> [want-port/proto ...] — 关清单里不在 want 中的
+  local _be="$1"; shift
+  [ -f "$WORKDIR/firewall-ports.txt" ] || return 0
+  local _old _w _keep
+  while IFS= read -r _old || [ -n "$_old" ]; do
+    [ -n "$_old" ] || continue
+    _keep=false
+    for _w in "$@"; do [ "$_old" = "$_w" ] && _keep=true && break; done
+    # SSH 端口永不关闭: 只要是 sshd 在用的端口, 即使旧清单里写了它, 也跳过
+    for _w in "${_FW_SSH_PORTS[@]}"; do [ "$_old" = "$_w/tcp" ] && _keep=true && break; done
+    [ "$_keep" = "false" ] && _fw_delete "$_old" "$_be"
+  done < "$WORKDIR/firewall-ports.txt"
+}
+
+_fw_sync() {
+  local _be; _be="$(_fw_backend)"
+  if [ "$_be" = "none" ]; then
+    warn "防火墙: 未检测到 ufw / firewalld，跳过端口配置 (云控制台安全组需手动放行)"
+    return 0
+  fi
+  # SSH 端口: 面板传来的节点端口 + 本机 sshd 在用的端口, 兜底 22。永久白名单。
+  _fw_load_ssh_ports
+  local _sp _ssh_list=""
+  for _sp in "${_FW_SSH_PORTS[@]}"; do _ssh_list="$_ssh_list${_ssh_list:+, }$_sp/tcp"; done
+  log "防火墙: 后端 $_be，SSH 端口 $_ssh_list 为永久白名单，永不关闭"
+  if [ "$_be" = "ufw" ] && ! ufw status 2>/dev/null | grep -q "Status: active"; then
+    log "防火墙: ufw 未启用，当前无入站拦截；写入的规则在以后启用 ufw 时生效"
+  fi
+  # 本次白名单 (SSH 除外才进清单): 直连已勾选端口 + ACME 时 80
+  local _want=() _spec _name _rest _p _proto _label
+  for _spec in "DIRECT_VLESS_TCP|$DIRECT_VLESS_TCP_PORT|tcp|直连 VLESS TCP" \
+      "DIRECT_VLESS_TLS|$DIRECT_VLESS_TLS_PORT|tcp|直连 VLESS TLS" \
+      "DIRECT_VLESS_REALITY|$DIRECT_VLESS_REALITY_PORT|tcp|直连 VLESS Reality" \
+      "DIRECT_VLESS_WS|$DIRECT_VLESS_WS_PORT|tcp|直连 VLESS WS" \
+      "DIRECT_VLESS_GRPC|$DIRECT_VLESS_GRPC_PORT|tcp|直连 VLESS gRPC" \
+      "DIRECT_TROJAN|$DIRECT_TROJAN_PORT|tcp|直连 Trojan" \
+      "DIRECT_VMESS_WS|$DIRECT_VMESS_WS_PORT|tcp|直连 VMess WS" \
+      "DIRECT_SB_TLS|$DIRECT_SB_TLS_PORT|tcp|直连 Sing-box TLS" \
+      "DIRECT_SB_TROJAN|$DIRECT_SB_TROJAN_PORT|tcp|直连 Sing-box Trojan" \
+      "DIRECT_SS|$DIRECT_SS_PORT|tcp|直连 Shadowsocks" \
+      "DIRECT_HY2|$DIRECT_HY2_PORT|udp|直连 Hysteria2"; do
+    _name="${_spec%%|*}"; _rest="${_spec#*|}"; _p="${_rest%%|*}"; _rest="${_rest#*|}"; _proto="${_rest%%|*}"; _label="${_rest##*|}"
+    if is_true "$ENABLE_DIRECT" && is_true "${!_name}"; then
+      _want+=("$_p/$_proto|$_label")
+    fi
+  done
+  if is_true "$ENABLE_DIRECT" && [ "$CERT_MODE" = "acme" ]; then
+    local _nc=false _v
+    for _v in "$DIRECT_VLESS_TLS" "$DIRECT_VLESS_GRPC" "$DIRECT_TROJAN" "$DIRECT_VMESS_WS" "$DIRECT_SB_TROJAN" "$DIRECT_SB_TLS"; do
+      if is_true "$_v"; then _nc=true; break; fi
+    done
+    if [ "$_nc" = "true" ] && _fw_is_domain "${DIRECT_DOMAIN:-}"; then
+      _want+=("80/tcp|ACME 签发与续期")
+    fi
+  fi
+  for _sp in "${_FW_SSH_PORTS[@]}"; do _fw_allow "$_sp/tcp" "SSH (面板连接，永久白名单)" "$_be"; done
+  local _e _pp _lb _bare=()
+  for _e in "${_want[@]}"; do
+    _pp="${_e%%|*}"; _lb="${_e##*|}"
+    _fw_allow "$_pp" "$_lb" "$_be"
+    _bare+=("$_pp")
+  done
+  # 关旧端口: 清单里有、本次白名单里没有的 (SSH 不进清单, 不会动)
+  _fw_close_stale "$_be" "${_bare[@]}"
+  # 写新清单 (SSH 不进清单)
+  { for _pp in "${_bare[@]}"; do echo "$_pp"; done; } > "$WORKDIR/firewall-ports.txt"
+  log "防火墙: 已同步，清单见 $WORKDIR/firewall-ports.txt"
+}
+# ---- 防火墙同步结束 ----
+
 uninstall() {
   log "Uninstalling nexus-* containers and $WORKDIR ..."
+  # 防火墙: 关掉清单里的 Nexus 端口 (SSH 永不在清单里, 不会动)。
+  # 清单在 $WORKDIR 里, 必须在删目录前读。
+  if [ -f "$WORKDIR/firewall-ports.txt" ]; then
+    _fw_load_ssh_ports
+    _fw_close_stale "$(_fw_backend)"
+    log "防火墙: 已关闭清单里的 Nexus 端口 (SSH 端口不受影响)"
+  fi
   for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel nexus-sub; do
     if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$c"; then
       docker rm -f "$c" >/dev/null || true
@@ -451,6 +599,9 @@ fi
 case "$TUNNEL_PROTOCOL" in auto|http2|quic) ;; *) die "TUNNEL_PROTOCOL must be auto|http2|quic, got $TUNNEL_PROTOCOL";; esac
 
 mkdir -p "$WORKDIR"/{xray,singbox,web,sub}
+# 部署步骤 1/5: 先配防火墙 (配置已定、证书未签、容器未起)。
+# 白名单按本次最终配置算; SSH 永久白名单永不关闭。
+_fw_sync
 # Direct mode: TLS cert + Reality keys, before render.
 # Cert (CERT_MODE): selfsigned — generate a 10-year cert only if
 # missing, never overwrite; upload — the panel already wrote
