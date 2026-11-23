@@ -17,12 +17,12 @@
   #appView > .hero button { background: #fff; color: #3730a3; border: 1px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,.15); padding: 12px 24px; font-size: 19px; }
   .shell { display: block; } .main { padding-left: 192px; padding-right: 20px; padding-bottom: 4px; }
   .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 180px; z-index: 50; background: #fff; border-right: 1px solid var(--bd); padding: 160px 10px 16px; display: flex; flex-direction: column; gap: 6px; }
-  .sidebar button { width: 100%; height: 56px; border-radius: 12px; background: transparent; color: #475569; border: 1px solid transparent; padding: 0 14px; font-size: 22px; font-weight: 600; line-height: 1.3; display: flex; align-items: center; gap: 10px; text-align: left; }
+  .sidebar button { width: 100%; height: 56px; border-radius: 12px; background: transparent; color: #475569; border: 1px solid transparent; padding: 0 14px; font-size: 18px; font-weight: 600; line-height: 1.3; display: flex; align-items: center; gap: 10px; text-align: left; white-space: nowrap; }
   .sidebar button:hover { background: #f1f5f9; }
   .sidebar button.on { background: linear-gradient(135deg,#6366f1,#3b82f6); color: #fff; box-shadow: 0 4px 12px rgba(99,102,241,.3); }
-  .sidebar button .ic { display:inline-flex; align-items:center; justify-content:center; width: 26px; flex-shrink: 0; font-size: 22px; }
+  .sidebar button .ic { display:inline-flex; align-items:center; justify-content:center; width: 26px; flex-shrink: 0; font-size: 20px; }
   .main { flex: 1; min-width: 0; }
-  @media (max-width: 760px) { .shell { flex-direction: column; } .sidebar { position: static; width: 100%; flex-direction: row; justify-content: flex-start; padding: 16px 10px; } .sidebar button { width: 64px; } .main { padding-left: 0; } #appView > .hero { margin-left: 0; } }
+  @media (max-width: 760px) { .shell { flex-direction: column; } .sidebar { position: static; width: 100%; flex-direction: row; justify-content: flex-start; padding: 16px 10px; } .sidebar button { width: 64px; white-space: normal; } .main { padding-left: 0; } #appView > .hero { margin-left: 0; } }
   .hero { background: linear-gradient(135deg, #eef2ff, #e0e7ff 55%, #dbeafe); color: #1e293b; border-radius: 18px; padding: 18px 22px; }
   .hero h1 { margin: 0; font-size: 22px; }
   .hero h1 .tag { font-size: 11px; background: #fff; border: 1px solid #c7d2fe; color: #4f46e5; padding: 2px 8px; border-radius: 20px; vertical-align: middle; margin-left: 8px; font-weight: 400; }
@@ -222,11 +222,11 @@
     <div class="shell">
     <nav class="sidebar" aria-label="面板导航">
       <button data-tab="overview" class="on"><span class="ic">◈</span>总览</button>
-      <button data-tab="deploy"><span class="ic">⬆</span>部署</button>
-      <button data-tab="nodes"><span class="ic">▣</span>节点管理</button>
       <button data-tab="sshdeploy"><span class="ic">⇪</span>SSH 部署</button>
+      <button data-tab="deploy"><span class="ic">⬆</span>部署</button>
       <button data-tab="routes"><span class="ic">↗</span>路由</button>
       <button data-tab="outbound"><span class="ic">⇄</span>出站</button>
+      <button data-tab="nodes"><span class="ic">▣</span>VPS监控</button>
       <button data-tab="sub"><span class="ic">🔗</span>订阅</button>
       <button data-tab="fission"><span class="ic">✦</span>优选裂变</button>
     </nav>
@@ -270,7 +270,7 @@
       <div class="card">
         <h2>远程节点</h2>
         <p class="hint">面板通过 SSH 管理的远程节点；部署状态由面板实时读取。</p>
-        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>名称</th><th>地址</th><th>认证</th><th>连通</th><th>部署状态</th></tr></thead><tbody id="ovNodeBody"><tr><td colspan="5" class="muted">暂无节点，去「节点管理」添加。</td></tr></tbody></table></div>
+        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>名称</th><th>地址</th><th>认证</th><th>连通</th><th>部署状态</th></tr></thead><tbody id="ovNodeBody"><tr><td colspan="5" class="muted">暂无节点，去「SSH 部署」添加。</td></tr></tbody></table></div>
         <div class="btnrow"><button class="sm" id="btnGoNodes">管理节点</button></div>
       </div>
       <p class="hint" style="margin-top:10px;">部署方式：Argo 隧道（默认）或直连节点，可同时部署；仅安装已选协议。订阅统一拉取隧道节点与直连节点。</p>
@@ -717,10 +717,10 @@
       </div>
     </div>
 
-    <!-- 节点管理 -->
+    <!-- VPS监控 -->
     <div id="tab-nodes" class="hidden">
       <div class="card">
-        <h2>节点管理</h2>
+        <h2>VPS监控</h2>
         <p class="hint">部署完成后的状态管理：查看本地与 SSH 端已部署节点的连接状态与部署状态；VPS 不需要了可以断连、删除。添加节点与部署请去「SSH 部署」。</p>
         <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>名称</th><th>地址</th><th>用户</th><th>认证</th><th>连通</th><th>部署状态</th><th>操作</th></tr></thead><tbody id="nodeBody"><tr><td colspan="7" class="muted">暂无节点，先去「SSH 部署」添加。</td></tr></tbody></table></div>
         <div id="nodeOut" class="status info"></div>
@@ -764,7 +764,7 @@
         </div>
         <div id="sshDoneWrap" class="hidden" style="margin-top:12px;">
           <h3 class="step-h">已完成部署记录</h3>
-          <p class="hint">只删这里的记录，不删节点本身、不清部署；节点仍在「节点管理」里。</p>
+          <p class="hint">只删这里的记录，不删节点本身、不清部署；节点仍在「VPS监控」里。</p>
           <div id="sshDoneList"></div>
         </div>
       </div>
@@ -1949,7 +1949,7 @@ $("btnTestAllOutbounds").onclick = async () => {
   } catch (e) { setOut($("outboundOut"), e.message, "err"); }
 };
 
-// ---- 节点管理 (SSH 远程部署 Phase 1) ----
+// ---- VPS监控 (SSH 远程部署 Phase 1) ----
 let nodes = [], sshLogTimers = {}, sshLogOffsets = {}, sshDone = [], sshChecked = new Set();
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c])); }
 function nodeDeployLabel(st) {
@@ -1958,7 +1958,7 @@ function nodeDeployLabel(st) {
 function renderOvNodes(list) {
   const body = $("ovNodeBody");
   if (!body) return;
-  if (!list || !list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">暂无节点，去「节点管理」添加。</td></tr>'; return; }
+  if (!list || !list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">暂无节点，去「SSH 部署」添加。</td></tr>'; return; }
   body.innerHTML = "";
   list.forEach(n => {
     const tr = document.createElement("tr");
