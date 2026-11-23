@@ -169,6 +169,9 @@ TUNNEL_PROTOCOL="${TUNNEL_PROTOCOL:-auto}"
 SUB_DOMAIN="${SUB_DOMAIN:-}"
 SUB_PORT="${SUB_PORT:-18080}"
 SUB_PATH="${SUB_PATH:-sub}"
+# 订阅地址里的固定名字 (路径名, 默认 nexus): 代替原来放在地址里的 UUID,
+# 固定不变; 节点 UUID 只留在订阅内容里的节点链接中。
+SUB_NAME="${SUB_NAME:-nexus}"
 # Direct mode (backup only — exposes the VPS real IP). One self-signed
 # cert is generated at $WORKDIR/direct/ and shared by the direct inbounds.
 ENABLE_DIRECT="${ENABLE_DIRECT:-false}"
@@ -395,6 +398,11 @@ _fw_sync() {
     if [ "$_nc" = "true" ] && _fw_is_domain "${DIRECT_DOMAIN:-}"; then
       _want+=("80/tcp|ACME 签发与续期")
     fi
+  fi
+  # 订阅服务: nexus-sub 部署在 SUB_PORT 上, 直连订阅从 VPS 的域名或 IP
+  # 上直接拉, 所以要公开该端口 (订阅路径只认固定名或 UUID, 见 sub-server.py)。
+  if [ -n "${SUB_DOMAIN:-}" ]; then
+    _want+=("$SUB_PORT/tcp|订阅服务")
   fi
   for _sp in "${_FW_SSH_PORTS[@]}"; do _fw_allow "$_sp/tcp" "SSH (面板连接，永久白名单)" "$_be"; done
   local _e _pp _lb _bare=()
@@ -1852,8 +1860,10 @@ if [ -n "$SUB_DOMAIN" ]; then
   # from this deploy command's variables — so ?addrs= live fission
   # works again without a Worker. No static files to serve, no
   # nginx root to misconfigure (v3.1's bug class is gone by design).
-  # Bound to 127.0.0.1 — public access is only via the tunnel route
-  # SUB_DOMAIN -> 127.0.0.1:SUB_PORT (see ROUTES.md).
+  # Bound to 0.0.0.0:$SUB_PORT — 直连订阅从 VPS 的域名或 IP 上直接拉,
+  # 所以订阅服务要能被公网访问。订阅路径只认固定名字或节点 UUID
+  # (口令不对 404); /config.json 与明文版 raw.txt/merged.txt 也只认
+  # 口令 (见 sub-server.py), 生成器页面本身不含敏感信息。
   # The server listens on SUB_PORT inside the container too.
   # 订阅生成器面板 (web/sub-generator.html): 跟着 nexus-sub 一起部署,
   # 打开 https://$SUB_DOMAIN/ 就是生成器, 上面原生订阅、中间优选域名
@@ -1868,8 +1878,8 @@ if [ -n "$SUB_DOMAIN" ]; then
       log "WARNING: web/sub-generator.html 缺失 — 生成器面板不可用, 订阅本身不受影响"
     fi
     docker run -d --name nexus-sub --restart unless-stopped \
-      -p 127.0.0.1:"$SUB_PORT":"$SUB_PORT" \
-      -e NODE_UUID="$NODE_UUID" -e NODE_PREFIX="$NODE_PREFIX" \
+      -p "$SUB_PORT":"$SUB_PORT" \
+      -e NODE_UUID="$NODE_UUID" -e SUB_NAME="$SUB_NAME" -e NODE_PREFIX="$NODE_PREFIX" \
       -e NODE_PREFIX_ARGO="$NODE_PREFIX_ARGO" -e NODE_PREFIX_DIRECT="$NODE_PREFIX_DIRECT" \
       -e XRAY_DOMAIN="$XRAY_DOMAIN" -e XRAY_CONFIGS="$XRAY_CONFIGS" \
       -e SINGBOX_DOMAIN="$SINGBOX_DOMAIN" -e SINGBOX_CONFIGS="$SINGBOX_CONFIGS" \
@@ -1968,6 +1978,17 @@ if command -v curl >/dev/null 2>&1; then
         log "nexus-sub ?addrs= live fission OK ($_merged_n links for 2 addrs)"
       fi
     fi
+    # 直连订阅: 固定名 + ?only=direct, 有直连节点时必须返回直连节点数
+    if [ "$fail" = "0" ] && [ "${_direct_n:-0}" -gt 0 ]; then
+      _direct_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_NAME/$SUB_PATH/raw?only=direct" 2>/dev/null || true)"
+      _direct_live=$(printf '%s' "$_direct_body" | base64 -d 2>/dev/null | grep -c '://' || true)
+      if [ "$_direct_live" != "$_direct_n" ]; then
+        echo "[nexus-argo] ERROR: nexus-sub direct subscription check failed — expected $_direct_n direct links, got ${_direct_live:-0} — check: docker logs nexus-sub"
+        fail=1
+      else
+        log "nexus-sub direct subscription OK ($_direct_live direct links, Reality included)"
+      fi
+    fi
     # 生成器面板: 只有文件在时才要求 / 返回生成器; 文件缺失是
     # 可选功能未装, 只警告、不让健康检查失败 (2026-11-19 教训)。
     if [ "$fail" = "0" ]; then
@@ -1997,8 +2018,11 @@ fi
 # ---- subscription summary: print the links so the deployer can see/copy them ----
 # Native links are in $WORKDIR/sub/raw.txt (1 protocol = 1 node, address = tunnel domain).
 # Dynamic links are in $WORKDIR/sub/merged.txt (native x preferred addresses).
-# The panel serves them locally at /sub/raw/<uuid> and /sub/merged/<uuid>
-# (panel is bound to 127.0.0.1:8080 only — access via ssh -L 8080:127.0.0.1:8080).
+# The subscription is served locally at /<name>/sub/raw|merged
+# (nexus-sub on 127.0.0.1:$SUB_PORT, fixed name $SUB_NAME instead of
+# the node UUID; ?only=argo = tunnel nodes, ?only=direct = direct
+# nodes incl. Reality). The Direct subscription is also served
+# publicly on $SUB_PORT from the VPS domain/IP.
 # v3.2: the public link is the subscription-only service — no Worker
 # needed. Put this URL straight into the client; it serves base64,
 # same as the Worker used to. Changing preferred addresses NO LONGER
@@ -2018,23 +2042,29 @@ sep
 echo "原生订阅文件: $WORKDIR/sub/raw.txt ($_native_n 条节点)"
 echo "动态订阅文件: $WORKDIR/sub/merged.txt ($_merged_n 条节点)"
 echo ""
-echo "${C_BOLD}面板本地订阅${C_RESET} (需 SSH 端口转发 ssh -L 8080:127.0.0.1:8080, 本地路径固定是 /sub/):"
-echo "  原生: http://127.0.0.1:8080/sub/raw/$NODE_UUID"
-echo "  动态: http://127.0.0.1:8080/sub/merged/$NODE_UUID"
+echo "${C_BOLD}本地订阅${C_RESET} (本机 127.0.0.1:$SUB_PORT, 固定名 $SUB_NAME):"
+echo "  原生: http://127.0.0.1:$SUB_PORT/$SUB_NAME/$SUB_PATH/raw"
+echo "  动态: http://127.0.0.1:$SUB_PORT/$SUB_NAME/$SUB_PATH/merged"
 if [ -n "${SUB_DOMAIN:-}" ]; then
   echo ""
   echo "${C_BOLD}订阅生成器面板${C_RESET} (打开就是, 上面原生订阅、下面优选IP裂变):"
   echo "  ${C_GREEN}https://$SUB_DOMAIN/${C_RESET}"
-  echo "${C_BOLD}订阅 (公网, 直接加到客户端, 不用 Worker):${C_RESET}"
-  echo "  原生: ${C_GREEN}https://$SUB_DOMAIN/$SUB_PATH/raw/$NODE_UUID${C_RESET}"
-  echo "  动态: ${C_GREEN}https://$SUB_DOMAIN/$SUB_PATH/merged/$NODE_UUID${C_RESET}"
-  echo "  换优选地址不用重部署, 直接改 URL: https://$SUB_DOMAIN/$SUB_PATH/merged/$NODE_UUID?addrs=cf.xreak.top,cf.3666888.xyz"
+  echo "${C_BOLD}Argo 订阅 (隧道节点, 面板里也有, 直接加到客户端):${C_RESET}"
+  echo "  原生: ${C_GREEN}https://$SUB_DOMAIN/$SUB_NAME/$SUB_PATH/raw?only=argo${C_RESET}"
+  echo "  动态: ${C_GREEN}https://$SUB_DOMAIN/$SUB_NAME/$SUB_PATH/merged?only=argo${C_RESET}"
+  echo "  换优选地址不用重部署, 直接改 URL: https://$SUB_DOMAIN/$SUB_NAME/$SUB_PATH/merged?only=argo&addrs=cf.xreak.top,cf.3666888.xyz"
   echo "  ${C_YELLOW}⚠ Zero Trust 里要有一条路由: $SUB_DOMAIN -> http://127.0.0.1:$SUB_PORT, 见 $WORKDIR/ROUTES.md${C_RESET}"
 else
   echo ""
-  echo "${C_YELLOW}⚠ 订阅 (公网): 未设置 SUB_DOMAIN, 只有面板本地订阅可用${C_RESET}"
+  echo "${C_YELLOW}⚠ 订阅 (公网): 未设置 SUB_DOMAIN, 只有本地订阅可用${C_RESET}"
   echo "  如需公网订阅, 重新部署时加上 SUB_DOMAIN=<订阅子域名> SUB_PORT=18080"
   echo "  例如: SUB_DOMAIN=sub.ahstshu.eu.cc"
+fi
+if is_true "$ENABLE_DIRECT"; then
+  echo ""
+  echo "${C_BOLD}直连订阅 (直连节点, 含 Reality, 从 VPS 直接拉):${C_RESET}"
+  _dhost="${DIRECT_DOMAIN:-}"; [ -z "$_dhost" ] && _dhost="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  echo "  ${C_GREEN}http://$_dhost:$SUB_PORT/$SUB_NAME/$SUB_PATH/raw?only=direct${C_RESET}"
 fi
 if is_true "$ENABLE_DIRECT"; then
   echo ""
