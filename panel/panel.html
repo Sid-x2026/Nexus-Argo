@@ -81,7 +81,7 @@
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
   .proto-wrap .row2 { grid-template-columns: 0.9fr 1.1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) 120px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
   .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
-  #directFields .proto-wrap { grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); gap: 12px; }
+  #directFields .proto-wrap { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); gap: 12px; }
   @media (max-width: 900px) { #directFields .proto-wrap { grid-template-columns: 1fr; } .reality-cols { grid-template-columns: 1fr; } }
 
   .direct-cols { grid-template-columns: minmax(200px, 1.2fr) minmax(170px, 1fr) minmax(170px, 1fr) !important; gap: 8px !important; }
@@ -362,11 +362,20 @@
         <div id="directFields" class="mode-box direct hidden">
           <h4>直连安全配置 <span class="warn-inline">直连将暴露 VPS 真实 IP，仅作备用；须与隧道节点使用不同子域名。</span></h4>
           <div class="proto-wrap">
+            <div class="sec-card direct">
+              <h4>直连域名与前缀</h4>
+              <label class="f">直连地址 address <span class="opt">选填</span></label>
+              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP">
+              <p class="hint">留空用 VPS 公网 IP；ACME 须填域名并解析至 VPS IP（DNS only）。</p>
+              <label class="f">直连 SNI <span class="opt">选填</span></label>
+              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同">
+              <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
+            </div>
             <div style="display:flex; flex-direction:column; gap:12px; min-width:0;">
             <div class="sec-card direct">
               <h4>直连订阅</h4>
               <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
-                <div style="flex:1 1 260px; min-width:0;">
+                <div style="flex:1 1 260px; min-width:0; max-width:360px;">
                   <label class="f">订阅地址 <span class="opt">选填</span></label>
                   <input type="text" id="directSubHost" class="mono" placeholder="例如 hkzl.sidns.xyz 或 45.124.64.56" style="width:100%;">
                   <p class="hint">直连订阅从这台 VPS 的域名或 IP 上拉；端口在右侧订阅端口里填。Reality 节点也走直连订阅。</p>
@@ -409,15 +418,6 @@
               </div>
               <p id="certNotNeeded" class="hint">当前选中的协议不需要证书，无需配置。</p>
             </div>
-            </div>
-            <div class="sec-card direct">
-              <h4>直连域名与前缀</h4>
-              <label class="f">直连地址 address <span class="opt">选填</span></label>
-              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP">
-              <p class="hint">留空用 VPS 公网 IP；ACME 须填域名并解析至 VPS IP（DNS only）。</p>
-              <label class="f">直连 SNI <span class="opt">选填</span></label>
-              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同">
-              <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
             </div>
           </div>
           </div>
@@ -489,34 +489,37 @@
           <div style="margin-top:10px; border-top:1px solid #c7d2fe; padding-top:10px;">
             <div>
               <label class="pill"><input type="checkbox" id="subPanelEnabled" checked> 面板订阅</label>
+              <div style="display:flex; gap:12px; margin-top:6px; flex-wrap:wrap;">
+                <div style="flex:1 1 110px; min-width:0;">
+                  <label class="f">订阅名称 <span class="opt">选填</span></label>
+                  <input type="text" id="subName" value="nexus" class="mono" style="width:100%;">
+                </div>
+                <div style="flex:1 1 110px; min-width:0;">
+                  <label class="f">订阅路径 <span class="opt">选填</span></label>
+                  <input type="text" id="subPath" value="sub" class="mono" style="width:100%;">
+                </div>
+                <div style="flex:none; width:120px;">
+                  <label class="f">Argo 前缀 <span class="opt">选填</span></label>
+                  <input type="text" id="argoPrefix" value="Argo" style="width:100px;">
+                </div>
+              </div>
+              <p class="hint">订阅地址 = 面板地址 + 订阅名称 + 订阅路径；订阅名称默认 nexus，改成只有你知道的字符串更安全，改后旧订阅地址失效。Argo 前缀是隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。</p>
               <div id="argoSubPreview" class="hidden" style="margin-top:6px;">
                 <div class="addr-row"><div class="addr" id="argoSubPreviewAddr"></div><button class="sm" id="btnCopyArgoPreview" type="button">复制</button></div>
-                <p class="hint">前面是 Argo 面板地址，后缀是 Argo 订阅卡里的订阅名称与订阅路径，改了实时更新。</p>
+                <p class="hint">前面是 Argo 面板地址，后缀是上面的订阅名称与订阅路径，改了实时更新。</p>
               </div>
             </div>
             <div style="margin-top:8px;">
               <label class="pill"><input type="checkbox" id="subIpEnabled" checked> IP域名订阅</label>
               <div id="ipSubPreview" class="hidden" style="margin-top:6px;">
                 <div class="addr-row"><div class="addr" id="ipSubPreviewAddr"></div><button class="sm" id="btnCopyIpPreview" type="button">复制</button></div>
-                <p class="hint">从直连 VPS 的域名或 IP 上拉，端口见直连订阅卡的订阅端口。</p>
+                <p class="hint">从直连 VPS 的域名或 IP 上拉，端口见直连订阅卡的订阅端口；订阅名称与路径共用上面那一组。</p>
               </div>
             </div>
             <p class="hint">两个开关可同时开。面板订阅须先配置 ARGO 面板。</p>
             <p id="subPreviewHint" class="hint hidden">未开启任何订阅，或订阅地址未填。</p>
             <span id="subPreviewOut" class="hint"></span>
           </div>
-          </div>
-          <div class="sec-card tunnel">
-            <h4>Argo 订阅</h4>
-            <label class="f">订阅路径 <span class="opt">选填</span></label>
-            <input type="text" id="subPath" value="sub" class="mono">
-            <p class="hint">Argo 订阅地址：面板地址 + 订阅名称 + 该路径；隧道节点走这个订阅，裂变后也在里面。</p>
-            <label class="f">订阅名称（路径名） <span class="opt">选填</span></label>
-            <input type="text" id="subName" value="nexus" class="mono">
-            <p class="hint">订阅地址里固定的一段名字，代替原来的 UUID；默认 nexus，不用改。改成只有你知道的字符串更安全，改后旧订阅地址失效。</p>
-            <label class="f">Argo 前缀 <span class="opt">选填</span></label>
-            <input type="text" id="argoPrefix" value="Argo">
-            <p class="hint">隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。</p>
           </div>
           </div>
         </div>
