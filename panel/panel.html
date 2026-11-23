@@ -223,6 +223,7 @@
     <nav class="sidebar" aria-label="面板导航">
       <button data-tab="overview" class="on"><span class="ic">◈</span>总览</button>
       <button data-tab="deploy"><span class="ic">⬆</span>部署</button>
+      <button data-tab="nodes"><span class="ic">▣</span>节点管理</button>
       <button data-tab="routes"><span class="ic">↗</span>路由</button>
       <button data-tab="outbound"><span class="ic">⇄</span>出站</button>
       <button data-tab="sub"><span class="ic">🔗</span>订阅</button>
@@ -264,6 +265,12 @@
           <button id="btnRefresh">刷新状态</button><span id="lastRefresh" class="muted" style="margin-left:8px;"></span>
         </div>
         <div id="ovOut" class="status info"></div>
+      </div>
+      <div class="card">
+        <h2>远程节点</h2>
+        <p class="hint">面板通过 SSH 管理的远程节点；部署状态由面板实时读取。</p>
+        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>名称</th><th>地址</th><th>认证</th><th>连通</th><th>部署状态</th></tr></thead><tbody id="ovNodeBody"><tr><td colspan="5" class="muted">暂无节点，去「节点管理」添加。</td></tr></tbody></table></div>
+        <div class="btnrow"><button class="sm" id="btnGoNodes">管理节点</button></div>
       </div>
       <p class="hint" style="margin-top:10px;">部署方式：Argo 隧道（默认）或直连节点，可同时部署；仅安装已选协议。订阅统一拉取隧道节点与直连节点。</p>
     </div>
@@ -711,6 +718,44 @@
       </div>
     </div>
 
+    <!-- 节点管理 -->
+    <div id="tab-nodes" class="hidden">
+      <div class="card">
+        <h2>节点管理</h2>
+        <p class="hint">面板通过 SSH 管理远程节点：先添加节点，再用密码接入一次（面板把自己的公钥写入节点，之后一直用密钥连接，密码不保存），然后就可以一键远程部署。</p>
+        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>名称</th><th>地址</th><th>用户</th><th>认证</th><th>连通</th><th>部署状态</th><th>操作</th></tr></thead><tbody id="nodeBody"><tr><td colspan="7" class="muted">暂无节点，先在下方添加。</td></tr></tbody></table></div>
+        <div id="nodeOut" class="status info"></div>
+        <h3 class="step-h">添加节点</h3>
+        <div class="row2">
+          <div><label class="f">节点名称 <span class="req">* 必填</span></label><input type="text" id="ndName" placeholder="例如 香港"></div>
+          <div><label class="f">地址（IP 或域名） <span class="req">* 必填</span></label><input type="text" id="ndHost" class="mono" placeholder="例如 45.124.64.56"></div>
+        </div>
+        <div class="row2">
+          <div><label class="f">SSH 端口</label><input type="number" id="ndPort" value="22" min="1" max="65535"></div>
+          <div><label class="f">SSH 用户</label><input type="text" id="ndUser" value="root"></div>
+        </div>
+        <div><label class="f">接入方式</label><select id="ndAuth" style="max-width:420px;"><option value="key">密钥（已把面板公钥加到节点上）</option><option value="password">密码接入（只用一次，面板自动写入公钥）</option></select></div>
+        <p class="hint">选「密码接入」时，添加后会弹出密码框：密码只用一次，面板用它连进节点、把自己的公钥写进去，之后一直用密钥连接，密码不保存。</p>
+        <div class="btnrow"><button id="btnAddNode">添加节点</button></div>
+        <div id="bootstrapBox" class="hidden" style="margin-top:12px;">
+          <h3 class="step-h">密码接入 <span id="bsNodeName" class="muted"></span></h3>
+          <p class="hint">密码只在首次接入时用一次：面板用它连进节点、把自己的公钥写进去，之后一直用密钥连接，密码不保存。</p>
+          <div style="display:flex; gap:8px; align-items:center;"><input type="password" id="bsPass" autocomplete="off" placeholder="节点 SSH 密码" style="max-width:300px;"><button class="sm" id="btnBootstrapGo" type="button">确认接入</button><button class="sm ghost" id="btnBootstrapCancel" type="button">取消</button></div>
+          <div id="bsOut" class="status info"></div>
+        </div>
+        <h3 class="step-h">面板公钥</h3>
+        <p class="hint">选「密钥」接入时，把下面这段公钥追加到节点的 ~/.ssh/authorized_keys（每行一个），再放行 SSH 端口。</p>
+        <div style="display:flex; gap:8px; align-items:flex-start;"><textarea id="panelPubkey" class="mono" rows="2" readonly placeholder="加载中…" style="max-width:none; flex:1;"></textarea><button class="sm ghost" id="btnCopyPubkey" type="button" style="flex:none;">复制</button></div>
+        <div id="nodeLogWrap" class="hidden" style="margin-top:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:700;">节点部署日志 <span id="nodeLogTitle" class="muted"></span></span><span id="nodeDeployState" class="muted"></span>
+          </div>
+          <div style="display:flex; justify-content:flex-end; margin-top:4px;"><button class="sm ghost" id="btnCloseNodeLog" type="button">关闭</button></div>
+          <div class="log" id="nodeDeployLog"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- 优选裂变（占位） -->
     <div id="tab-fission" class="hidden">
       <div class="card">
@@ -766,18 +811,20 @@ function showApp() {
   Promise.allSettled([loadStatus(), loadConfig(), loadSubscription(), loadCert(), loadRealityKeys()]);
   statusTimer = setInterval(() => { if (authed) loadStatus(); }, 15000);
 }
-function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) clearInterval(statusTimer); logTimer = statusTimer = null; }
+function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) clearInterval(statusTimer); if (nodeLogTimer) clearInterval(nodeLogTimer); logTimer = statusTimer = nodeLogTimer = null; }
 
 function switchTab(name) {
   document.querySelectorAll(".sidebar button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
-  ["overview", "deploy", "sub", "outbound", "routes", "fission"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
+  ["overview", "deploy", "nodes", "sub", "outbound", "routes", "fission"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
   if (name === "sub") loadSubscription();
   if (name === "overview") loadStatus();
   if (name === "outbound") loadOutbounds();
   if (name === "routes") loadRoutes();
+  if (name === "nodes") loadNodes();
 }
 document.querySelectorAll(".sidebar button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 $("btnGoDeploy").onclick = () => switchTab("deploy");
+$("btnGoNodes").onclick = () => switchTab("nodes");
 $("btnCopyOvAuto").onclick = () => copyAddr("ovSubAuto", "ovOut");
 $("btnCopyOvV2ray").onclick = () => copyAddr("ovSubV2ray", "ovOut");
 $("btnCopyOvSingbox").onclick = () => copyAddr("ovSubSingbox", "ovOut");
@@ -826,6 +873,7 @@ async function loadStatus() {
     const ds = {idle: "未部署", running: "部署中…", ok: "已部署", failed: "部署失败"}[s.deploy_state] || s.deploy_state;
     $("nDeploy").textContent = ds;
     $("lastRefresh").textContent = "上次刷新 " + new Date().toLocaleTimeString();
+    renderOvNodes(s.remote_nodes);
     if (s.panel_port) { panelPort = s.panel_port; checkPortConflicts(); }
     // 面板仅支持一次部署: 任一节点容器存在即视为已部署, 禁用开始部署
     const NODE_CONTAINERS = ["nexus-xray", "nexus-singbox", "nexus-sb-dispatch", "nexus-argo", "nexus-sub", "nexus-web-panel"];
@@ -1828,6 +1876,163 @@ $("btnTestAllOutbounds").onclick = async () => {
     renderOutbounds();
     setOut($("outboundOut"), "测试完成", "ok");
   } catch (e) { setOut($("outboundOut"), e.message, "err"); }
+};
+
+// ---- 节点管理 (SSH 远程部署 Phase 1) ----
+let nodes = [], nodeLogTimer = null, nodeLogOffset = 0, nodeLogId = null;
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c])); }
+function nodeDeployLabel(st) {
+  return {idle: "未部署", running: "部署中…", ok: "已部署", failed: "部署失败"}[st] || st || "—";
+}
+function renderOvNodes(list) {
+  const body = $("ovNodeBody");
+  if (!body) return;
+  if (!list || !list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">暂无节点，去「节点管理」添加。</td></tr>'; return; }
+  body.innerHTML = "";
+  list.forEach(n => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + esc(n.name) + "</td><td class='mono'>" + esc(n.host) + ":" + (n.ssh_port || 22) + "</td><td>" + (n.auth === "key" ? "密钥" : "密码接入") + "</td><td>" + esc(n.status || "—") + "</td><td>" + nodeDeployLabel((n.deploy || {}).state) + "</td>";
+    body.appendChild(tr);
+  });
+}
+function renderNodes() {
+  const body = $("nodeBody");
+  body.innerHTML = "";
+  if (!nodes.length) { body.innerHTML = '<tr><td colspan="7" class="muted">暂无节点，先在下方添加。</td></tr>'; return; }
+  nodes.forEach(n => {
+    const tr = document.createElement("tr");
+    const dep = n.deploy || {};
+    let ops = "<button type='button' class='sm' data-act='deploy'>部署</button> <button type='button' class='sm ghost' data-act='log'>日志</button> <button type='button' class='sm ghost' data-act='test'>测试连接</button> ";
+    if (n.auth === "password") ops += "<button type='button' class='sm' data-act='bootstrap'>密码接入</button> ";
+    ops += "<button type='button' class='sm ghost' data-act='del'>删除</button>";
+    tr.innerHTML = "<td>" + esc(n.name) + "</td><td class='mono'>" + esc(n.host) + ":" + (n.ssh_port || 22) + "</td><td>" + esc(n.ssh_user || "") + "</td><td>" + (n.auth === "key" ? "密钥" : "密码接入") + "</td><td>" + esc(n.status || "—") + "</td><td>" + nodeDeployLabel(dep.state) + "</td><td>" + ops + "</td>";
+    tr.querySelectorAll("button").forEach(b => b.onclick = () => nodeAction(n, b.dataset.act));
+    body.appendChild(tr);
+  });
+}
+async function loadNodes() {
+  try {
+    const r = await api("/api/nodes");
+    nodes = r.nodes || [];
+    renderNodes();
+    try {
+      const k = await api("/api/nodes/pubkey");
+      $("panelPubkey").value = k.public_key || "";
+    } catch (e) { $("panelPubkey").value = ""; $("panelPubkey").placeholder = "公钥加载失败：" + e.message; }
+  } catch (e) { setOut($("nodeOut"), e.message, "err"); }
+}
+async function nodeAction(n, act) {
+  if (act === "test") {
+    setOut($("nodeOut"), "正在测试 " + n.name + " 的 SSH 连通…", "info");
+    try {
+      const r = await api("/api/nodes/" + n.id + "/test", {method: "POST"});
+      setOut($("nodeOut"), n.name + "：" + r.status, r.ok ? "ok" : "err");
+      loadNodes();
+    } catch (e) { setOut($("nodeOut"), e.message, "err"); }
+  } else if (act === "del") {
+    if (!(await showConfirm("确定删除节点「" + n.name + "」吗？只删面板里的记录，不动节点上的机器。已写入节点的面板公钥如需收回，请去节点上删掉。"))) return;
+    try {
+      await api("/api/nodes/" + n.id, {method: "DELETE"});
+      setOut($("nodeOut"), "节点「" + n.name + "」已删除", "ok");
+      loadNodes();
+    } catch (e) { setOut($("nodeOut"), e.message, "err"); }
+  } else if (act === "bootstrap") {
+    showBootstrapBox(n);
+  } else if (act === "log") {
+    showNodeLog(n.id, n.name);
+  } else if (act === "deploy") {
+    deployNode(n);
+  }
+}
+function showBootstrapBox(n) {
+  $("bootstrapBox").classList.remove("hidden");
+  $("bsNodeName").textContent = "— 节点「" + n.name + "」";
+  $("bsPass").value = "";
+  setOut($("bsOut"), "", "info");
+  $("bootstrapBox").dataset.nodeId = n.id;
+  $("bsPass").focus();
+}
+$("btnBootstrapCancel").onclick = () => { $("bootstrapBox").classList.add("hidden"); $("bsPass").value = ""; };
+$("btnBootstrapGo").onclick = async () => {
+  const id = $("bootstrapBox").dataset.nodeId;
+  const pw = $("bsPass").value;
+  $("bsPass").value = "";
+  if (!pw) { setOut($("bsOut"), "请填写 SSH 密码", "err"); return; }
+  setOut($("bsOut"), "正在接入…", "info");
+  try {
+    const r = await api("/api/nodes/" + id + "/bootstrap", {method: "POST", body: JSON.stringify({password: pw})});
+    setOut($("bsOut"), r.message || "接入完成", "ok");
+    $("bootstrapBox").classList.add("hidden");
+    loadNodes();
+  } catch (e) { setOut($("bsOut"), e.message, "err"); }
+};
+$("btnAddNode").onclick = async () => {
+  const name = $("ndName").value.trim(), host = $("ndHost").value.trim();
+  const port = parseInt($("ndPort").value, 10) || 22;
+  const user = $("ndUser").value.trim() || "root";
+  const auth = $("ndAuth").value;
+  if (!name || !host) { setOut($("nodeOut"), "请填写节点名称和地址", "err"); return; }
+  setOut($("nodeOut"), "正在添加节点…", "info");
+  try {
+    const r = await api("/api/nodes", {method: "POST", body: JSON.stringify({name: name, host: host, ssh_port: port, ssh_user: user, auth: auth})});
+    $("ndName").value = ""; $("ndHost").value = "";
+    setOut($("nodeOut"), "节点「" + name + "」已添加", "ok");
+    await loadNodes();
+    const added = (nodes || []).find(x => x.id === (r.node || {}).id);
+    if (added && added.auth === "password") showBootstrapBox(added);
+  } catch (e) { setOut($("nodeOut"), e.message, "err"); }
+};
+$("btnCopyPubkey").onclick = async () => {
+  const v = $("panelPubkey").value;
+  if (!v) { setOut($("nodeOut"), "公钥还没加载出来", "err"); return; }
+  try { await navigator.clipboard.writeText(v); setOut($("nodeOut"), "面板公钥已复制", "ok"); }
+  catch (e) { $("panelPubkey").select(); setOut($("nodeOut"), "已选中公钥，请按 Ctrl+C 复制", "info"); }
+};
+async function deployNode(n) {
+  const errs = validateDeploy();
+  if (errs.length) {
+    setOut($("deployOut"), "请先补全部署表单必填项：" + errs.map(e => e.name).join("、"), "err");
+    switchTab("deploy");
+    const first = errs[0].el;
+    if (first) first.scrollIntoView({block: "center", behavior: "smooth"});
+    return;
+  }
+  setOut($("nodeOut"), "正在启动远程部署…", "info");
+  try {
+    await api("/api/nodes/" + n.id + "/deploy", {method: "POST", body: JSON.stringify(collectConfig())});
+    setOut($("nodeOut"), "远程部署已开始，下方查看日志", "info");
+    showNodeLog(n.id, n.name);
+  } catch (e) { setOut($("nodeOut"), e.message, "err"); }
+}
+function showNodeLog(id, name) {
+  nodeLogId = id;
+  nodeLogOffset = 0;
+  $("nodeLogTitle").textContent = "— 节点「" + name + "」";
+  $("nodeDeployLog").textContent = "";
+  $("nodeLogWrap").classList.remove("hidden");
+  $("nodeDeployState").textContent = "部署中…";
+  if (nodeLogTimer) clearInterval(nodeLogTimer);
+  nodeLogTimer = setInterval(pollNodeLog, 2000);
+  pollNodeLog();
+}
+async function pollNodeLog() {
+  if (!nodeLogId) return;
+  try {
+    const s = await api("/api/nodes/" + nodeLogId + "/deploy/status");
+    $("nodeDeployState").textContent = nodeDeployLabel(s.state) + (s.message ? " — " + s.message : "");
+    const l = await api("/api/nodes/" + nodeLogId + "/deploy/log?offset=" + nodeLogOffset);
+    if (l.log) { $("nodeDeployLog").textContent += l.log; $("nodeDeployLog").scrollTop = $("nodeDeployLog").scrollHeight; }
+    nodeLogOffset = l.offset;
+    if (s.state === "ok" || s.state === "failed") {
+      clearInterval(nodeLogTimer); nodeLogTimer = null;
+      loadNodes();
+    }
+  } catch (e) { /* 隧道重启导致短暂断开时, 下次轮询自动恢复 */ }
+}
+$("btnCloseNodeLog").onclick = () => {
+  if (nodeLogTimer) clearInterval(nodeLogTimer);
+  nodeLogTimer = null; nodeLogId = null;
+  $("nodeLogWrap").classList.add("hidden");
 };
 
 // 进页面先试一次登录态, 已登录直接进, 否则显示登录

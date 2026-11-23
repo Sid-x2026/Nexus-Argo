@@ -42,6 +42,15 @@
 #   POST /api/outbounds          整表保存出站 (本版只存面板, 不接进核心渲染)
 #   POST /api/outbounds/test     全部测试 (测每条出站的延迟)
 #   POST /api/clear               清除本次部署 (节点容器 + 配置文件, 面板本身保留)
+#   GET  /api/nodes               节点列表 (含每节点部署状态)
+#   POST /api/nodes               添加节点 {name, host, ssh_port, ssh_user, auth}
+#   DELETE /api/nodes/<id>        删除节点 (部署中返回 409)
+#   GET  /api/nodes/pubkey        面板 SSH 公钥
+#   POST /api/nodes/<id>/test     测试 SSH 连通 (密钥方式)
+#   POST /api/nodes/<id>/bootstrap {password} 密码接入一次, 写入面板公钥后改密钥
+#   POST /api/nodes/<id>/deploy   远程部署 (与本地 /api/deploy 同形 body, 按节点 409)
+#   GET  /api/nodes/<id>/deploy/status  节点部署状态
+#   GET  /api/nodes/<id>/deploy/log?offset=N  节点部署日志增量
 #
 # 安全边界: 面板用账号密码登录 (默认 admin, 密码安装时随机生成,
 # 只存 salt+sha256); 部署是后台任务, 浏览器断开不影响; 部署时
@@ -55,8 +64,10 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -80,6 +91,14 @@ CONFIG_PATH = os.path.join(PANEL_DIR, "config.json")
 AUTH_PATH = os.path.join(PANEL_DIR, "auth.json")
 LOG_PATH = os.path.join(PANEL_DIR, "deploy.log")
 STATUS_PATH = os.path.join(PANEL_DIR, "deploy-status.json")
+NODES_PATH = os.path.join(PANEL_DIR, "nodes.json")
+SSH_DIR = os.path.join(PANEL_DIR, "ssh")
+SSH_KEY_PATH = os.path.join(SSH_DIR, "id_ed25519")
+SSH_PUB_PATH = SSH_KEY_PATH + ".pub"
+_NODE_INSTALL_SH = "/tmp/nexus-argo-install.sh"
+_NODE_LOG = "/tmp/nexus-install.log"
+_NODE_EXIT = "/tmp/nexus-install.exit"
+_NODE_POLL_MARKER = "__NEXUS_POLL_9f27__"
 
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 SUB_PATH_RE = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
@@ -427,6 +446,145 @@ def _save_json(path, data):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, path)
+
+
+def load_nodes():
+    """节点列表 (nodes.json), 损坏或缺失时返回 []。"""
+    data = _load_json(NODES_PATH, {})
+    nodes = data.get("nodes")
+    return nodes if isinstance(nodes, list) else []
+
+
+def _save_nodes(nodes):
+    _save_json(NODES_PATH, {"nodes": nodes})
+
+
+def _find_node(node_id):
+    for n in load_nodes():
+        if n.get("id") == node_id:
+            return n
+    return None
+
+
+def _node_log_path(node_id):
+    return os.path.join(PANEL_DIR, f"deploy-{node_id}.log")
+
+
+def _node_status_path(node_id):
+    return os.path.join(PANEL_DIR, f"deploy-status-{node_id}.json")
+
+
+def _node_deploy_status(node_id):
+    return _load_json(_node_status_path(node_id), {"state": "idle"})
+
+
+def _set_node_deploy_status(node_id, state, **extra):
+    st = {"state": state, "at": time.strftime("%Y-%m-%d %H:%M:%S")}
+    st.update(extra)
+    _save_json(_node_status_path(node_id), st)
+    return st
+
+
+def _ensure_panel_key():
+    """首次使用时生成面板 ed25519 密钥对。返回 (ok, error)。"""
+    try:
+        os.makedirs(SSH_DIR, exist_ok=True)
+        if os.path.isfile(SSH_KEY_PATH) and os.path.isfile(SSH_PUB_PATH):
+            return True, ""
+        if shutil.which("ssh-keygen") is None:
+            return False, "ssh-keygen 不可用, 请检查镜像是否装了 openssh-client"
+        r = subprocess.run(["ssh-keygen", "-t", "ed25519", "-N", "", "-f", SSH_KEY_PATH],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            return False, "生成面板密钥失败"
+        try:
+            os.chmod(SSH_KEY_PATH, 0o600)
+        except OSError:
+            pass
+        return True, ""
+    except Exception as e:
+        return False, f"生成面板密钥失败: {e}"
+
+
+def _panel_pubkey():
+    try:
+        with open(SSH_PUB_PATH, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _ssh_base_args(node):
+    return ["-i", SSH_KEY_PATH, "-p", str(node.get("ssh_port") or 22),
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
+
+
+def _ssh_target(node):
+    return f'{node.get("ssh_user") or "root"}@{node.get("host")}'
+
+
+def _ssh_cmd(node, cmd, timeout=30):
+    """ssh 到节点跑一条命令, 返回 (rc, out_bytes, err_bytes)。
+    rc == -1 表示本地超时/异常; 远端命令本身的退出码原样返回。"""
+    argv = ["ssh"] + _ssh_base_args(node) + [_ssh_target(node), cmd]
+    try:
+        r = subprocess.run(argv, capture_output=True, timeout=timeout)
+        return r.returncode, r.stdout, r.stderr
+    except subprocess.TimeoutExpired:
+        return -1, b"", "ssh 超时".encode()
+    except Exception as e:
+        return -1, b"", str(e).encode()
+
+
+def _scp_put(node, local_path, remote_path, timeout=60):
+    """scp 一个文件到节点, 返回 (rc, out_bytes, err_bytes)。"""
+    argv = ["scp", "-i", SSH_KEY_PATH, "-P", str(node.get("ssh_port") or 22),
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
+            local_path, f'{_ssh_target(node)}:{remote_path}']
+    try:
+        r = subprocess.run(argv, capture_output=True, timeout=timeout)
+        return r.returncode, r.stdout, r.stderr
+    except subprocess.TimeoutExpired:
+        return -1, b"", "scp 超时".encode()
+    except Exception as e:
+        return -1, b"", str(e).encode()
+
+
+def _sshpass_cmd(node, password, cmd, timeout=30):
+    """用密码连一次 (仅 bootstrap), 返回 (rc, out_bytes, err_bytes)。
+    密码只进 sshpass 参数, 不回显、不写日志。"""
+    argv = ["sshpass", "-p", password, "ssh", "-p", str(node.get("ssh_port") or 22),
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", "ConnectTimeout=10",
+            _ssh_target(node), cmd]
+    try:
+        r = subprocess.run(argv, capture_output=True, timeout=timeout)
+        return r.returncode, r.stdout, r.stderr
+    except subprocess.TimeoutExpired:
+        return -1, b"", "ssh 超时".encode()
+    except Exception as e:
+        return -1, b"", str(e).encode()
+
+
+def _sshpass_scp(node, password, local_path, remote_path, timeout=60):
+    argv = ["sshpass", "-p", password, "scp", "-P", str(node.get("ssh_port") or 22),
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", "ConnectTimeout=10",
+            local_path, f'{_ssh_target(node)}:{remote_path}']
+    try:
+        r = subprocess.run(argv, capture_output=True, timeout=timeout)
+        return r.returncode, r.stdout, r.stderr
+    except subprocess.TimeoutExpired:
+        return -1, b"", "scp 超时".encode()
+    except Exception as e:
+        return -1, b"", str(e).encode()
+
+
+def _ssh_test(node):
+    rc, _, _ = _ssh_cmd(node, "true", timeout=15)
+    return rc == 0
 
 
 def load_config():
@@ -1233,6 +1391,132 @@ def _deploy_worker(cfg):
         _deploy_thread = None
 
 
+_node_deploy_threads = {}  # node_id -> Thread
+_node_deploy_locks = {}    # node_id -> Lock
+_node_deploy_locks_guard = threading.Lock()
+
+
+def _node_lock(node_id):
+    with _node_deploy_locks_guard:
+        return _node_deploy_locks.setdefault(node_id, threading.Lock())
+
+
+def _node_log_append(node_id, data):
+    """往节点部署日志追加 bytes (远端拉回来的原文, 不做编解码, 偏移才对得上)。"""
+    try:
+        with open(_node_log_path(node_id), "ab") as f:
+            f.write(data)
+    except OSError:
+        pass
+
+
+def _node_upload_cert(node, cfg):
+    """上传证书模式: 把证书传到远端 $WORKDIR/direct/ (install.sh 在远端读它)。
+    失败时抛 RuntimeError, 部署中止。临时文件用完即删。"""
+    pem = cfg.get("cert_pem") or ""
+    key = cfg.get("cert_key") or ""
+    tmpdir = tempfile.mkdtemp(prefix="nexus-cert-")
+    try:
+        pem_path = os.path.join(tmpdir, "cert.pem")
+        key_path = os.path.join(tmpdir, "key.pem")
+        for path, content in ((pem_path, pem), (key_path, key)):
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content if content.endswith("\n") else content + "\n")
+            os.chmod(path, 0o600)
+        for local, remote in ((pem_path, "/tmp/nexus-cert.pem"), (key_path, "/tmp/nexus-cert.key")):
+            rc, _, err = _scp_put(node, local, remote, timeout=60)
+            if rc != 0:
+                raise RuntimeError(f"传证书失败: {err.decode('utf-8', 'replace').strip() or 'scp 退出码 ' + str(rc)}")
+        rc, _, err = _ssh_cmd(node, "mkdir -p /opt/nexus-argo/direct && mv /tmp/nexus-cert.pem /opt/nexus-argo/direct/cert.pem && mv /tmp/nexus-cert.key /opt/nexus-argo/direct/key.pem && chmod 600 /opt/nexus-argo/direct/cert.pem /opt/nexus-argo/direct/key.pem", timeout=30)
+        if rc != 0:
+            raise RuntimeError(f"写远端证书失败: {err.decode('utf-8', 'replace').strip() or 'ssh 退出码 ' + str(rc)}")
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def _node_deploy_worker(node, cfg):
+    """远程部署: scp install.sh -> 后台 nohup 跑 -> 轮询日志与退出码。
+    状态与日志按节点 id 分开存, 与本地 _deploy_worker 同形状。"""
+    nid = node["id"]
+    started = time.time()
+    _set_node_deploy_status(nid, "running",
+                            started_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+                            host=node.get("host"), name=node.get("name") or "")
+    try:
+        with open(_node_log_path(nid), "wb") as f:
+            f.write(f"[nexus-panel] 开始远程部署到节点「{node.get('name') or ''}」({node.get('host')})\n".encode())
+    except OSError:
+        pass
+    code = -1
+    try:
+        rc, _, err = _scp_put(node, INSTALL_SH, _NODE_INSTALL_SH, timeout=120)
+        if rc != 0:
+            raise RuntimeError(f"传 install.sh 失败: {err.decode('utf-8', 'replace').strip() or 'scp 退出码 ' + str(rc)}")
+        _node_log_append(nid, "[nexus-panel] install.sh 已传到远端, 正在启动安装...\n".encode())
+        # 上传证书模式: install.sh 在远端读 $WORKDIR/direct/cert.pem,
+        # 面板先把证书传过去 (不传就回退自签名, 这里显式传, 行为与本地一致)。
+        if cfg.get("cert_mode") == "upload" and cfg.get("cert_pem") and cfg.get("cert_key"):
+            _node_upload_cert(node, cfg)
+        env = config_to_env(cfg)
+        env_str = " ".join(f"{k}={shlex.quote(str(v))}" for k, v in env.items())
+        launch = (f"{env_str} nohup bash -c 'bash {_NODE_INSTALL_SH}; echo $? > {_NODE_EXIT}' "
+                  f"> {_NODE_LOG} 2>&1 &")
+        rc, _, err = _ssh_cmd(node, launch, timeout=60)
+        if rc != 0:
+            raise RuntimeError(f"启动远程安装失败: {err.decode('utf-8', 'replace').strip() or 'ssh 退出码 ' + str(rc)}")
+        # 轮询: 一次 ssh 同时拉增量日志 + 看退出码文件。
+        # rc 只看 ssh 层: -1/255 是连接失败 (安装在远端后台继续跑, 下轮重试),
+        # 其它值是远端命令本身的退出码 (没出退出码文件时 test 返回 1, 正常)。
+        offset = 0
+        while True:
+            time.sleep(2)
+            if time.time() - started > 2 * 3600:
+                _node_log_append(nid, "[nexus-panel] 轮询超时 (2 小时), 停止等待\n".encode())
+                break
+            poll = (f"tail -c +{offset + 1} {_NODE_LOG} 2>/dev/null; "
+                    f"echo {_NODE_POLL_MARKER}; "
+                    f"test -f {_NODE_EXIT} && cat {_NODE_EXIT}")
+            rc, out, _ = _ssh_cmd(node, poll, timeout=30)
+            if rc == -1 or rc == 255:
+                _node_log_append(nid, "[nexus-panel] 轮询连接失败, 2 秒后重试 (安装在远端后台继续跑)\n".encode())
+                continue
+            marker = _NODE_POLL_MARKER.encode()
+            if marker not in out:
+                continue
+            new_bytes, _, tail = out.partition(marker)
+            if new_bytes:
+                _node_log_append(nid, new_bytes)
+                offset += len(new_bytes)
+            tail_s = tail.decode("utf-8", "replace").strip()
+            if tail_s:
+                try:
+                    code = int(tail_s.split()[0])
+                    break
+                except Exception:
+                    pass
+        # 退出码已出: 最后再拉一次, 避免漏掉安装收尾的日志
+        rc, out, _ = _ssh_cmd(node, f"tail -c +{offset + 1} {_NODE_LOG} 2>/dev/null", timeout=30)
+        if rc not in (-1, 255) and out:
+            _node_log_append(nid, out)
+    except RuntimeError as e:
+        code = -1
+        _node_log_append(nid, f"[nexus-panel] {e}\n".encode())
+    except Exception as e:
+        code = -1
+        _node_log_append(nid, f"[nexus-panel] 远程部署异常: {e}\n".encode())
+    elapsed = int(time.time() - started)
+    if code == 0:
+        _set_node_deploy_status(nid, "ok", exit_code=0, elapsed_s=elapsed,
+                                finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+                                message="远程部署完成, 健康检查通过")
+    else:
+        _set_node_deploy_status(nid, "failed", exit_code=code, elapsed_s=elapsed,
+                                finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+                                message=f"远程部署失败 (退出码 {code}), 看日志找原因")
+    with _node_lock(nid):
+        _node_deploy_threads.pop(nid, None)
+
+
 def _restart_sub(cfg):
     """改订阅路径后重启 nexus-sub 生效 (不用重部署, 几秒就好)。
     复刻 install.sh 里起 nexus-sub 的那条 docker run。"""
@@ -1530,11 +1814,17 @@ class Handler(BaseHTTPRequestHandler):
                     svc["state"] = _argo_tunnel_state()
             st = deploy_status()
             sub = subscription_urls(cfg, self.headers.get("Host"), self.headers.get("X-Forwarded-Proto"))
+            remote_nodes = []
+            for n in load_nodes():
+                _d = dict(n)
+                _d["deploy"] = _node_deploy_status(n["id"])
+                remote_nodes.append(_d)
             self._send_json({
                 "deployed": _is_deployed(),
                 "deploy_state": st.get("state", "idle"),
                 "services": services,
                 "nodes": {"native": sub["raw_count"], "dynamic": sub["merged_count"]},
+                "remote_nodes": remote_nodes,
                 "subscription": sub,
                 "public_ip": _public_ip(),
                 "panel_port": PANEL_PORT,
@@ -1597,6 +1887,62 @@ class Handler(BaseHTTPRequestHandler):
             if not self._need_auth():
                 return
             self._send_json({"routes": load_routes(), "settings": load_route_settings()})
+            return
+        if path == "/api/nodes":
+            if not self._need_auth():
+                return
+            out = []
+            for n in load_nodes():
+                d = dict(n)
+                d["deploy"] = _node_deploy_status(n["id"])
+                out.append(d)
+            self._send_json({"nodes": out})
+            return
+        if path == "/api/nodes/pubkey":
+            if not self._need_auth():
+                return
+            ok, err = _ensure_panel_key()
+            if not ok:
+                self._send_json({"error": err}, 500)
+                return
+            pub = _panel_pubkey()
+            if not pub:
+                self._send_json({"error": "读取面板公钥失败"}, 500)
+                return
+            self._send_json({"public_key": pub})
+            return
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)/deploy/status$", path)
+        if _m:
+            if not self._need_auth():
+                return
+            if not _find_node(_m.group(1)):
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            self._send_json(_node_deploy_status(_m.group(1)))
+            return
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)/deploy/log$", path)
+        if _m:
+            if not self._need_auth():
+                return
+            nid = _m.group(1)
+            if not _find_node(nid):
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            query = urllib.parse.parse_qs(url.query)
+            try:
+                offset = int((query.get("offset", ["0"])[0] or "0"))
+            except Exception:
+                offset = 0
+            try:
+                with open(_node_log_path(nid), "rb") as f:
+                    f.seek(0, os.SEEK_END)
+                    size = f.tell()
+                    offset = max(0, min(offset, size))
+                    f.seek(offset)
+                    data = f.read().decode("utf-8", "replace")
+            except OSError:
+                data, size = "", 0
+            self._send_json({"log": data, "offset": size, "state": _node_deploy_status(nid).get("state", "idle")})
             return
         self._send_json({"error": "未知路径"}, 404)
 
@@ -1932,7 +2278,161 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "message": "部署已清除, 配置还在, 可以一键重新部署"})
             return
 
+        if path == "/api/nodes":
+            name = str(body.get("name") or "").strip()
+            host = str(body.get("host") or "").strip()
+            try:
+                port = int(body.get("ssh_port") or 22)
+            except Exception:
+                port = 0
+            user = str(body.get("ssh_user") or "").strip() or "root"
+            auth = str(body.get("auth") or "key").strip().lower()
+            if not name:
+                self._send_json({"error": "请填写节点名称"}, 400)
+                return
+            if not host or (not _is_ipv4(host) and not _is_domain(host)):
+                self._send_json({"error": "节点地址须为 IP 或域名"}, 400)
+                return
+            if not 1 <= port <= 65535:
+                self._send_json({"error": "SSH 端口须为 1-65535"}, 400)
+                return
+            if auth not in ("key", "password"):
+                auth = "key"
+            node = {"id": secrets.token_hex(4), "name": name, "host": host,
+                    "ssh_port": port, "ssh_user": user, "auth": auth,
+                    "status": "未测试",
+                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+            nodes = load_nodes()
+            nodes.append(node)
+            _save_nodes(nodes)
+            self._send_json({"ok": True, "node": node})
+            return
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)/test$", path)
+        if _m:
+            node = _find_node(_m.group(1))
+            if not node:
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            if node.get("auth") == "password":
+                self._send_json({"error": "该节点尚未完成密钥接入, 请先用密码接入 (bootstrap)"}, 400)
+                return
+            ok, err = _ensure_panel_key()
+            if not ok:
+                self._send_json({"error": err}, 500)
+                return
+            alive = _ssh_test(node)
+            nodes = load_nodes()
+            for n in nodes:
+                if n["id"] == node["id"]:
+                    n["status"] = "在线" if alive else "离线"
+            _save_nodes(nodes)
+            self._send_json({"ok": alive, "status": "在线" if alive else "离线"})
+            return
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)/bootstrap$", path)
+        if _m:
+            node = _find_node(_m.group(1))
+            if not node:
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            password = str(body.get("password") or "")
+            if not password:
+                self._send_json({"error": "请填写 SSH 密码"}, 400)
+                return
+            ok, err = _ensure_panel_key()
+            if not ok:
+                self._send_json({"error": err}, 500)
+                return
+            pub = _panel_pubkey()
+            if not pub:
+                self._send_json({"error": "读取面板公钥失败"}, 500)
+                return
+            rc, _, err = _sshpass_scp(node, password, SSH_PUB_PATH, "/tmp/nexus-panel.pub", timeout=60)
+            if rc != 0:
+                self._send_json({"error": f"密码接入失败, 请检查密码与 SSH 端口是否正确 ({err.decode('utf-8', 'replace').strip() or 'scp 退出码 ' + str(rc)})"}, 500)
+                return
+            cmd = ("mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && "
+                   "{ grep -qxF \"$(cat /tmp/nexus-panel.pub)\" ~/.ssh/authorized_keys "
+                   "|| cat /tmp/nexus-panel.pub >> ~/.ssh/authorized_keys; } "
+                   "&& chmod 600 ~/.ssh/authorized_keys && rm -f /tmp/nexus-panel.pub")
+            rc, _, err = _sshpass_cmd(node, password, cmd, timeout=30)
+            if rc != 0:
+                self._send_json({"error": f"写入公钥失败 ({err.decode('utf-8', 'replace').strip() or 'ssh 退出码 ' + str(rc)})"}, 500)
+                return
+            if not _ssh_test(node):
+                self._send_json({"error": "公钥已写入, 但密钥登录测试失败, 请检查节点 SSH 配置"}, 500)
+                return
+            nodes = load_nodes()
+            for n in nodes:
+                if n["id"] == node["id"]:
+                    n["auth"] = "key"
+                    n["status"] = "在线"
+            _save_nodes(nodes)
+            self._send_json({"ok": True, "message": "密码接入完成, 以后用密钥连接, 密码已丢弃"})
+            return
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)/deploy$", path)
+        if _m:
+            node = _find_node(_m.group(1))
+            if not node:
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            cfg, errors = validate_config(body if body else load_config())
+            if errors:
+                self._send_json({"error": "；".join(errors)}, 400)
+                return
+            nid = node["id"]
+            lock = _node_lock(nid)
+            with lock:
+                th = _node_deploy_threads.get(nid)
+                if th is not None and th.is_alive():
+                    self._send_json({"error": "该节点已有部署在跑, 请等它完成"}, 409)
+                    return
+                if not os.path.isfile(INSTALL_SH):
+                    self._send_json({"error": "install.sh 不存在, 面板安装不完整"}, 500)
+                    return
+                # 直连 WS path 与 gRPC serviceName 每次部署重新随机生成 (与本地一致)
+                cfg["direct_ws_path"], cfg["direct_grpc_service"] = _gen_direct_paths()
+                _save_json(CONFIG_PATH, cfg)
+                ok, msg = _write_upload_cert(cfg)
+                if not ok:
+                    self._send_json({"error": msg}, 500)
+                    return
+                th = threading.Thread(target=_node_deploy_worker, args=(node, cfg), daemon=True)
+                _node_deploy_threads[nid] = th
+                th.start()
+            self._send_json({"ok": True, "message": "远程部署已开始, 看日志跟进"})
+            return
+
         self._send_json({"error": "未知路径"}, 404)
+
+    def do_DELETE(self):
+        url = urllib.parse.urlparse(self.path)
+        path = url.path
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)$", path)
+        if not _m:
+            self._send_json({"error": "未知路径"}, 404)
+            return
+        if not self._need_auth():
+            return
+        nid = _m.group(1)
+        lock = _node_lock(nid)
+        with lock:
+            th = _node_deploy_threads.get(nid)
+            if th is not None and th.is_alive():
+                self._send_json({"error": "该节点正在部署, 请等它完成再删除"}, 409)
+                return
+            nodes = load_nodes()
+            kept = [n for n in nodes if n.get("id") != nid]
+            if len(kept) == len(nodes):
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            _save_nodes(kept)
+            for p in (_node_status_path(nid), _node_log_path(nid)):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+        self._send_json({"ok": True, "message": "节点已删除"})
+        return
 
 
 def main():
