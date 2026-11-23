@@ -242,7 +242,7 @@
       </div>
       <div class="card">
         <h2>节点与订阅</h2>
-        <p class="hint">节点数来自本次部署生成的订阅文件；部署后刷新即可看到。</p>
+        <p class="hint">节点数来自本次部署生成的订阅文件；部署后刷新即可看到。上面五条是 Argo 订阅（五种客户端格式），直连订阅地址是直连节点（含 Reality），从直连 VPS 上拉。</p>
         <div class="row3">
           <div><div class="muted">原生节点</div><div class="num" id="nNative">—</div></div>
           <div><div class="muted">动态节点（原生 × 优选地址）</div><div class="num" id="nMerged">—</div></div>
@@ -260,6 +260,8 @@
           <div class="addr-row"><div class="addr empty" id="ovSubClash" data-hint="尚未部署">尚未部署</div><button class="sm" id="btnCopyOvClash">复制</button></div>
           <div class="addr-label">iOS 订阅地址</div>
           <div class="addr-row"><div class="addr empty" id="ovSubIos" data-hint="尚未部署">尚未部署</div><button class="sm" id="btnCopyOvIos">复制</button></div>
+          <div class="addr-label">直连订阅地址</div>
+          <div class="addr-row"><div class="addr empty" id="ovSubDirect" data-hint="未填直连订阅地址">未填直连订阅地址</div><button class="sm" id="btnCopyOvDirect">复制</button></div>
         </div>
         <div class="btnrow">
           <button id="btnGoDeploy">去部署</button>
@@ -391,6 +393,15 @@
               <p id="certNotNeeded" class="hint">当前选中的协议不需要证书，无需配置。</p>
             </div>
                         </div>
+          <div class="sec-card direct">
+            <h4>直连订阅</h4>
+            <label class="f">订阅地址 <span class="opt">选填</span></label>
+            <input type="text" id="directSubHost" class="mono" placeholder="例如 hkzl.sidns.xyz 或 45.124.64.56，可带端口">
+            <p class="hint">直连订阅从这台 VPS 的域名或 IP 上拉；填域名或 IP，可带端口（默认 18080）。Reality 节点也走直连订阅。</p>
+            <label class="f">直连前缀 <span class="opt">选填</span></label>
+            <input type="text" id="directPrefix" value="直连">
+            <p class="hint">直连节点在订阅里的名字前缀，例如：直连丨Xray-TLS。</p>
+          </div>
           </div>
         <div id="realitySection">
 <div id="realityCard" class="sec-card direct" style="width:100%;">
@@ -450,33 +461,23 @@
           <div class="sec-card tunnel">
           <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><div style="display:flex; gap:8px; align-items:center;"><textarea id="optAddrSingle" class="mono" rows="7">cloudflare.com</textarea><button class="ghost sm" id="btnOptAddr" type="button" style="flex:none;">使用优化地址</button></div><span id="optAddrOut" class="hint" style="margin:0;"></span><p class="hint">点「使用优化地址」自动测速，从优选域名池取延迟最低的 6 个填入，最多 6 个。测速前请先关闭代理（测本地直连延迟）。</p></div>
           </div>
+          <div class="sec-card tunnel">
+            <h4>Argo 订阅</h4>
+            <label class="f">订阅路径 <span class="opt">选填</span></label>
+            <input type="text" id="subPath" value="sub" class="mono">
+            <p class="hint">Argo 订阅地址：面板地址 + 订阅名称 + 该路径；隧道节点走这个订阅，裂变后也在里面。</p>
+            <label class="f">订阅名称（路径名） <span class="opt">选填</span></label>
+            <input type="text" id="subName" value="nexus" class="mono">
+            <p class="hint">订阅地址里固定的一段名字，代替原来的 UUID；默认 nexus，不用改。改成只有你知道的字符串更安全，改后旧订阅地址失效。</p>
+            <label class="f">Argo 前缀 <span class="opt">选填</span></label>
+            <input type="text" id="argoPrefix" value="Argo">
+            <p class="hint">隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。</p>
+          </div>
           </div>
         </div>
         <div id="portConflictOut" class="status"></div>
 
-        <h3 class="step-h">⑤ 节点与订阅</h3>
-        <div class="mode-box tunnel">
-        <div style="display:grid; grid-template-columns:minmax(0,0.75fr) minmax(0,1.25fr); gap:12px; align-items:stretch;">
-        <div class="sec-card tunnel" style="display:flex; flex-direction:column; justify-content:space-between;">
-        <label class="f">节点前缀 <span class="opt">选填</span></label>
-        <div class="row2 row-prefix">
-          <div><label class="f">Argo 前缀</label><input type="text" id="argoPrefix" value="Argo"></div>
-          <div><label class="f">直连前缀</label><input type="text" id="directPrefix" value="直连"></div>
-        </div>
-        <p class="hint">示例：Argo丨Xray丨xhttp_h2；直连丨Xray-TLS。</p>
-        </div>
-        <div class="sec-card tunnel">
-        <label class="f">订阅服务 <span class="opt">选填</span></label>
-        <p class="hint">订阅统一拉取隧道节点和直连节点，一个订阅里全有，由面板直接提供。</p>
-        <label class="f">订阅路径 <span class="opt">选填</span></label>
-        <div class="subtpl">
-          <span class="static" id="subTplScheme">https://</span><input type="text" id="subHost" class="mono" style="width:260px;max-width:260px;text-align:center" placeholder="面板域名或 IP:端口"><span class="static">/</span><span class="static mono" id="subTplUuid">UUID</span><span class="static">/</span><input type="text" id="subPath" value="sub" class="mono"><span class="static" id="subTplSuffix">/raw</span>
-        </div>
-        </div>
-        </div>
-        </div>
-
-        <h3 class="step-h">⑥ 开始部署</h3>
+        <h3 class="step-h">⑤ 开始部署</h3>
         <div class="mode-box tunnel">
         <div class="sec-card tunnel">
         <div class="sticky-deploy">
@@ -552,11 +553,13 @@
     <div id="tab-sub" class="hidden">
       <div class="card">
         <h2>订阅地址</h2>
-        <p class="hint">订阅统一拉取隧道节点和直连节点，一个订阅里全有。裂变请用订阅生成器或其它工具手动完成，本面板不做裂变。</p>
-        <div class="addr-label">原生订阅地址</div>
+        <p class="hint">Argo 订阅拉隧道节点，直连订阅拉直连节点（含 Reality）。裂变请用订阅生成器或其它工具手动完成，本面板不做裂变。</p>
+        <div class="addr-label">Argo 原生订阅地址</div>
         <div class="addr-row"><div class="addr empty" id="subRaw" data-hint="尚未部署">尚未部署</div><button class="sm" id="btnCopyRaw">复制</button></div>
-        <div class="addr-label">动态订阅地址（原生 × 优选地址）</div>
+        <div class="addr-label">Argo 动态订阅地址（原生 × 优选地址）</div>
         <div class="addr-row"><div class="addr empty" id="subMerged" data-hint="尚未部署">尚未部署</div><button class="sm" id="btnCopyMerged">复制</button></div>
+        <div class="addr-label">直连订阅地址</div>
+        <div class="addr-row"><div class="addr empty" id="subDirect" data-hint="未填直连订阅地址">未填直连订阅地址</div><button class="sm" id="btnCopyDirect">复制</button></div>
         <h3 style="margin-top:12px;">自定义订阅地址</h3>
         <p class="hint">改订阅路径（后缀），所有订阅地址实时更新。订阅服务正在运行时直接重启生效，不用重新部署。订阅路径只能是字母 / 数字 / . _ -（1–32 个字符），不能是 api / config.json / help.txt。</p>
         <div style="display:flex; gap:8px; max-width:420px;"><input type="text" id="subPathEdit" class="mono" value="sub"><button class="green sm" id="btnSaveSubPath">保存并生效</button></div>
@@ -846,6 +849,7 @@ $("btnCopyOvV2ray").onclick = () => copyAddr("ovSubV2ray", "ovOut");
 $("btnCopyOvSingbox").onclick = () => copyAddr("ovSubSingbox", "ovOut");
 $("btnCopyOvClash").onclick = () => copyAddr("ovSubClash", "ovOut");
 $("btnCopyOvIos").onclick = () => copyAddr("ovSubIos", "ovOut");
+$("btnCopyOvDirect").onclick = () => copyAddr("ovSubDirect", "ovOut");
 $("btnRefresh").onclick = () => loadStatus();
 $("btnLogout").onclick = async () => { try { await api("/api/logout", {method: "POST"}); } catch (e) {} showLogin(); };
 
@@ -880,11 +884,14 @@ async function loadStatus() {
     if (s.nodes) { $("nNative").textContent = s.nodes.native; $("nMerged").textContent = s.nodes.dynamic; }
     if (s.subscription) {
       const sub = s.subscription;
-      setAddr("ovSubAuto", sub.merged_url ? sub.merged_url + "?format=auto" : "", "尚未部署");
+      // Argo 订阅地址已带 ?only=argo, 格式参数用 & 追加
+      const withFmt = (u, f) => u ? u + (u.indexOf("?") >= 0 ? "&" : "?") + "format=" + f : "";
+      setAddr("ovSubAuto", withFmt(sub.merged_url, "auto"), "尚未部署");
       setAddr("ovSubV2ray", sub.raw_url || "", "尚未部署");
-      setAddr("ovSubSingbox", sub.merged_url ? sub.merged_url + "?format=singbox" : "", "尚未部署");
-      setAddr("ovSubClash", sub.merged_url ? sub.merged_url + "?format=clash" : "", "尚未部署");
-      setAddr("ovSubIos", sub.merged_url ? sub.merged_url + "?format=auto" : "", "尚未部署");
+      setAddr("ovSubSingbox", withFmt(sub.merged_url, "singbox"), "尚未部署");
+      setAddr("ovSubClash", withFmt(sub.merged_url, "clash"), "尚未部署");
+      setAddr("ovSubIos", withFmt(sub.merged_url, "auto"), "尚未部署");
+      setAddr("ovSubDirect", sub.direct_url || "", "未填直连订阅地址");
     }
     const ds = {idle: "未部署", running: "部署中…", ok: "已部署", failed: "部署失败"}[s.deploy_state] || s.deploy_state;
     $("nDeploy").textContent = ds;
@@ -965,17 +972,6 @@ function updateRealityFields() {
   card.classList.toggle("disabled", !enabled);
   card.querySelectorAll("input,select,textarea,button").forEach(el => { el.disabled = !enabled; });
 }
-function updateSubTpl() {
-  // 订阅地址前缀自动抓当前访问地址 (隧道域名 / IP:端口), 可手动改成自己的域名+端口
-  const sc = location.protocol === "http:" ? "http://" : "https://";
-  $("subTplScheme").textContent = sc;
-  const sh = $("subHost");
-  if (sh && !sh.value.trim()) sh.value = location.host;
-  const uuid = $("nodeUuid").value.trim() || "UUID";
-  const u = $("subTplUuid"); if (u) u.textContent = uuid;
-  const s = $("subTplSuffix"); if (s) s.textContent = "/raw";
-}
-
 function collectConfig() {
   const protos = (cls) => { const o = {}; document.querySelectorAll("." + cls).forEach(el => { if (el.checked) o[el.value] = parseInt($("port_" + el.value).value, 10) || 443; }); return o; };
   const dport = (id) => parseInt($(id + "_port").value, 10) || DIRECT_PORTS[id];
@@ -995,8 +991,12 @@ function collectConfig() {
     singbox_domain: $("sbDomain").value.trim(),
     singbox_protocols: protos("sp"),
     opt_addrs: ($("optAddrSingle").value || "cloudflare.com").split(/[,\n]+/).map(s => cleanOptAddr(s)).filter(Boolean).slice(0, 6),
-    sub_host: $("subHost").value.trim(),
+    // Argo 订阅地址主机由面板自动抓当前访问地址 (sub_host 为空即自动),
+    // 订阅路径与订阅名称在 Argo 配置里, 直连订阅地址在直连配置里。
+    sub_host: "",
     sub_path: $("subPath").value.trim() || "sub",
+    sub_name: $("subName").value.trim() || "nexus",
+    direct_sub_host: $("directSubHost").value.trim(),
     enable_direct: $("modeDirect").checked,
     direct_address: $("directAddress").value.trim(),
     direct_sni: $("directSni").value.trim(),
@@ -1041,8 +1041,9 @@ function fillConfig(c) {
   document.querySelectorAll(".xp").forEach(el => { el.checked = !!(c.xray_protocols && c.xray_protocols[el.value] != null); const p = $("port_" + el.value); if (p && c.xray_protocols && c.xray_protocols[el.value] != null) p.value = c.xray_protocols[el.value]; });
   document.querySelectorAll(".sp").forEach(el => { el.checked = !!(c.singbox_protocols && c.singbox_protocols[el.value] != null); const p = $("port_" + el.value); if (p && c.singbox_protocols && c.singbox_protocols[el.value] != null) p.value = c.singbox_protocols[el.value]; });
   $("optAddrSingle").value = ((c.opt_addrs || []).map(cleanOptAddr).filter(Boolean).join("\n") || "cloudflare.com");
-  $("subHost").value = c.sub_host || c.sub_domain || location.host;
   $("subPath").value = c.sub_path || "sub";
+  $("subName").value = c.sub_name || "nexus";
+  $("directSubHost").value = c.direct_sub_host || "";
   $("modeDirect").checked = !!c.enable_direct;
   $("directAddress").value = c.direct_address || c.direct_domain || "";
   $("directSni").value = c.direct_sni || "";
@@ -1079,7 +1080,6 @@ function fillConfig(c) {
   $("cert_pem").value = c.cert_pem || "";
   $("cert_key").value = c.cert_key || "";
   toggleMode();
-  updateSubTpl();
 }
 async function loadConfig() {
   try { fillConfig(await api("/api/config")); if (!directManual) applyClientSelection(); } catch (e) {}
@@ -1110,7 +1110,6 @@ $("btnGenUuid").onclick = () => {
   const u = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16); });
   $("nodeUuid").value = u;
   $("nodeUuid").classList.remove("field-err");
-  updateSubTpl();
 };
 // 第35步②：优选地址一键测速填入（第一期：浏览器测速 + 填入共享列表）
 // 优选地址只保留裸地址（域名或 IP）：去掉 :端口、#标注 与 |显示名
@@ -1171,9 +1170,7 @@ $("optAddrSingle").addEventListener("input", () => {
     const o = $("optAddrOut"); if (o) o.textContent = "最多 6 个优选地址";
   }
 });
-$("nodeUuid").addEventListener("input", updateSubTpl);
 $("directAddress").addEventListener("input", () => { const v = $("directAddress").value.trim(); if (v && !$("directSni").value.trim()) $("directSni").value = v; });
-$("subHost").addEventListener("input", updateSubTpl);
 // 输入变化即清除该字段的红框标记
 document.addEventListener("input", e => { if (e.target && e.target.classList) e.target.classList.remove("field-err"); });
 document.addEventListener("change", e => { if (e.target && e.target.classList) e.target.classList.remove("field-err"); });
@@ -1765,11 +1762,13 @@ async function copyAddr(id, outEl) {
 }
 $("btnCopyRaw").onclick = () => copyAddr("subRaw", "subOut");
 $("btnCopyMerged").onclick = () => copyAddr("subMerged", "subOut");
+$("btnCopyDirect").onclick = () => copyAddr("subDirect", "subOut");
 async function loadSubscription() {
   try {
     const s = await api("/api/subscription");
     setAddr("subRaw", s.raw_url, "尚未部署");
     setAddr("subMerged", s.merged_url, "尚未部署");
+    setAddr("subDirect", s.direct_url, "未填直连订阅地址");
     $("subPathEdit").value = s.sub_path || "sub";
   } catch (e) {}
 }

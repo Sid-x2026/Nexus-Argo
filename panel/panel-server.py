@@ -30,7 +30,9 @@
 #   GET  /api/deploy/log?offset=N 部署日志增量 (按字节偏移)
 #   GET  /api/subscription        订阅地址 + 自定义路径
 #   POST /api/subscription        {sub_path} 改订阅路径, 重启 nexus-sub 生效
-#   GET  /<uuid>/<sub_path>/raw|merged  面板订阅 (公开, 免登录):
+#   GET  /<name>/<sub_path>/raw|merged  面板订阅 (公开, 免登录):
+#        <name> 是订阅地址里的固定名 (默认 nexus, 旧的 UUID 也认),
+#        ?only=argo 隧道节点 / ?only=direct 直连节点 (含 Reality)
 #        面板收到后转发给本机 nexus-sub, 订阅不再需要单独的域名/端口/路由,
 #        地址就是面板自己的域名或 IP:端口 + UUID + 订阅路径。
 #   GET  /api/cert               证书状态 (是否已部署 / 颁发给谁 / 到期时间 / 续期方式)
@@ -166,6 +168,12 @@ DEFAULT_CONFIG = {
     "sub_domain": "sub.ahstshu.eu.cc",
     "sub_port": 18080,
     "sub_path": "sub",
+    # 订阅地址里的固定名字 (路径名, 默认 nexus): 代替原来放在地址里的 UUID,
+    # 固定不变; 节点 UUID 只留在订阅内容里的节点链接中。
+    "sub_name": "nexus",
+    # 直连订阅地址: 用户填的直连 VPS 域名或 IP, 可带端口 (默认 18080)。
+    # 直连订阅从这台 VPS 上直接拉, 不走面板; 为空则不显示直连订阅。
+    "direct_sub_host": "",
     "enable_direct": False,
     "direct_domain": "",
     "direct_address": "",
@@ -711,13 +719,16 @@ def validate_config(raw):
     cfg["singbox_port"] = _as_int(cfg.get("singbox_port"), 8002)
     cfg["sub_port"] = 18080  # 订阅服务内部端口, 不再由用户填, 面板代理到本机 nexus-sub
     # 订阅地址主机: 域名或 IP, 可带端口 (面板域名 / IP:面板端口); 为空则用请求时的 Host
-    _sh = str(cfg.get("sub_host") or cfg.get("sub_domain") or "").strip()
+    # (sub_host 为空不再回退到 sub_domain, 否则旧的 sub 域名会被复活成订阅地址)。
+    _sh = str(cfg.get("sub_host") or "").strip()
     _sh_host, _sh_port = _split_host_port(_sh) if _sh else ("", 443)
     if _sh and not (_is_domain(_sh_host) or _is_ipv4(_sh_host)):
         errors.append("订阅地址格式不正确, 请填域名或 IP, 可带端口")
         _sh_host, _sh_port = "", 443
     cfg["sub_host"] = f"{_sh_host}:{_sh_port}" if _sh_host and _sh_port != 443 else _sh_host
-    cfg["sub_domain"] = _sh_host
+    # sub_domain 不再从 sub_host 派生: 它只是 install.sh 起 nexus-sub 的开关,
+    # 保留已保存的值 (默认 sub.ahstshu.eu.cc)。
+    cfg["sub_domain"] = str(cfg.get("sub_domain") or "sub.ahstshu.eu.cc").strip()
     for name, label in (("xray_port", "Xray 回源端口"),
                         ("singbox_port", "Sing-box 回源端口"),
                         ("sub_port", "订阅端口")):
@@ -795,6 +806,20 @@ def validate_config(raw):
     cfg["sub_path"] = str(cfg.get("sub_path") or "sub").strip()
     if not SUB_PATH_RE.match(cfg["sub_path"]) or cfg["sub_path"] in RESERVED_SUB_PATH:
         errors.append("订阅路径只能是字母/数字/._- (1-32 个字符), 不能是 api / config.json / help.txt")
+    # 订阅名称 (路径名里的固定名字): 与订阅路径同一套字符规则, 改后旧订阅地址失效。
+    # 注意: 报错里不要出现「订阅路径」四个字 (/api/subscription 只取含这四字的报错)。
+    cfg["sub_name"] = str(cfg.get("sub_name") or "nexus").strip()
+    if not SUB_PATH_RE.match(cfg["sub_name"]) or cfg["sub_name"] in RESERVED_SUB_PATH:
+        errors.append("订阅名称只能是字母/数字/._- (1-32 个字符), 不能是 api / config.json / help.txt")
+        cfg["sub_name"] = "nexus"
+    # 直连订阅地址: 用户填的直连 VPS 域名或 IP, 可带端口; 为空则不显示直连订阅。
+    _dsh = str(cfg.get("direct_sub_host") or "").strip()
+    if _dsh:
+        _dh_host, _dh_port = _split_host_port(_dsh)
+        if not (_is_domain(_dh_host) or _is_ipv4(_dh_host)) or not _port_ok(_dh_port):
+            errors.append("直连订阅地址格式不正确, 请填域名或 IP, 可带端口")
+            _dsh = ""
+    cfg["direct_sub_host"] = _dsh
 
     # ---- 直连 ----
     cfg["enable_direct"] = _as_bool(cfg.get("enable_direct"), False)
@@ -1158,6 +1183,7 @@ def config_to_env(cfg):
         "SUB_DOMAIN": cfg["sub_domain"],
         "SUB_PORT": str(cfg["sub_port"]),
         "SUB_PATH": cfg["sub_path"],
+        "SUB_NAME": cfg.get("sub_name") or "nexus",
         "ENABLE_DIRECT": _b(cfg["enable_direct"]),
         "DIRECT_DOMAIN": cfg["direct_domain"],
         "DIRECT_ADDRESS": cfg.get("direct_address") or cfg["direct_domain"],
@@ -1325,19 +1351,41 @@ def _sub_base(cfg, host=None, scheme=None):
     return f"{_sc}://{_hp}"
 
 
+def _direct_sub_base(cfg):
+    """直连订阅 base: 用户填的直连 VPS 域名或 IP (可带端口)。
+    直连订阅从 VPS 上直接拉, 固定走 http + 订阅端口 (默认 18080)。
+    为空返回 None (不显示直连订阅)。"""
+    _h = (cfg.get("direct_sub_host") or "").strip()
+    if not _h:
+        return None
+    _hh, _pp = _split_host_port(_h)
+    if not _hh or not (_is_domain(_hh) or _is_ipv4(_hh)):
+        return None
+    _port = _pp if ":" in _h else 18080
+    return f"http://{_hh}:{_port}"
+
+
 def subscription_urls(cfg, host=None, scheme=None):
-    """订阅地址 (按当前配置算, 改 sub_path 后实时变)。
-    面板订阅: 地址就是面板自己的域名或 IP:端口 + UUID + 订阅路径。"""
-    uuid = cfg["node_uuid"]
+    """订阅地址 (按当前配置算, 改订阅路径后实时变)。
+    Argo 订阅由面板提供: 面板地址 + 固定名 + 订阅路径, 只含隧道节点
+    (原生 raw / 动态 merged, 裂变后也在里面)。
+    直连订阅由直连 VPS 提供: 用户填的域名或 IP + 固定名 + 订阅路径,
+    只含直连节点 (Reality 也在直连里)。
+    订阅地址里不再放节点 UUID (固定名代替), UUID 只留在订阅内容里。"""
+    sub_name = cfg.get("sub_name") or "nexus"
     sub_path = cfg.get("sub_path") or "sub"
     base = _sub_base(cfg, host, scheme)
+    direct_base = _direct_sub_base(cfg)
     out = {
         "sub_host": cfg.get("sub_host") or "",
         "sub_domain": cfg.get("sub_domain") or "",
         "sub_path": sub_path,
+        "sub_name": sub_name,
         "sub_port": cfg.get("sub_port") or 18080,
-        "raw_url": f"{base}/{uuid}/{sub_path}/raw" if base and uuid else "",
-        "merged_url": f"{base}/{uuid}/{sub_path}/merged" if base and uuid else "",
+        "direct_sub_host": cfg.get("direct_sub_host") or "",
+        "raw_url": f"{base}/{sub_name}/{sub_path}/raw?only=argo" if base else "",
+        "merged_url": f"{base}/{sub_name}/{sub_path}/merged?only=argo" if base else "",
+        "direct_url": f"{direct_base}/{sub_name}/{sub_path}/raw?only=direct" if direct_base else "",
         "generator_url": "",
         "raw_count": _count_lines(os.path.join(WORKDIR, "sub", "raw.txt")),
         "merged_count": _count_lines(os.path.join(WORKDIR, "sub", "merged.txt")),
@@ -1551,7 +1599,7 @@ def _restart_sub(cfg):
     env = config_to_env(cfg)
     cmds = [["docker", "rm", "-f", "nexus-sub"]]
     run = ["docker", "run", "-d", "--name", "nexus-sub", "--restart", "unless-stopped",
-           "-p", f"127.0.0.1:{cfg['sub_port']}:{cfg['sub_port']}"]
+           "-p", f"{cfg['sub_port']}:{cfg['sub_port']}"]
     # 全部部署变量都传进去 (和 config_to_env 同一份, 含 DIRECT_* / REALITY_* / CERT_MODE),
     # 这样订阅里直连节点的链接也能按最新配置生成
     for k, v in env.items():
@@ -1757,10 +1805,27 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _proxy_sub(self, url):
-        """面板订阅代理: /<uuid>/<sub_path>/raw|merged[?format=...] 转发给
-        本机 nexus-sub (127.0.0.1:订阅内部端口), 面板域名/IP 直接出订阅。"""
+        """面板订阅代理: /<name>/<sub_path>/raw|merged[?only=...&format=...]
+        转发给本机 nexus-sub (127.0.0.1:订阅内部端口), 面板域名/IP 直接出订阅。
+        第一段是订阅口令: 固定名或节点 UUID 都认 (UUID 是旧地址的兼容);
+        转发时统一换成本机部署的节点 UUID (nexus-sub 只认它), 口令不对直接 404。
+        直连订阅不走这里 (从直连 VPS 上直接拉)。"""
         cfg = load_config()
-        target = f"http://127.0.0.1:{cfg.get('sub_port') or 18080}{url.path}"
+        sub_path = cfg.get("sub_path") or "sub"
+        sub_name = cfg.get("sub_name") or "nexus"
+        node_uuid = cfg.get("node_uuid") or ""
+        path = url.path
+        m = re.match(r"^/([^/]+)/" + re.escape(sub_path) + r"/(raw|merged)$", path)
+        if m:
+            seg = m.group(1)
+            if seg != sub_name and seg != node_uuid:
+                self._send_json({"error": "订阅口令不正确"}, 404)
+                return
+            if not node_uuid:
+                self._send_json({"error": "订阅服务未运行, 请先部署"}, 502)
+                return
+            path = f"/{node_uuid}/{sub_path}/{m.group(2)}"
+        target = f"http://127.0.0.1:{cfg.get('sub_port') or 18080}{path}"
         if url.query:
             target += "?" + url.query
         try:
