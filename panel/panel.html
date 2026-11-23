@@ -484,7 +484,7 @@
             <button id="btnDeploy">开始部署</button>
             <button id="btnClear" class="red">清除部署</button>
           </div>
-          <p class="hint">开始部署：保存配置并开始部署。本面板仅支持一次部署；部署完成后如需调整，请先清除部署，再重新部署。<br>清除部署：卸载除面板外的全部部署（节点容器与生成的配置文件），面板及已保存配置保留；如需连同面板彻底清理，请在 VPS 上执行一键清理脚本 cleanup.sh。</p>
+          <p class="hint">开始部署：先选本地部署或 SSH 部署。本地部署保存配置并在本机安装节点，本面板仅支持一次本地部署；SSH 部署把配置部署到「SSH 部署」版块里打勾的 VPS（一台或多台）。部署完成后如需调整，请先清除部署，再重新部署。<br>清除部署：本地清除卸载除面板外的全部本机部署（节点容器与生成的配置文件），面板及已保存配置保留；SSH 清除只清除打勾节点的远程部署，不影响其他节点与本机面板。如需连同面板彻底清理，请在 VPS 上执行一键清理脚本 cleanup.sh。</p>
           <div id="deployOut" class="status info"></div>
         </div>
         </div>
@@ -721,9 +721,20 @@
     <div id="tab-nodes" class="hidden">
       <div class="card">
         <h2>节点管理</h2>
-        <p class="hint">面板通过 SSH 管理远程节点：先添加节点，再用密码接入一次（面板把自己的公钥写入节点，之后一直用密钥连接，密码不保存），然后就可以一键远程部署。</p>
-        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>名称</th><th>地址</th><th>用户</th><th>认证</th><th>连通</th><th>部署状态</th><th>操作</th></tr></thead><tbody id="nodeBody"><tr><td colspan="7" class="muted">暂无节点，先在下方添加。</td></tr></tbody></table></div>
+        <p class="hint">部署完成后的状态管理：查看本地与 SSH 端已部署节点的连接状态与部署状态；VPS 不需要了可以断连、删除。添加节点与部署请去「SSH 部署」。</p>
+        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th>名称</th><th>地址</th><th>用户</th><th>认证</th><th>连通</th><th>部署状态</th><th>操作</th></tr></thead><tbody id="nodeBody"><tr><td colspan="7" class="muted">暂无节点，先去「SSH 部署」添加。</td></tr></tbody></table></div>
         <div id="nodeOut" class="status info"></div>
+      </div>
+    </div>
+
+    <!-- SSH 部署 -->
+    <div id="tab-sshdeploy" class="hidden">
+      <div class="card">
+        <h2>SSH 部署</h2>
+        <p class="hint">这里是第一次添加 SSH 端的地方：添加 VPS 后打勾选中，再到部署页点「开始部署」/「清除部署」。</p>
+        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th style="width:36px;"><input type="checkbox" id="sshCheckAll" title="全选"></th><th>名称</th><th>地址</th><th>认证</th><th>连通</th><th>部署状态</th></tr></thead><tbody id="sshBody"><tr><td colspan="6" class="muted">暂无节点，先在下方添加。</td></tr></tbody></table></div>
+        <div class="btnrow"><button id="btnSshRefresh" class="ghost">刷新列表</button></div>
+        <div id="sshOut" class="status info"></div>
         <h3 class="step-h">添加节点</h3>
         <div class="row2">
           <div><label class="f">节点名称 <span class="req">* 必填</span></label><input type="text" id="ndName" placeholder="例如 香港"></div>
@@ -745,24 +756,6 @@
         <h3 class="step-h">面板公钥</h3>
         <p class="hint">选「密钥」接入时，把下面这段公钥追加到节点的 ~/.ssh/authorized_keys（每行一个），再放行 SSH 端口。</p>
         <div style="display:flex; gap:8px; align-items:flex-start;"><textarea id="panelPubkey" class="mono" rows="2" readonly placeholder="加载中…" style="max-width:none; flex:1;"></textarea><button class="sm ghost" id="btnCopyPubkey" type="button" style="flex:none;">复制</button></div>
-        <div id="nodeLogWrap" class="hidden" style="margin-top:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-weight:700;">节点部署日志 <span id="nodeLogTitle" class="muted"></span></span><span id="nodeDeployState" class="muted"></span>
-          </div>
-          <div style="display:flex; justify-content:flex-end; margin-top:4px;"><button class="sm ghost" id="btnCloseNodeLog" type="button">关闭</button></div>
-          <div class="log" id="nodeDeployLog"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SSH 部署 -->
-    <div id="tab-sshdeploy" class="hidden">
-      <div class="card">
-        <h2>SSH 部署</h2>
-        <p class="hint">批量部署与清除 SSH 远程节点：勾选一个或多个节点，一次部署多台。节点在「节点管理」里添加；本地清除仍在部署页的「清除部署」。</p>
-        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th style="width:36px;"><input type="checkbox" id="sshCheckAll" title="全选"></th><th>名称</th><th>地址</th><th>认证</th><th>连通</th><th>部署状态</th></tr></thead><tbody id="sshBody"><tr><td colspan="6" class="muted">暂无节点，先去「节点管理」添加。</td></tr></tbody></table></div>
-        <div class="btnrow"><button id="btnSshBatchDeploy">批量部署</button><button id="btnSshBatchClear" class="ghost">批量清除</button><button id="btnSshRefresh" class="ghost">刷新列表</button></div>
-        <div id="sshOut" class="status info"></div>
         <div id="sshLogWrap" class="hidden" style="margin-top:12px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-weight:700;">部署日志</span><button class="sm ghost" id="btnCloseSshLogs" type="button">关闭</button>
@@ -790,9 +783,10 @@
 </div>
 
 <div id="confirmModal" class="hidden" style="position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:100; display:flex; align-items:center; justify-content:center;"><div style="background:#fff; border-radius:16px; box-shadow:0 12px 40px rgba(15,23,42,.25); padding:22px 24px; width:min(420px,90vw);"><div id="confirmModalText" style="font-size:15px; color:#1f2937; line-height:1.6;"></div><div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;"><button type="button" class="ghost" id="btnConfirmCancel">取消</button><button type="button" id="btnConfirmOk">确定</button></div></div></div>
+<div id="choiceModal" class="hidden" style="position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:100; display:flex; align-items:center; justify-content:center;"><div style="background:#fff; border-radius:16px; box-shadow:0 12px 40px rgba(15,23,42,.25); padding:22px 24px; width:min(460px,90vw);"><div id="choiceModalText" style="font-size:15px; color:#1f2937; line-height:1.6;"></div><div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px; flex-wrap:wrap;"><button type="button" class="ghost" id="btnChoiceCancel">取消</button><button type="button" class="ghost" id="btnChoiceB"></button><button type="button" id="btnChoiceA"></button></div></div></div>
 <script>
 const $ = id => document.getElementById(id);
-let authed = false, logTimer = null, statusTimer = null, logOffset = 0;
+let authed = false, logTimer = null, statusTimer = null, logOffset = 0, localDeployed = false;
 
 // 直连协议字段: [复选框 id, 默认端口]
 const DIRECT_IDS = ["direct_vless_tcp", "direct_vless_tls", "direct_vless_reality", "direct_vless_ws", "direct_vless_grpc", "direct_trojan", "direct_vmess_ws", "direct_sb_trojan", "direct_sb_tls", "direct_ss", "direct_hy2"];
@@ -832,7 +826,7 @@ function showApp() {
   Promise.allSettled([loadStatus(), loadConfig(), loadSubscription(), loadCert(), loadRealityKeys()]);
   statusTimer = setInterval(() => { if (authed) loadStatus(); }, 15000);
 }
-function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) clearInterval(statusTimer); if (nodeLogTimer) clearInterval(nodeLogTimer); Object.values(sshLogTimers || {}).forEach(t => clearInterval(t)); logTimer = statusTimer = nodeLogTimer = null; }
+function stopTimers() { if (logTimer) clearInterval(logTimer); if (statusTimer) clearInterval(statusTimer); Object.values(sshLogTimers || {}).forEach(t => clearInterval(t)); logTimer = statusTimer = null; }
 
 function switchTab(name) {
   document.querySelectorAll(".sidebar button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
@@ -897,11 +891,10 @@ async function loadStatus() {
     $("lastRefresh").textContent = "上次刷新 " + new Date().toLocaleTimeString();
     renderOvNodes(s.remote_nodes);
     if (s.panel_port) { panelPort = s.panel_port; checkPortConflicts(); }
-    // 面板仅支持一次部署: 任一节点容器存在即视为已部署, 禁用开始部署
+    // 面板仅支持一次本地部署: 任一节点容器存在即视为本机已部署, 选择弹窗里禁用本地选项 (SSH 仍可用, 后端 409 兜底)
     const NODE_CONTAINERS = ["nexus-xray", "nexus-singbox", "nexus-sb-dispatch", "nexus-argo", "nexus-sub", "nexus-web-panel"];
     const deployedNow = NODE_CONTAINERS.some(n => svc(n) !== "not_installed");
-    const bd = $("btnDeploy");
-    if (bd) bd.disabled = deployedNow;
+    localDeployed = deployedNow;
     if (deployedNow) setOut($("deployOut"), "已部署，如需修改请先清除部署，再重新部署。", "info");
   } catch (e) {}
 }
@@ -1323,22 +1316,32 @@ $("btnDeploy").onclick = async () => {
     }
     return;
   }
-  if (!(await showConfirm("确认部署到本机（本地）吗？将在面板所在机上安装节点，订阅自动生成。"))) return;
-  $("btnDeploy").disabled = true;
-  setOut($("deployOut"), "正在启动部署…", "info");
-  $("logWrap").classList.remove("hidden");
-  $("deployLog").textContent = "";
-  logOffset = 0;
-  try {
-    await api("/api/deploy", {method: "POST", body: JSON.stringify(collectConfig())});
-    setOut($("deployOut"), "部署已开始，下方查看安装日志", "info");
-    $("deployOut").scrollIntoView({block: "center", behavior: "smooth"});
-    if (logTimer) clearInterval(logTimer);
-    logTimer = setInterval(pollDeploy, 1500);
-    pollDeploy();
-  } catch (e) {
-    $("btnDeploy").disabled = false;
-    setOut($("deployOut"), e.message, "err");
+  const localNote = localDeployed ? "（本地已部署，如需修改请先清除部署）" : "：保存配置并在面板所在机上安装节点，订阅自动生成。";
+  const choice = await showChoice("请选择部署目标：<br>本地部署" + localNote + "<br>SSH 部署：把配置部署到「SSH 部署」版块里打勾的 VPS（SSH 远程），可一台或多台。", "本地部署", "SSH 部署", {disableA: localDeployed});
+  if (!choice) return;
+  if (choice === "a") {
+    $("btnDeploy").disabled = true;
+    setOut($("deployOut"), "正在启动部署…", "info");
+    $("logWrap").classList.remove("hidden");
+    $("deployLog").textContent = "";
+    logOffset = 0;
+    try {
+      await api("/api/deploy", {method: "POST", body: JSON.stringify(collectConfig())});
+      setOut($("deployOut"), "部署已开始，下方查看安装日志", "info");
+      $("deployOut").scrollIntoView({block: "center", behavior: "smooth"});
+      if (logTimer) clearInterval(logTimer);
+      logTimer = setInterval(pollDeploy, 1500);
+      pollDeploy();
+    } catch (e) {
+      $("btnDeploy").disabled = false;
+      setOut($("deployOut"), e.message, "err");
+    }
+  } else {
+    await loadNodes(); renderSshDeploy();
+    const sel = sshSelected();
+    if (!sel.length) { setOut($("deployOut"), "请先去「SSH 部署」版块勾选要部署的节点", "err"); switchTab("sshdeploy"); return; }
+    if (!(await showConfirm("确认部署到以下 " + sel.length + " 个节点（SSH 远程）吗？节点：" + sshSelectedNames(sel) + "。将在各远程节点上安装节点。"))) return;
+    startSshDeploy(sel, collectConfig());
   }
 };
 async function pollDeploy() {
@@ -1372,13 +1375,45 @@ function showConfirm(msg) {
     m.onclick = (e) => { if (e.target === m) done(false); };
   });
 }
+function showChoice(html, labelA, labelB, opts) {
+  // 二选一弹窗: 返回 "a"(左/主选项) / "b"(次选项) / null(取消)。html 只传静态文案。
+  return new Promise((resolve) => {
+    const m = $("choiceModal");
+    $("choiceModalText").innerHTML = html;
+    const a = $("btnChoiceA"), b = $("btnChoiceB"), c = $("btnChoiceCancel");
+    a.textContent = labelA; b.textContent = labelB;
+    a.disabled = !!(opts && opts.disableA);
+    b.disabled = !!(opts && opts.disableB);
+    m.classList.remove("hidden");
+    const done = (v) => {
+      m.classList.add("hidden");
+      a.onclick = b.onclick = c.onclick = null;
+      m.onclick = null;
+      resolve(v);
+    };
+    a.onclick = () => done("a");
+    b.onclick = () => done("b");
+    c.onclick = () => done(null);
+    m.onclick = (e) => { if (e.target === m) done(null); };
+  });
+}
 $("btnClear").onclick = async () => {
-  if (!(await showConfirm("确定清除本次部署吗？节点容器和配置文件会被删除，面板本身保留，部署配置还在，可以一键重新部署。"))) return;
-  try {
-    const r = await api("/api/clear", {method: "POST"});
-    setOut($("deployOut"), r.message, "ok");
-    loadStatus(); loadSubscription();
-  } catch (e) { setOut($("deployOut"), e.message, "err"); }
+  const choice = await showChoice("请选择清除目标：<br>本地清除：卸载除面板外的全部本机部署，面板及已保存配置保留。<br>SSH 清除：清除「SSH 部署」版块里打勾的 VPS 的远程部署，只清选中的节点。", "本地清除", "SSH 清除");
+  if (!choice) return;
+  if (choice === "a") {
+    if (!(await showConfirm("确定清除本次部署吗？节点容器和配置文件会被删除，面板本身保留，部署配置还在，可以一键重新部署。"))) return;
+    try {
+      const r = await api("/api/clear", {method: "POST"});
+      setOut($("deployOut"), r.message, "ok");
+      loadStatus(); loadSubscription();
+    } catch (e) { setOut($("deployOut"), e.message, "err"); }
+  } else {
+    await loadNodes(); renderSshDeploy();
+    const sel = sshSelected();
+    if (!sel.length) { setOut($("deployOut"), "请先去「SSH 部署」版块勾选要清除的节点", "err"); switchTab("sshdeploy"); return; }
+    if (!(await showConfirm("确认清除以下 " + sel.length + " 个节点的 SSH 远程部署吗？节点：" + sshSelectedNames(sel) + "。将删除这些节点上的节点容器与配置文件，只清选中的节点，不影响其他节点与本机面板。"))) return;
+    startSshClear(sel);
+  }
 };
 
 function randomShortId() {
@@ -1915,7 +1950,7 @@ $("btnTestAllOutbounds").onclick = async () => {
 };
 
 // ---- 节点管理 (SSH 远程部署 Phase 1) ----
-let nodes = [], nodeLogTimer = null, nodeLogOffset = 0, nodeLogId = null, sshLogTimers = {}, sshLogOffsets = {}, sshDone = [];
+let nodes = [], sshLogTimers = {}, sshLogOffsets = {}, sshDone = [], sshChecked = new Set();
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c])); }
 function nodeDeployLabel(st) {
   return {idle: "未部署", running: "部署中…", ok: "已部署", failed: "部署失败"}[st] || st || "—";
@@ -1938,9 +1973,8 @@ function renderNodes() {
   nodes.forEach(n => {
     const tr = document.createElement("tr");
     const dep = n.deploy || {};
-    let ops = "<button type='button' class='sm' data-act='deploy'>部署</button> <button type='button' class='sm ghost' data-act='log'>日志</button> <button type='button' class='sm ghost' data-act='test'>测试连接</button> ";
-    if (n.auth === "password") ops += "<button type='button' class='sm' data-act='bootstrap'>密码接入</button> ";
-    ops += "<button type='button' class='sm ghost' data-act='clear'>清除部署</button> <button type='button' class='sm ghost' data-act='del'>删除</button>";
+    let ops = "<button type='button' class='sm ghost' data-act='test'>测试连接</button> ";
+    ops += "<button type='button' class='sm ghost' data-act='del'>删除</button>";
     tr.innerHTML = "<td>" + esc(n.name) + "</td><td class='mono'>" + esc(n.host) + ":" + (n.ssh_port || 22) + "</td><td>" + esc(n.ssh_user || "") + "</td><td>" + (n.auth === "key" ? "密钥" : "密码接入") + "</td><td>" + esc(n.status || "—") + "</td><td>" + nodeDeployLabel(dep.state) + "</td><td>" + ops + "</td>";
     tr.querySelectorAll("button").forEach(b => b.onclick = () => nodeAction(n, b.dataset.act));
     body.appendChild(tr);
@@ -1972,20 +2006,6 @@ async function nodeAction(n, act) {
       setOut($("nodeOut"), "节点「" + n.name + "」已删除", "ok");
       loadNodes();
     } catch (e) { setOut($("nodeOut"), e.message, "err"); }
-  } else if (act === "bootstrap") {
-    showBootstrapBox(n);
-  } else if (act === "log") {
-    showNodeLog(n.id, n.name);
-  } else if (act === "clear") {
-    if (!(await showConfirm("确定清除节点「" + n.name + "」的远程部署吗？将删除该节点上的节点容器与配置文件，只清这一个节点，不影响其他节点与本机面板。"))) return;
-    setOut($("nodeOut"), "正在清除节点「" + n.name + "」的远程部署…", "info");
-    try {
-      const r = await api("/api/nodes/" + n.id + "/clear", {method: "POST"});
-      setOut($("nodeOut"), r.message || ("节点「" + n.name + "」的远程部署已清除"), "ok");
-      loadNodes();
-    } catch (e) { setOut($("nodeOut"), e.message, "err"); }
-  } else if (act === "deploy") {
-    deployNode(n);
   }
 }
 function showBootstrapBox(n) {
@@ -2007,7 +2027,7 @@ $("btnBootstrapGo").onclick = async () => {
     const r = await api("/api/nodes/" + id + "/bootstrap", {method: "POST", body: JSON.stringify({password: pw})});
     setOut($("bsOut"), r.message || "接入完成", "ok");
     $("bootstrapBox").classList.add("hidden");
-    loadNodes();
+    loadNodes().then(renderSshDeploy);
   } catch (e) { setOut($("bsOut"), e.message, "err"); }
 };
 $("btnAddNode").onclick = async () => {
@@ -2015,93 +2035,56 @@ $("btnAddNode").onclick = async () => {
   const port = parseInt($("ndPort").value, 10) || 22;
   const user = $("ndUser").value.trim() || "root";
   const auth = $("ndAuth").value;
-  if (!name || !host) { setOut($("nodeOut"), "请填写节点名称和地址", "err"); return; }
-  setOut($("nodeOut"), "正在添加节点…", "info");
+  if (!name || !host) { setOut($("sshOut"), "请填写节点名称和地址", "err"); return; }
+  setOut($("sshOut"), "正在添加节点…", "info");
   try {
     const r = await api("/api/nodes", {method: "POST", body: JSON.stringify({name: name, host: host, ssh_port: port, ssh_user: user, auth: auth})});
     $("ndName").value = ""; $("ndHost").value = "";
-    setOut($("nodeOut"), "节点「" + name + "」已添加", "ok");
+    setOut($("sshOut"), "节点「" + name + "」已添加", "ok");
     await loadNodes();
+    renderSshDeploy();
     const added = (nodes || []).find(x => x.id === (r.node || {}).id);
     if (added && added.auth === "password") showBootstrapBox(added);
-  } catch (e) { setOut($("nodeOut"), e.message, "err"); }
+  } catch (e) { setOut($("sshOut"), e.message, "err"); }
 };
 $("btnCopyPubkey").onclick = async () => {
   const v = $("panelPubkey").value;
-  if (!v) { setOut($("nodeOut"), "公钥还没加载出来", "err"); return; }
-  try { await navigator.clipboard.writeText(v); setOut($("nodeOut"), "面板公钥已复制", "ok"); }
-  catch (e) { $("panelPubkey").select(); setOut($("nodeOut"), "已选中公钥，请按 Ctrl+C 复制", "info"); }
+  if (!v) { setOut($("sshOut"), "公钥还没加载出来", "err"); return; }
+  try { await navigator.clipboard.writeText(v); setOut($("sshOut"), "面板公钥已复制", "ok"); }
+  catch (e) { $("panelPubkey").select(); setOut($("sshOut"), "已选中公钥，请按 Ctrl+C 复制", "info"); }
 };
-async function deployNode(n) {
-  const errs = validateDeploy();
-  if (errs.length) {
-    setOut($("deployOut"), "请先补全部署表单必填项：" + errs.map(e => e.name).join("、"), "err");
-    switchTab("deploy");
-    const first = errs[0].el;
-    if (first) first.scrollIntoView({block: "center", behavior: "smooth"});
-    return;
-  }
-  if (!(await showConfirm("确认部署到节点「" + n.name + "」（SSH 远程）吗？将在远程节点 " + n.host + " 上安装节点。"))) return;
-  setOut($("nodeOut"), "正在启动远程部署…", "info");
-  try {
-    await api("/api/nodes/" + n.id + "/deploy", {method: "POST", body: JSON.stringify(collectConfig())});
-    setOut($("nodeOut"), "远程部署已开始，下方查看日志", "info");
-    showNodeLog(n.id, n.name);
-    $("nodeLogWrap").scrollIntoView({block: "start", behavior: "smooth"});
-  } catch (e) { setOut($("nodeOut"), e.message, "err"); }
-}
-function showNodeLog(id, name) {
-  nodeLogId = id;
-  nodeLogOffset = 0;
-  $("nodeLogTitle").textContent = "— 节点「" + name + "」";
-  $("nodeDeployLog").textContent = "";
-  $("nodeLogWrap").classList.remove("hidden");
-  $("nodeDeployState").textContent = "部署中…";
-  if (nodeLogTimer) clearInterval(nodeLogTimer);
-  nodeLogTimer = setInterval(pollNodeLog, 2000);
-  pollNodeLog();
-}
-async function pollNodeLog() {
-  if (!nodeLogId) return;
-  try {
-    const s = await api("/api/nodes/" + nodeLogId + "/deploy/status");
-    $("nodeDeployState").textContent = nodeDeployLabel(s.state) + (s.message ? " — " + s.message : "");
-    const l = await api("/api/nodes/" + nodeLogId + "/deploy/log?offset=" + nodeLogOffset);
-    if (l.log) { $("nodeDeployLog").textContent += l.log; $("nodeDeployLog").scrollTop = $("nodeDeployLog").scrollHeight; }
-    nodeLogOffset = l.offset;
-    if (s.state === "ok" || s.state === "failed") {
-      clearInterval(nodeLogTimer); nodeLogTimer = null;
-      loadNodes();
-    }
-  } catch (e) { /* 隧道重启导致短暂断开时, 下次轮询自动恢复 */ }
-}
-$("btnCloseNodeLog").onclick = () => {
-  if (nodeLogTimer) clearInterval(nodeLogTimer);
-  nodeLogTimer = null; nodeLogId = null;
-  $("nodeLogWrap").classList.add("hidden");
-};
-
-// ---- SSH 部署（独立版块：批量部署/批量清除，多节点） ----
+// ---- SSH 部署（接入：添加/删除节点 + 打勾选中；部署/清除走部署页） ----
+// 打勾选中用 Set 持久化: 切页/刷新列表重渲染后勾选不丢
 function sshSelected() {
   return (nodes || []).filter(n => {
     const c = document.querySelector('.ssh-check[data-id="' + n.id + '"]');
-    return c && c.checked;
+    if (c) return c.checked;
+    return sshChecked.has(n.id);
   });
+}
+function syncSshCheckAll() {
+  const all = $("sshCheckAll");
+  if (!all) return;
+  all.checked = nodes.length > 0 && nodes.every(n => sshChecked.has(n.id));
 }
 function sshSelectedNames(list) { return list.map(n => n.name).join("、"); }
 function renderSshDeploy() {
   const body = $("sshBody");
   if (!body) return;
   body.innerHTML = "";
-  if (!nodes.length) { body.innerHTML = '<tr><td colspan="6" class="muted">暂无节点，先去「节点管理」添加。</td></tr>'; return; }
+  if (!nodes.length) { body.innerHTML = '<tr><td colspan="6" class="muted">暂无节点，先在下方添加。</td></tr>'; syncSshCheckAll(); return; }
   nodes.forEach(n => {
     const dep = n.deploy || {};
     const tr = document.createElement("tr");
     tr.innerHTML = "<td><input type='checkbox' class='ssh-check' data-id='" + n.id + "'></td><td>" + esc(n.name) + "</td><td class='mono'>" + esc(n.host) + ":" + (n.ssh_port || 22) + "</td><td>" + (n.auth === "key" ? "密钥" : "密码接入") + "</td><td>" + esc(n.status || "—") + "</td><td>" + nodeDeployLabel(dep.state) + "</td>";
+    const c = tr.querySelector(".ssh-check");
+    c.checked = sshChecked.has(n.id);
+    c.onchange = () => { if (c.checked) sshChecked.add(n.id); else sshChecked.delete(n.id); syncSshCheckAll(); };
     body.appendChild(tr);
   });
+  syncSshCheckAll();
   const all = $("sshCheckAll");
-  if (all) { all.checked = false; all.onchange = () => { document.querySelectorAll(".ssh-check").forEach(c => c.checked = all.checked); }; }
+  if (all) { all.onchange = () => { document.querySelectorAll(".ssh-check").forEach(c => { c.checked = all.checked; if (all.checked) sshChecked.add(c.dataset.id); else sshChecked.delete(c.dataset.id); }); }; }
 }
 function sshLogBlock(n) {
   const div = document.createElement("div");
@@ -2146,19 +2129,7 @@ function renderSshDone() {
     list.appendChild(div);
   });
 }
-$("btnSshBatchDeploy").onclick = async () => {
-  const errs = validateDeploy();
-  if (errs.length) {
-    setOut($("deployOut"), "请先补全部署表单必填项：" + errs.map(e => e.name).join("、"), "err");
-    switchTab("deploy");
-    const first = errs[0].el;
-    if (first) first.scrollIntoView({block: "center", behavior: "smooth"});
-    return;
-  }
-  const sel = sshSelected();
-  if (!sel.length) { setOut($("sshOut"), "请先勾选要部署的节点", "err"); return; }
-  if (!(await showConfirm("确认批量部署到以下 " + sel.length + " 个节点（SSH 远程）吗？节点：" + sshSelectedNames(sel) + "。将在各远程节点上安装节点。"))) return;
-  const cfg = collectConfig();
+function startSshDeploy(sel, cfg) {
   $("sshLogs").innerHTML = "";
   $("sshLogWrap").classList.remove("hidden");
   setOut($("sshOut"), "正在启动 " + sel.length + " 个节点的远程部署…", "info");
@@ -2180,19 +2151,19 @@ $("btnSshBatchDeploy").onclick = async () => {
       loadNodes().then(renderSshDeploy);
     });
   });
+  switchTab("sshdeploy");
   $("sshLogWrap").scrollIntoView({block: "start", behavior: "smooth"});
-};
-$("btnSshBatchClear").onclick = async () => {
-  const sel = sshSelected();
-  if (!sel.length) { setOut($("sshOut"), "请先勾选要清除的节点", "err"); return; }
-  if (!(await showConfirm("确认清除以下 " + sel.length + " 个节点的 SSH 远程部署吗？节点：" + sshSelectedNames(sel) + "。将删除这些节点上的节点容器与配置文件，只清选中的节点，不影响其他节点与本机面板。本地清除请去部署页的「清除部署」。"))) return;
+}
+async function startSshClear(sel) {
   setOut($("sshOut"), "正在清除 " + sel.length + " 个节点的远程部署…", "info");
   const rs = await Promise.allSettled(sel.map(n => api("/api/nodes/" + n.id + "/clear", {method: "POST"})));
   const okN = rs.filter(r => r.status === "fulfilled").length;
   const fails = rs.map((r, i) => (r.status === "rejected" ? sel[i].name + "：" + (r.reason && r.reason.message ? r.reason.message : r.reason) : null)).filter(Boolean);
   setOut($("sshOut"), "批量清除完成：成功 " + okN + " 个" + (fails.length ? "，失败 " + fails.length + " 个：" + fails.join("；") : ""), fails.length ? "err" : "ok");
+  setOut($("deployOut"), "SSH 清除完成：成功 " + okN + " 个" + (fails.length ? "，失败 " + fails.length + " 个" : ""), fails.length ? "err" : "ok");
   loadNodes().then(renderSshDeploy);
-};
+  switchTab("sshdeploy");
+}
 $("btnSshRefresh").onclick = () => { loadNodes().then(renderSshDeploy); };
 $("btnCloseSshLogs").onclick = () => {
   Object.keys(sshLogTimers).forEach(id => clearInterval(sshLogTimers[id]));
