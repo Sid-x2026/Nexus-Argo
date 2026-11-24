@@ -56,9 +56,11 @@
 #   POST /api/nodes/<id>/test     测试 SSH 连通 (密钥方式)
 #   POST /api/nodes/<id>/bootstrap {password} 密码接入一次, 写入面板公钥后改密钥
 #   POST /api/nodes/<id>/deploy   远程部署 (与本地 /api/deploy 同形 body, 按节点 409)
-#   POST /api/nodes/<id>/clear    清除远程部署 (SSH 跑 install.sh uninstall, 部署中返回 409)
+#   POST /api/nodes/<id>/clear    清除远程部署 (后台线程跑 install.sh uninstall, 日志写 clear-<id>.log, 部署/清除进行中返回 409)
 #   GET  /api/nodes/<id>/deploy/status  节点部署状态
 #   GET  /api/nodes/<id>/deploy/log?offset=N  节点部署日志增量
+#   GET  /api/nodes/<id>/clear/status  节点清除状态
+#   GET  /api/nodes/<id>/clear/log?offset=N  节点清除日志增量
 #
 # 安全边界: 面板用账号密码登录 (默认 admin, 密码安装时随机生成,
 # 只存 salt+sha256); 部署是后台任务, 浏览器断开不影响; 部署时
@@ -107,6 +109,8 @@ SSH_PUB_PATH = SSH_KEY_PATH + ".pub"
 _NODE_INSTALL_SH = "/tmp/nexus-argo-install.sh"
 _NODE_LOG = "/tmp/nexus-install.log"
 _NODE_EXIT = "/tmp/nexus-install.exit"
+_NODE_CLEAR_LOG = "/tmp/nexus-clear.log"
+_NODE_CLEAR_EXIT = "/tmp/nexus-clear.exit"
 _NODE_POLL_MARKER = "__NEXUS_POLL_9f27__"
 
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
@@ -518,6 +522,34 @@ def _set_node_deploy_status(node_id, state, **extra):
     st.update(extra)
     _save_json(_node_status_path(node_id), st)
     return st
+
+
+def _node_clear_log_path(node_id):
+    return os.path.join(PANEL_DIR, f"clear-{node_id}.log")
+
+
+def _node_clear_status_path(node_id):
+    return os.path.join(PANEL_DIR, f"clear-status-{node_id}.json")
+
+
+def _node_clear_status(node_id):
+    return _load_json(_node_clear_status_path(node_id), {"state": "idle"})
+
+
+def _set_node_clear_status(node_id, state, **extra):
+    st = {"state": state, "at": time.strftime("%Y-%m-%d %H:%M:%S")}
+    st.update(extra)
+    _save_json(_node_clear_status_path(node_id), st)
+    return st
+
+
+def _node_clear_log_append(node_id, data):
+    """往节点清除日志追加 bytes (与 _node_log_append 同形, 偏移才对得上)。"""
+    try:
+        with open(_node_clear_log_path(node_id), "ab") as f:
+            f.write(data)
+    except OSError:
+        pass
 
 
 def _ensure_panel_key():
@@ -1581,6 +1613,7 @@ def _deploy_worker(cfg):
 
 
 _node_deploy_threads = {}  # node_id -> Thread
+_node_clear_threads = {}  # node_id -> Thread
 _node_deploy_locks = {}    # node_id -> Lock
 _node_deploy_locks_guard = threading.Lock()
 
@@ -1623,24 +1656,85 @@ def _node_upload_cert(node, cfg):
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def _node_clear(node):
+def _node_clear_worker(node):
     """清掉远程节点的部署: 传 install.sh 过去跑 uninstall, 只清该节点。
     install.sh 的 uninstall 会保留 $WORKDIR/panel (面板自身), 且不碰 ~/.ssh。
-    返回 (ok, message)。"""
+    与部署一样后台 nohup 跑 + 轮询拉日志, 日志写 clear-<id>.log,
+    状态写 clear-status-<id>.json, 前端弹窗实时看。
+    部署日志不再随清除删除, 留作备份, 删节点时才一并删除。"""
     nid = node["id"]
-    rc, _, err = _scp_put(node, INSTALL_SH, _NODE_INSTALL_SH, timeout=120)
-    if rc != 0:
-        return False, "传 install.sh 到节点失败: " + (err.decode(errors="replace").strip() or "scp 失败")
-    rc, out, err = _ssh_cmd(node, f"bash {_NODE_INSTALL_SH} uninstall; rm -f {_NODE_INSTALL_SH} {_NODE_LOG} {_NODE_EXIT}", timeout=120)
-    if rc != 0:
-        detail = ((out or b"") + (err or b"")).decode(errors="replace").strip()
-        return False, "远程清理失败: " + (detail[-300:] if detail else "ssh 失败")
-    _set_node_deploy_status(nid, "idle")
+    started = time.time()
+    _set_node_clear_status(nid, "running",
+                           started_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+                           host=node.get("host"), name=node.get("name") or "")
     try:
-        os.remove(_node_log_path(nid))
+        with open(_node_clear_log_path(nid), "wb") as f:
+            f.write(f"[nexus-panel] 开始清除节点「{node.get('name') or ''}」({node.get('host')}) 的远程部署\n".encode())
     except OSError:
         pass
-    return True, "节点「" + (node.get("name") or "") + "」的远程部署已清除"
+    code = -1
+    try:
+        rc, _, err = _scp_put(node, INSTALL_SH, _NODE_INSTALL_SH, timeout=120)
+        if rc != 0:
+            raise RuntimeError(f"传 install.sh 失败: {err.decode('utf-8', 'replace').strip() or 'scp 退出码 ' + str(rc)}")
+        _node_clear_log_append(nid, "[nexus-panel] install.sh 已传到远端, 正在清除...\n".encode())
+        launch = (f"nohup bash -c 'bash {_NODE_INSTALL_SH} uninstall; echo $? > {_NODE_CLEAR_EXIT}' "
+                  f"> {_NODE_CLEAR_LOG} 2>&1 &")
+        rc, _, err = _ssh_cmd(node, launch, timeout=60)
+        if rc != 0:
+            raise RuntimeError(f"启动远程清除失败: {err.decode('utf-8', 'replace').strip() or 'ssh 退出码 ' + str(rc)}")
+        # 轮询: 与部署同形, 一次 ssh 同时拉增量日志 + 看退出码文件。
+        offset = 0
+        while True:
+            time.sleep(2)
+            if time.time() - started > 600:
+                _node_clear_log_append(nid, "[nexus-panel] 轮询超时 (10 分钟), 停止等待\n".encode())
+                break
+            poll = (f"tail -c +{offset + 1} {_NODE_CLEAR_LOG} 2>/dev/null; "
+                    f"echo {_NODE_POLL_MARKER}; "
+                    f"test -f {_NODE_CLEAR_EXIT} && cat {_NODE_CLEAR_EXIT}")
+            rc, out, _ = _ssh_cmd(node, poll, timeout=30)
+            if rc == -1 or rc == 255:
+                _node_clear_log_append(nid, "[nexus-panel] 轮询连接失败, 2 秒后重试 (清除在远端后台继续跑)\n".encode())
+                continue
+            marker = _NODE_POLL_MARKER.encode()
+            if marker not in out:
+                continue
+            new_bytes, _, tail = out.partition(marker)
+            if new_bytes:
+                _node_clear_log_append(nid, new_bytes)
+                offset += len(new_bytes)
+            tail_s = tail.decode("utf-8", "replace").strip()
+            if tail_s:
+                try:
+                    code = int(tail_s.split()[0])
+                    break
+                except Exception:
+                    pass
+        # 退出码已出: 最后再拉一次, 避免漏掉清除收尾的日志
+        rc, out, _ = _ssh_cmd(node, f"tail -c +{offset + 1} {_NODE_CLEAR_LOG} 2>/dev/null", timeout=30)
+        if rc not in (-1, 255) and out:
+            _node_clear_log_append(nid, out)
+        # 清掉远端临时文件 (日志已拉回面板, 不留痕)
+        _ssh_cmd(node, f"rm -f {_NODE_INSTALL_SH} {_NODE_CLEAR_LOG} {_NODE_CLEAR_EXIT}", timeout=30)
+    except RuntimeError as e:
+        code = -1
+        _node_clear_log_append(nid, f"[nexus-panel] {e}\n".encode())
+    except Exception as e:
+        code = -1
+        _node_clear_log_append(nid, f"[nexus-panel] 远程清除异常: {e}\n".encode())
+    elapsed = int(time.time() - started)
+    if code == 0:
+        _set_node_deploy_status(nid, "idle")
+        _set_node_clear_status(nid, "ok", exit_code=0, elapsed_s=elapsed,
+                               finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+                               message="节点「" + (node.get("name") or "") + "」的远程部署已清除")
+    else:
+        _set_node_clear_status(nid, "failed", exit_code=code, elapsed_s=elapsed,
+                               finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+                               message=f"远程清除失败 (退出码 {code}), 看日志找原因")
+    with _node_lock(nid):
+        _node_clear_threads.pop(nid, None)
 
 
 def _node_deploy_worker(node, cfg):
@@ -2340,6 +2434,39 @@ class Handler(BaseHTTPRequestHandler):
                 data, size = "", 0
             self._send_json({"log": data, "offset": size, "state": _node_deploy_status(nid).get("state", "idle")})
             return
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)/clear/status$", path)
+        if _m:
+            if not self._need_auth():
+                return
+            if not _find_node(_m.group(1)):
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            self._send_json(_node_clear_status(_m.group(1)))
+            return
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)/clear/log$", path)
+        if _m:
+            if not self._need_auth():
+                return
+            nid = _m.group(1)
+            if not _find_node(nid):
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            query = urllib.parse.parse_qs(url.query)
+            try:
+                offset = int((query.get("offset", ["0"])[0] or "0"))
+            except Exception:
+                offset = 0
+            try:
+                with open(_node_clear_log_path(nid), "rb") as f:
+                    f.seek(0, os.SEEK_END)
+                    size = f.tell()
+                    offset = max(0, min(offset, size))
+                    f.seek(offset)
+                    data = f.read().decode("utf-8", "replace")
+            except OSError:
+                data, size = "", 0
+            self._send_json({"log": data, "offset": size, "state": _node_clear_status(nid).get("state", "idle")})
+            return
         self._send_json({"error": "未知路径"}, 404)
 
     def do_POST(self):
@@ -2824,14 +2951,17 @@ class Handler(BaseHTTPRequestHandler):
                 if th is not None and th.is_alive():
                     self._send_json({"error": "该节点正在部署, 请等它完成再清除"}, 409)
                     return
+                th = _node_clear_threads.get(nid)
+                if th is not None and th.is_alive():
+                    self._send_json({"error": "该节点正在清除, 请等它完成"}, 409)
+                    return
                 if not os.path.isfile(INSTALL_SH):
                     self._send_json({"error": "install.sh 不存在, 面板安装不完整"}, 500)
                     return
-                ok, msg = _node_clear(node)
-            if ok:
-                self._send_json({"ok": True, "message": msg})
-            else:
-                self._send_json({"error": msg}, 500)
+                th = threading.Thread(target=_node_clear_worker, args=(node,), daemon=True)
+                _node_clear_threads[nid] = th
+                th.start()
+            self._send_json({"ok": True, "message": "远程清除已开始, 看日志跟进"})
             return
 
         _m = re.match(r"^/api/nodes/([0-9a-f]+)/deploy$", path)
@@ -2850,6 +2980,10 @@ class Handler(BaseHTTPRequestHandler):
                 th = _node_deploy_threads.get(nid)
                 if th is not None and th.is_alive():
                     self._send_json({"error": "该节点已有部署在跑, 请等它完成"}, 409)
+                    return
+                th = _node_clear_threads.get(nid)
+                if th is not None and th.is_alive():
+                    self._send_json({"error": "该节点正在清除, 请等它完成再部署"}, 409)
                     return
                 if not os.path.isfile(INSTALL_SH):
                     self._send_json({"error": "install.sh 不存在, 面板安装不完整"}, 500)
@@ -2885,13 +3019,18 @@ class Handler(BaseHTTPRequestHandler):
             if th is not None and th.is_alive():
                 self._send_json({"error": "该节点正在部署, 请等它完成再删除"}, 409)
                 return
+            th = _node_clear_threads.get(nid)
+            if th is not None and th.is_alive():
+                self._send_json({"error": "该节点正在清除, 请等它完成再删除"}, 409)
+                return
             nodes = load_nodes()
             kept = [n for n in nodes if n.get("id") != nid]
             if len(kept) == len(nodes):
                 self._send_json({"error": "节点不存在"}, 404)
                 return
             _save_nodes(kept)
-            for p in (_node_status_path(nid), _node_log_path(nid), _cert_log_path(nid)):
+            for p in (_node_status_path(nid), _node_log_path(nid), _cert_log_path(nid),
+                      _node_clear_status_path(nid), _node_clear_log_path(nid)):
                 try:
                     os.remove(p)
                 except OSError:
