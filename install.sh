@@ -284,6 +284,30 @@ warn() { echo "${C_YELLOW}⚠ $*${C_RESET}"; }
 
 is_true() { case "${1,,}" in true|1|yes|y) return 0;; *) return 1;; esac; }
 
+# _ensure_pkg <cmd> [pkg...]: 命令不存在时自动安装 (apt/dnf/yum)。
+# 全新系统常缺 curl / socat, 部署脚本多处依赖它们, 不能默认已装。
+# 安装失败只警告 (调用方按原有逻辑继续, 失败原因写进日志)。
+_ensure_pkg() {
+  local _cmd="$1"; shift
+  command -v "$_cmd" >/dev/null 2>&1 && return 0
+  local _pkgs="${*:-$_cmd}"
+  log "未检测到 $_cmd，正在自动安装 ($_pkgs)…"
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -qq >/dev/null 2>&1 || true
+    apt-get install -y $_pkgs >/dev/null 2>&1 || true
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y $_pkgs >/dev/null 2>&1 || true
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y $_pkgs >/dev/null 2>&1 || true
+  else
+    warn "未找到 apt/dnf/yum，无法自动安装 $_cmd，请手动安装后重试"
+    return 1
+  fi
+  if command -v "$_cmd" >/dev/null 2>&1; then log "$_cmd 已安装"; return 0; fi
+  warn "$_cmd 自动安装失败 — 请手动安装 ($_pkgs) 后重试"
+  return 1
+}
+
 check_port() {
   local name="$1" val="$2"
   [[ "$val" =~ ^[0-9]+$ ]] || die "$name must be a number, got '$val'"
@@ -503,7 +527,7 @@ _ensure_acme_cron() { # $1: acme.sh 路径 (可空, 自动找); 续期 cron 存�
   fi
 }
 _issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
-  local _strict="${1:-}" _cert_ok=false _need_cert=false _days="" _acme="" _issue_log=""
+  local _strict="${1:-}" _cert_ok=false _need_cert=false _days="" _acme="" _issue_log="" _acme_install_log=""
   mkdir -p "$WORKDIR/direct"
   if [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
     if [ "$CERT_MODE" = "upload" ]; then
@@ -537,12 +561,39 @@ _issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
       if [ -x "$HOME/.acme.sh/acme.sh" ]; then _acme="$HOME/.acme.sh/acme.sh";
       elif command -v acme.sh >/dev/null 2>&1; then _acme="$(command -v acme.sh)"; fi
       if [ -z "$_acme" ]; then
+        # 先确保 curl 在 (cert 模式与部署步骤 1 都会提前装; 这里再兜底一次)。
+        _ensure_pkg curl || true
+        _acme_install_log="/tmp/nexus-acme-install.log"
+        : > "$_acme_install_log" 2>/dev/null || true
         if command -v timeout >/dev/null 2>&1; then
-          timeout 180 curl -fsSL https://get.acme.sh -o /tmp/get.acme.sh 2>/dev/null && sh /tmp/get.acme.sh --install-online >/dev/null 2>&1
+          timeout 180 curl -fsSL https://get.acme.sh -o /tmp/get.acme.sh >>"$_acme_install_log" 2>&1 \
+            && sh /tmp/get.acme.sh --install-online >>"$_acme_install_log" 2>&1
         else
-          curl -fsSL https://get.acme.sh 2>/dev/null | sh -s -- --install-online >/dev/null 2>&1
+          curl -fsSL https://get.acme.sh -o /tmp/get.acme.sh >>"$_acme_install_log" 2>&1 \
+            && sh /tmp/get.acme.sh --install-online >>"$_acme_install_log" 2>&1
         fi
-        if [ -x "$HOME/.acme.sh/acme.sh" ]; then _acme="$HOME/.acme.sh/acme.sh"; else warn "acme.sh 安装失败 — 回退到自签名证书"; fi
+        if [ ! -x "$HOME/.acme.sh/acme.sh" ]; then
+          # get.acme.sh 不通时 (个别线路到 GitHub 不稳), 直接从 GitHub 拉安装脚本再试一次。
+          log "get.acme.sh 安装失败，改从 GitHub 直拉 acme.sh 再试一次…"
+          if command -v timeout >/dev/null 2>&1; then
+            timeout 180 curl -fsSL https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh -o /tmp/acme.sh >>"$_acme_install_log" 2>&1 \
+              && sh /tmp/acme.sh --install-online >>"$_acme_install_log" 2>&1
+          else
+            curl -fsSL https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh -o /tmp/acme.sh >>"$_acme_install_log" 2>&1 \
+              && sh /tmp/acme.sh --install-online >>"$_acme_install_log" 2>&1
+          fi
+        fi
+        if [ -x "$HOME/.acme.sh/acme.sh" ]; then
+          _acme="$HOME/.acme.sh/acme.sh"
+        elif [ -n "$_strict" ]; then
+          # 严格模式 (面板「生成证书」): 装不上就直接失败, 不会回退自签名;
+          # 之前这里写「回退到自签名证书」是误导, 改成实话并贴出失败原因。
+          warn "acme.sh 安装失败 — 请检查 curl 是否已安装、能否访问 https://get.acme.sh (详情见 $_acme_install_log)"
+          tail -n 10 "$_acme_install_log" 2>/dev/null || true
+        else
+          warn "acme.sh 安装失败 — 回退到自签名证书 (详情见 $_acme_install_log)"
+          tail -n 10 "$_acme_install_log" 2>/dev/null || true
+        fi
       fi
       if [ -n "$_acme" ]; then
         _issue_log="/tmp/nexus-acme-issue.log"
@@ -579,6 +630,16 @@ _issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
 _cert_standalone() { # install.sh cert: 只签证书, 不部署 (面板「生成证书」按钮用)
   [ "$(id -u)" = "0" ] || die "run as root"
   command -v openssl >/dev/null 2>&1 || die "openssl not found — needed for the direct-mode cert"
+  # ACME 要 curl 下 acme.sh、socat 监听 80 做 http-01 验证; 全新系统常缺
+  # 这两个, 先装好再签 (之前缺 curl 会在 acme.sh 安装那步静默失败)。
+  mkdir -p "$WORKDIR"
+  _ensure_pkg curl || true
+  if [ "$CERT_MODE" = "acme" ]; then
+    _ensure_pkg socat || true
+    # 单独生成证书不走部署步骤 1, 防火墙同步不会跑; 这里先同步一次, 把
+    # ACME 要用的 80/tcp 放行, 否则外网验证连不进来签发必失败。
+    _fw_sync
+  fi
   if [ -z "$DIRECT_DOMAIN" ]; then
     DIRECT_DOMAIN="$(curl -fsS --max-time 5 https://ifconfig.me/ip 2>/dev/null || curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
     [ -n "$DIRECT_DOMAIN" ] || die "DIRECT_DOMAIN 为空且无法自动探测公网 IP — 请设置 DIRECT_DOMAIN"
@@ -606,6 +667,10 @@ banner
 step "步骤 1/5  检查配置"
 # ---- validation (mirrors the frontend's validatePort, plus the checks it lacks) ----
 [ "$(id -u)" = "0" ] || die "run as root"
+# 部署多处依赖 curl (拉 web 文件、探测公网 IP、订阅冒烟检查); socat 是
+# ACME standalone 模式监听 80 端口要用的。全新系统常缺, 先装好。
+_ensure_pkg curl || true
+if [ "$CERT_MODE" = "acme" ]; then _ensure_pkg socat || true; fi
 if ! command -v docker >/dev/null 2>&1; then
   log "未检测到 Docker，正在自动安装…"
   if command -v apt-get >/dev/null 2>&1; then
