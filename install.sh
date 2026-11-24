@@ -403,6 +403,11 @@ _fw_close_stale() { # _fw_close_stale <backend> [want-port/proto ...] — 关清
     for _w in "${_FW_SSH_PORTS[@]}"; do [ "$_old" = "$_w/tcp" ] && _keep=true && break; done
     [ "$_keep" = "false" ] && _fw_delete "$_old" "$_be"
   done < "$WORKDIR/firewall-ports.txt"
+  # 清单清理是尽力而为: while 循环的退出状态是最后一次循环体的状态,
+  # 末行仍在白名单时为 1; 必须显式返回 0, 否则 set -e 会让调用方
+  # (_fw_sync) 在无任何报错的情况下直接退出 (证书生成曾因此在防火墙
+  # 同步后静默失败, 退出码 1, 日志停在防火墙行)。
+  return 0
 }
 
 _fw_sync() {
@@ -521,6 +526,21 @@ _cert_days_left() { # 已部署证书剩余天数, 读不到返回空 (调用方
   [ "$_diff" -gt 0 ] 2>/dev/null || { echo 0; return 0; }
   echo $(( _diff / 86400 ))
 }
+_store_cert_days_left() { # $1: 域名 — acme.sh 仓库证书剩余天数, 没有/读不到返回空 (调用方按重新签发处理)
+  local _d="$1" _f="" _end="" _now="" _diff=""
+  if [ -f "$HOME/.acme.sh/$_d/fullchain.cer" ]; then _f="$HOME/.acme.sh/$_d/fullchain.cer";
+  elif [ -f "$HOME/.acme.sh/${_d}_ecc/fullchain.cer" ]; then _f="$HOME/.acme.sh/${_d}_ecc/fullchain.cer";
+  else return 1; fi
+  _end="$(openssl x509 -in "$_f" -noout -enddate 2>/dev/null | sed 's/^notAfter=//')"
+  [ -n "$_end" ] || return 1
+  _now="$(date +%s 2>/dev/null || echo 0)"
+  _diff="$(( $(date -d "$_end" +%s 2>/dev/null || echo 0) - _now ))"
+  [ "$_diff" -gt 0 ] 2>/dev/null || { echo 0; return 0; }
+  echo $(( _diff / 86400 ))
+}
+# _issue_cert 是否签发了新证书 (ACME 新签 / 自签名新生成); 复用已有证书
+# (部署文件或仓库) 时不置位, 调用方据此决定要不要重载核心。
+_CERT_ISSUED_NEW=false
 _ensure_acme_cron() { # $1: acme.sh 路径 (可空, 自动找); 续期 cron 存在即跳过
   local _a="${1:-}"
   if [ -z "$_a" ]; then
@@ -575,12 +595,15 @@ _issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
         _ensure_pkg curl || true
         _acme_install_log="/tmp/nexus-acme-install.log"
         : > "$_acme_install_log" 2>/dev/null || true
+        # get.acme.sh 的 $1 是邮箱, 不能传 --install-online: 它会把 $1
+        # 拼成 ----install-online 传给内层 acme.sh, 直接报 Unknown parameter。
+        # 不带参数跑就是在线安装 (内层自己传 --install-online)。
         if command -v timeout >/dev/null 2>&1; then
           timeout 180 curl -fsSL https://get.acme.sh -o /tmp/get.acme.sh >>"$_acme_install_log" 2>&1 \
-            && sh /tmp/get.acme.sh --install-online >>"$_acme_install_log" 2>&1
+            && sh /tmp/get.acme.sh >>"$_acme_install_log" 2>&1
         else
           curl -fsSL https://get.acme.sh -o /tmp/get.acme.sh >>"$_acme_install_log" 2>&1 \
-            && sh /tmp/get.acme.sh --install-online >>"$_acme_install_log" 2>&1
+            && sh /tmp/get.acme.sh >>"$_acme_install_log" 2>&1
         fi
         if [ ! -x "$HOME/.acme.sh/acme.sh" ]; then
           # get.acme.sh 不通时 (个别线路到 GitHub 不稳), 直接从 GitHub 拉安装脚本再试一次。
@@ -606,6 +629,21 @@ _issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
         fi
       fi
       if [ -n "$_acme" ]; then
+        # 仓库里已有有效证书 (部署文件被清除/未安装) 时直接安装复用,
+        # 不重新签发; acme.sh --issue 在证书未到期时会返回 RENEW_SKIP(2),
+        # 不能把它当签发失败处理。
+        _store_days="$(_store_cert_days_left "$DIRECT_DOMAIN")" || _store_days=""
+        if [ -n "$_store_days" ] && [ "$_store_days" -gt 30 ]; then
+          if "$_acme" --install-cert -d "$DIRECT_DOMAIN" \
+               --key-file "$WORKDIR/direct/key.pem" \
+               --fullchain-file "$WORKDIR/direct/cert.pem" >/dev/null 2>&1 \
+             && [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
+            log "ACME 证书已存在 (剩余 $_store_days 天)，已安装到部署目录 ($DIRECT_DOMAIN)"
+            _ensure_acme_cron "$_acme"
+            return 0
+          fi
+          warn "仓库证书安装失败，重新签发"
+        fi
         _issue_log="/tmp/nexus-acme-issue.log"
         # acme.sh v3 起默认 CA 是 ZeroSSL, 注册账号要邮箱, 不填就签不下来;
         # 改用 Let's Encrypt, 不用邮箱, 续期也走同一家。
@@ -616,10 +654,24 @@ _issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
                 --fullchain-file "$WORKDIR/direct/cert.pem" >/dev/null 2>&1 \
            && [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
           _cert_ok=true
+          _CERT_ISSUED_NEW=true
           log "ACME 证书已签发 ($DIRECT_DOMAIN)"
           _ensure_acme_cron "$_acme"
           return 0
         else
+          if grep -q "Skipping" "$_issue_log" 2>/dev/null; then
+            # acme.sh 证书未到期时 --issue 返回 RENEW_SKIP(2)，不是签发失败：
+            # 直接安装仓库里的证书。
+            if "$_acme" --install-cert -d "$DIRECT_DOMAIN" \
+                 --key-file "$WORKDIR/direct/key.pem" \
+                 --fullchain-file "$WORKDIR/direct/cert.pem" >/dev/null 2>&1 \
+               && [ -f "$WORKDIR/direct/cert.pem" ] && [ -f "$WORKDIR/direct/key.pem" ]; then
+              _days="$(_cert_days_left)" || _days=""
+              log "ACME 证书已存在 (剩余 ${_days:-?} 天)，已安装到部署目录 ($DIRECT_DOMAIN)"
+              _ensure_acme_cron "$_acme"
+              return 0
+            fi
+          fi
           warn "ACME 签发失败 (域名 $DIRECT_DOMAIN 需解析到本机且 80 端口可达) — 详情:"
           tail -n 15 "$_issue_log" 2>/dev/null || true
           [ -n "$_strict" ] && return 1
@@ -637,8 +689,25 @@ _issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
     -out "$WORKDIR/direct/cert.pem" -days 3650 -nodes \
     -subj "/CN=$DIRECT_DOMAIN" >/dev/null 2>&1 \
     || die "自签名证书生成失败 (需要 openssl)"
+  _CERT_ISSUED_NEW=true
   log "直连自签名证书已生成 ($WORKDIR/direct/cert.pem, CN=$DIRECT_DOMAIN)"
   return 0
+}
+_reload_cert_cores() { # 只重载用直连证书的核心 (nexus-xray / nexus-singbox); 没跑的容器跳过, 不动其它容器
+  command -v docker >/dev/null 2>&1 || { warn "docker 不可用，跳过核心重载 — 新证书将在下次部署或重启核心时生效"; return 0; }
+  local _c _running _reloaded=false
+  for _c in nexus-xray nexus-singbox; do
+    docker inspect "$_c" >/dev/null 2>&1 || continue
+    _running="$(docker inspect -f '{{.State.Running}}' "$_c" 2>/dev/null || echo false)"
+    [ "$_running" = "true" ] || continue
+    if docker restart "$_c" >/dev/null 2>&1; then
+      log "已重载 $_c (新证书生效)"
+      _reloaded=true
+    else
+      warn "$_c 重载失败 — 请手动重启该容器使新证书生效"
+    fi
+  done
+  [ "$_reloaded" = "true" ] || log "没有正在运行的证书核心需要重载 (新证书将在下次部署时生效)"
 }
 _cert_standalone() { # install.sh cert: 只签证书, 不部署 (面板「生成证书」按钮用)
   [ "$(id -u)" = "0" ] || die "run as root"
@@ -661,15 +730,39 @@ _cert_standalone() { # install.sh cert: 只签证书, 不部署 (面板「生成
   fi
   mkdir -p "$WORKDIR/direct"
   if _issue_cert 1; then
+    # 只在签发了新证书时重载核心 (复用已有证书时核心内存里已是同一张证, 不用动)。
+    if [ "${_CERT_ISSUED_NEW:-false}" = "true" ]; then
+      _reload_cert_cores
+    fi
     log "证书已就绪 ($WORKDIR/direct/cert.pem)"
     exit 0
   else
     die "证书生成失败 (见上方日志)"
   fi
 }
-_cert_clear() { # install.sh clear-cert: 删已部署的证书, 下次部署时重新生成/签发
+_cert_clear() { # install.sh clear-cert: 删已部署的证书 + acme.sh 仓库里的同域名证书, 下次部署时重新生成/签发; 不重载核心
+  local _acme=""
   rm -f "$WORKDIR/direct/cert.pem" "$WORKDIR/direct/key.pem"
-  log "已清除部署的证书 ($WORKDIR/direct/cert.pem / key.pem); 下次部署时重新生成/签发"
+  log "已清除部署的证书 ($WORKDIR/direct/cert.pem / key.pem)"
+  if _cert_is_domain "${DIRECT_DOMAIN:-}"; then
+    if [ -x "$HOME/.acme.sh/acme.sh" ]; then _acme="$HOME/.acme.sh/acme.sh";
+    elif command -v acme.sh >/dev/null 2>&1; then _acme="$(command -v acme.sh)"; fi
+    if [ -n "$_acme" ]; then
+      if [ -d "$HOME/.acme.sh/$DIRECT_DOMAIN" ] || [ -d "$HOME/.acme.sh/${DIRECT_DOMAIN}_ecc" ]; then
+        [ -d "$HOME/.acme.sh/$DIRECT_DOMAIN" ] && "$_acme" --remove -d "$DIRECT_DOMAIN" >/dev/null 2>&1 || true
+        [ -d "$HOME/.acme.sh/${DIRECT_DOMAIN}_ecc" ] && "$_acme" --remove -d "$DIRECT_DOMAIN" --ecc >/dev/null 2>&1 || true
+        rm -rf "$HOME/.acme.sh/$DIRECT_DOMAIN" "$HOME/.acme.sh/${DIRECT_DOMAIN}_ecc"
+        log "已清除 acme.sh 仓库中 $DIRECT_DOMAIN 的证书"
+      else
+        log "acme.sh 仓库中没有 $DIRECT_DOMAIN 的证书，跳过"
+      fi
+    else
+      log "acme.sh 未安装，跳过仓库清理"
+    fi
+  else
+    log "DIRECT_DOMAIN 不是域名 (${DIRECT_DOMAIN:-空})，跳过 acme.sh 仓库清理"
+  fi
+  log "注意：正在运行的核心仍在使用旧证书（内存中），新证书将在下次部署或生成证书时生效"
   exit 0
 }
 
