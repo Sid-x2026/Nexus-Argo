@@ -1390,8 +1390,11 @@ def _direct_sub_base(cfg):
     """直连订阅 base: 用户填的直连 VPS 域名或 IP。
     直连订阅从 VPS 上直接拉, 固定走 http + 订阅端口 (默认 18080,
     地址里带了端口的旧配置仍认那个端口)。
-    为空返回 None (不显示直连订阅)。"""
-    _h = (cfg.get("direct_sub_host") or "").strip()
+    direct_sub_host 为空时回落到直连地址 (新版面板里订阅域名自动取
+    直连地址, 不再单独填); 两个都空返回 None (不显示直连订阅)。"""
+    _h = ((cfg.get("direct_sub_host") or "").strip()
+          or (cfg.get("direct_address") or "").strip()
+          or (cfg.get("direct_domain") or "").strip())
     if not _h:
         return None
     _hh, _pp = _split_host_port(_h)

@@ -69,18 +69,18 @@
   .mode-box.direct h4 { color: #4f46e5; margin: 0 0 8px; font-size: 13.5px; }
   .mode-box.tunnel { background: #eef2ff; border-left-color: #6366f1; }
   .mode-box.tunnel h4 { color: #4f46e5; margin: 0 0 8px; font-size: 13.5px; }
-  .proto { display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 8px; font-size: 12px; padding: 4px 6px; margin-top: 6px; }
+  .proto { display: grid; grid-template-columns: minmax(0, 1fr) 84px; align-items: center; gap: 8px; font-size: 12px; padding: 4px 6px; margin-top: 6px; }
   .proto label { display: block !important; cursor: pointer; font-weight: 600; min-width: 0; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; } .proto label input, .proto label .tag { margin-right: 6px; vertical-align: middle; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
   .proto input[type=checkbox] { accent-color: #6366f1; width: 16px; height: 16px; }
   .proto .port { display: flex; align-items: center; justify-content: flex-end; gap: 6px; color: #64748b; font-size: 12.5px; }
-  .proto .port input { width: 56px; padding: 5px 6px; font-size: 12px; text-align: center; }
+  .proto .port input { width: 48px; padding: 5px 6px; font-size: 12px; text-align: center; }
   .proto.off { opacity: .45; }
   .tag { display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; font-weight: 600; }
   .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
   .proto-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; margin-top: 10px; }
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
-  .proto-wrap .row2 { grid-template-columns: 1fr 1fr; gap: 12px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) 120px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
-  .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; } .proto-wrap:has(> #argoGroup:not(.hidden)):has(> #directGroup:not(.hidden)) { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
+  .proto-wrap .row2 { grid-template-columns: 1fr 1fr; gap: 12px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) 84px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
+  .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; } .proto-wrap:has(> #argoGroup:not(.hidden)):has(> #directGroup:not(.hidden)) { grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); }
   #directFields .proto-wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
   @media (max-width: 900px) { #directFields .proto-wrap { grid-template-columns: 1fr; } .reality-cols { grid-template-columns: 1fr; } }
 
@@ -93,7 +93,7 @@
   .sec-card.direct h4 { color: #4f46e5; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; border-left: 5px solid #6366f1; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: stretch; margin-top: 4px; } .cfg-grid > .mode-box { margin-top: 0; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; margin: 5px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 13.7px; padding: 5px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 12.7px; margin: 4px 0 3px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 13.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; text-align: center; } #tunnelFields #argoToken { text-align: left; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols .ghead { min-height: 36px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px; } .pill.static { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; cursor: default; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 300px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 300px; text-align: center; }  #tunnelFields .row2 { margin-top: 12px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 1fr; gap: 12px; }  .row-prefix { grid-template-columns: 230px 230px !important; gap: 30px !important; justify-content: start !important; } .row-prefix > div { display: flex; align-items: center; gap: 8px; } .row-prefix label.f { margin: 0; white-space: nowrap; } #argoPrefix, #directPrefix { width: 150px; max-width: 150px; }  #nodeUuid { flex: none; width: 320px; text-align: center; }  .proto .port input { font-size: 12px; width: 60px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 8px; } #realityCard label.f { margin: 5px 0 2px; } #realityCard input, #realityCard select { padding: 5px 9px; } #realityCard .hint { margin: 4px 0 3px; } #realityCard input[type=text], #realityCard select { max-width: 250px; } #reality_short_ids { flex: 1 1 0; min-width: 0; } #tunnelFields .optaddr-row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-top: 0; flex: 1; } #tunnelFields .sec-card { display: flex; flex-direction: column; }
+  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: stretch; margin-top: 4px; } .cfg-grid > .mode-box { margin-top: 0; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; margin: 5px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 13.7px; padding: 5px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 12.7px; margin: 4px 0 3px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 13.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; text-align: center; } #tunnelFields #argoToken { text-align: left; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols .ghead { min-height: 36px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px; } .pill.static { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; cursor: default; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 300px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 300px; text-align: center; }  #tunnelFields .row2 { margin-top: 12px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 1fr; gap: 12px; }  .row-prefix { grid-template-columns: 230px 230px !important; gap: 30px !important; justify-content: start !important; } .row-prefix > div { display: flex; align-items: center; gap: 8px; } .row-prefix label.f { margin: 0; white-space: nowrap; } #argoPrefix, #directPrefix { width: 150px; max-width: 150px; }  #nodeUuid { flex: none; width: 320px; text-align: center; }  .proto .port input { font-size: 12px; width: 48px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 8px; } #realityCard label.f { margin: 5px 0 2px; } #realityCard input, #realityCard select { padding: 5px 9px; } #realityCard .hint { margin: 4px 0 3px; } #realityCard input[type=text], #realityCard select { max-width: 250px; } #reality_short_ids { flex: 1 1 0; min-width: 0; } #tunnelFields .optaddr-row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-top: 0; flex: 1; } #tunnelFields .sec-card { display: flex; flex-direction: column; }
 #tunnelFields #optAddrSingle { max-width: 250px; width: 100%; text-align: center; resize: vertical; min-height: 150px; } #tunnelFields .optaddr-row label.f { margin: 0; white-space: nowrap; } .warn-inline { display: inline-block; background: #fef9c3; border: 1px solid #fde68a; color: #854d0e; border-radius: 8px; padding: 2px 8px; font-size: 12.7px; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; } .reality-note { font-size: 11.7px; color: #64748b; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; } .scan-table th { font-size: 12.5px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
@@ -316,17 +316,17 @@
             <div>
               <label class="pill" style="margin-top:8px;"><input type="checkbox" id="enableXray" checked> Xray-core</label>
               <div id="xrayProtos">
-                <div class="proto" data-proto="xhttp_h1"><label><input type="checkbox" class="xp" value="xhttp_h1" checked> <span class="tag">Argo</span> xhttp_h1</label><span class="port">端口 <input type="number" id="port_xhttp_h1" value="443" min="1" max="65535"></span></div>
-                <div class="proto" data-proto="xhttp_h2"><label><input type="checkbox" class="xp" value="xhttp_h2" checked> <span class="tag">Argo</span> xhttp_h2</label><span class="port">端口 <input type="number" id="port_xhttp_h2" value="443" min="1" max="65535"></span></div>
-                <div class="proto" data-proto="xhttp_h3"><label><input type="checkbox" class="xp" value="xhttp_h3" checked> <span class="tag">Argo</span> xhttp_h3</label><span class="port">端口 <input type="number" id="port_xhttp_h3" value="443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="xhttp_h1"><label><input type="checkbox" class="xp" value="xhttp_h1" checked>xhttp_h1</label><span class="port">端口 <input type="number" id="port_xhttp_h1" value="443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="xhttp_h2"><label><input type="checkbox" class="xp" value="xhttp_h2" checked>xhttp_h2</label><span class="port">端口 <input type="number" id="port_xhttp_h2" value="443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="xhttp_h3"><label><input type="checkbox" class="xp" value="xhttp_h3" checked>xhttp_h3</label><span class="port">端口 <input type="number" id="port_xhttp_h3" value="443" min="1" max="65535"></span></div>
               </div>
             </div>
             <div>
               <label class="pill" style="margin-top:8px;"><input type="checkbox" id="enableSb" checked> Sing-box</label>
               <div id="sbProtos">
-                <div class="proto" data-proto="ws"><label><input type="checkbox" class="sp" value="ws" checked> <span class="tag">Argo</span> ws</label><span class="port">端口 <input type="number" id="port_ws" value="8443" min="1" max="65535"></span></div>
-                <div class="proto" data-proto="httpupgrade"><label><input type="checkbox" class="sp" value="httpupgrade" checked> <span class="tag">Argo</span> httpupgrade</label><span class="port">端口 <input type="number" id="port_httpupgrade" value="8443" min="1" max="65535"></span></div>
-                <div class="proto" data-proto="grpc"><label><input type="checkbox" class="sp" value="grpc" checked> <span class="tag">Argo</span> grpc</label><span class="port">端口 <input type="number" id="port_grpc" value="8443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="ws"><label><input type="checkbox" class="sp" value="ws" checked>ws</label><span class="port">端口 <input type="number" id="port_ws" value="8443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="httpupgrade"><label><input type="checkbox" class="sp" value="httpupgrade" checked>httpupgrade</label><span class="port">端口 <input type="number" id="port_httpupgrade" value="8443" min="1" max="65535"></span></div>
+                <div class="proto" data-proto="grpc"><label><input type="checkbox" class="sp" value="grpc" checked>grpc</label><span class="port">端口 <input type="number" id="port_grpc" value="8443" min="1" max="65535"></span></div>
               </div>
             </div>
           </div>
@@ -336,21 +336,21 @@
           <summary><span id="directCount">直连组 · 已选 0</span><span class="muted">（直连协议，启用直连后至少勾选一个）</span></summary>
           <div class="direct-cols" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-items:start;">
           <div><div class="ghead"><span class="pill static">共用</span><span class="opt">Xray 和 Sing-box 都能跑的协议，放一起</span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_vless_tls" checked> <span class="tag direct">直连</span> VLESS + TLS（Xray）</label><span class="port">端口 <input type="number" id="direct_vless_tls_port" value="443" min="1" max="65535"></span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_sb_tls" checked> <span class="tag direct">直连</span> VLESS + TLS（Sing-box）</label><span class="port">端口 <input type="number" id="direct_sb_tls_port" value="8443" min="1" max="65535"></span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_trojan"> <span class="tag direct">直连</span> Trojan + TLS（Xray）</label><span class="port">端口 <input type="number" id="direct_trojan_port" value="9443" min="1" max="65535"></span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_sb_trojan" checked> <span class="tag direct">直连</span> Trojan + TLS（Sing-box）</label><span class="port">端口 <input type="number" id="direct_sb_trojan_port" value="9445" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_tls" checked>VLESS + TLS（Xray）</label><span class="port">端口 <input type="number" id="direct_vless_tls_port" value="443" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_sb_tls" checked>VLESS + TLS（Sing-box）</label><span class="port">端口 <input type="number" id="direct_sb_tls_port" value="8443" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_trojan">Trojan + TLS（Xray）</label><span class="port">端口 <input type="number" id="direct_trojan_port" value="9443" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_sb_trojan" checked>Trojan + TLS（Sing-box）</label><span class="port">端口 <input type="number" id="direct_sb_trojan_port" value="9445" min="1" max="65535"></span></div>
           </div>
           <div><div class="ghead"><span class="pill static">Xray-core</span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_vless_tcp"> <span class="tag direct">直连</span> VLESS + TCP</label><span class="port">端口 <input type="number" id="direct_vless_tcp_port" value="8082" min="1" max="65535"></span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_vless_reality"> <span class="tag direct">直连</span> VLESS + Reality</label><span class="port">端口 <input type="number" id="direct_vless_reality_port" value="9447" min="1" max="65535"></span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_vless_ws"> <span class="tag direct">直连</span> VLESS + WS</label><span class="port">端口 <input type="number" id="direct_vless_ws_port" value="8083" min="1" max="65535"></span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_vless_grpc"> <span class="tag direct">直连</span> VLESS + gRPC</label><span class="port">端口 <input type="number" id="direct_vless_grpc_port" value="8084" min="1" max="65535"></span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_vmess_ws"> <span class="tag direct">直连</span> VMess + WS</label><span class="port">端口 <input type="number" id="direct_vmess_ws_port" value="9444" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_tcp">VLESS + TCP</label><span class="port">端口 <input type="number" id="direct_vless_tcp_port" value="8082" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_reality">VLESS + Reality</label><span class="port">端口 <input type="number" id="direct_vless_reality_port" value="9447" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_ws">VLESS + WS</label><span class="port">端口 <input type="number" id="direct_vless_ws_port" value="8083" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vless_grpc">VLESS + gRPC</label><span class="port">端口 <input type="number" id="direct_vless_grpc_port" value="8084" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_vmess_ws">VMess + WS</label><span class="port">端口 <input type="number" id="direct_vmess_ws_port" value="9444" min="1" max="65535"></span></div>
           </div>
           <div><div class="ghead"><span class="pill static">Sing-box</span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_ss"> <span class="tag direct">直连</span> Shadowsocks</label><span class="port">端口 <input type="number" id="direct_ss_port" value="8388" min="1" max="65535"></span></div>
-          <div class="proto"><label><input type="checkbox" id="direct_hy2"> <span class="tag direct">直连</span> Hysteria2</label><span class="port">端口 <input type="number" id="direct_hy2_port" value="9446" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_ss">Shadowsocks</label><span class="port">端口 <input type="number" id="direct_ss_port" value="8388" min="1" max="65535"></span></div>
+          <div class="proto"><label><input type="checkbox" id="direct_hy2">Hysteria2</label><span class="port">端口 <input type="number" id="direct_hy2_port" value="9446" min="1" max="65535"></span></div>
           </div></div>
         </details>
         </div>
@@ -373,10 +373,13 @@
               <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
               <div style="margin-top:10px; border-top:1px solid #c7d2fe; padding-top:10px;">
               <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
-                <div style="flex:1 1 260px; min-width:0; max-width:360px;">
-                  <label class="f">订阅地址 <span class="opt">选填</span></label>
-                  <input type="text" id="directSubHost" class="mono" placeholder="例如 hkzl.sidns.xyz 或 45.124.64.56" style="width:100%;">
-                  <p class="hint">直连订阅从这台 VPS 的域名或 IP 上拉；订阅端口在 IP域名订阅里单独设。Reality 节点也走直连订阅。</p>
+                <div style="flex:1 1 260px; min-width:0;">
+                  <label class="f">订阅地址</label>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" id="directSubBar" class="mono" readonly style="flex:1 1 0; min-width:0;">
+                    <button type="button" class="sm" id="btnCopyDirectSub">复制</button>
+                  </div>
+                  <p class="hint">直连订阅地址，域名自动取上面的直连地址；订阅端口在 IP域名订阅里改。Reality 节点也走直连订阅。</p>
                 </div>
                 <div style="flex:none; width:170px;">
                   <label class="f">直连前缀 <span class="opt">选填</span></label>
@@ -510,27 +513,15 @@
             <div style="margin-top:8px;">
               <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <label class="pill"><input type="checkbox" id="subIpEnabled" checked> IP域名订阅</label>
-                <span id="ipSubBarWrap" style="display:flex; gap:8px; align-items:center; flex:1 1 220px; min-width:0;">
-                  <input type="text" id="ipSubBar" class="mono" readonly style="flex:1 1 0; min-width:0;">
+                <span id="ipSubBarWrap" style="display:flex; gap:6px; align-items:center; flex:1 1 220px; min-width:0;">
+                  <span id="ipSubHostPart" class="mono" style="font-size:13.5px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px;">http://</span>
+                  <input type="number" id="subPort" value="18080" min="1" max="65535" class="mono" style="width:80px; flex:none; text-align:center;">
+                  <span id="ipSubTokenPart" class="mono" style="font-size:13.5px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 1 0; min-width:0;">/raw?only=argo</span>
                   <button type="button" class="sm" id="btnCopyIpSub">复制</button>
                 </span>
               </div>
               <div id="ipSubArea" style="margin-top:6px;">
-                <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
-                  <div style="flex:none; width:110px;">
-                    <label class="f">订阅端口 <span class="opt">选填</span></label>
-                    <input type="number" id="subPort" value="18080" min="1" max="65535" style="width:100px;">
-                    <p class="hint">IP 订阅专用端口，改后需重新部署；只开面板订阅时不用开。</p>
-                  </div>
-                  <div style="flex:1 1 220px; min-width:0;" id="ipDirectBarWrap">
-                    <label class="f">直连订阅地址</label>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                      <input type="text" id="ipDirectBar" class="mono" readonly style="flex:1 1 0; min-width:0;">
-                      <button type="button" class="sm" id="btnCopyIpDirect">复制</button>
-                    </div>
-                  </div>
-                </div>
-                <p class="hint">从直连 VPS 的域名或 IP 上拉；IP 或域名在直连卡订阅地址里填（可空），端口在左侧订阅端口里填。没配直连时，IP 订阅拉到的是 Argo 节点。</p>
+                <p class="hint">从直连 VPS 的域名或 IP 上拉；域名自动取直连卡里的直连地址，端口在地址栏里改，改后需重新部署；只开面板订阅时不用开。没配直连时，IP 订阅拉到的是 Argo 节点；直连订阅地址在直连卡里看。</p>
               </div>
             </div>
             <p class="hint">两个开关可同时开。面板订阅须先配置 ARGO 面板。</p>
@@ -1091,7 +1082,8 @@ function updateSubPreview() {
   const modeDirect = $("modeDirect").checked;
   const domain = $("argoPanelDomain").value.trim();
   const panelPath = $("panelPath").value.trim() || "Nexus";
-  const host = $("directSubHost").value.trim();
+  // 订阅域名自动取直连地址 (直连卡里填的域名或 IP, 不用再填一遍)
+  const host = $("directAddress").value.trim().split(":")[0];
   const port = $("subPort").value.trim();
   const tok = subToken || "";
   const setBar = (input, btn, url, placeholder) => {
@@ -1109,29 +1101,32 @@ function updateSubPreview() {
   $("panelSubArea").classList.toggle("hidden", !panelSub);
   const panelSubUrl = panelSub && domain && tok ? "https://" + domain + "/" + tok + "/raw?only=argo" : "";
   setBar($("panelSubBar"), $("btnCopyPanelSub"), panelSubUrl, panelSub ? (tok ? "请先配置 ARGO 面板域名" : "尚未部署，部署后自动生成订阅地址") : "");
-  // IP 订阅栏 (Argo, 从 VPS 域名或 IP 上直接拉)
+  // IP 订阅栏 (一个输出框, 复合结构: http://域名: [端口输入框] /口令/raw?only=argo;
+  // 端口是栏里唯一的输入框, 可以改, 改后需重新部署; 口令随机, 不可改)
   $("ipSubBarWrap").classList.toggle("hidden", !ipSub);
   $("ipSubArea").classList.toggle("hidden", !ipSub);
   const ipArgoUrl = ipSub && host && tok ? "http://" + host + ":" + port + "/" + tok + "/raw?only=argo" : "";
-  setBar($("ipSubBar"), $("btnCopyIpSub"), ipArgoUrl, ipSub ? (tok ? "请先填写直连订阅地址" : "尚未部署，部署后自动生成订阅地址") : "");
-  // 直连订阅栏 (只在直连模式下显示)
-  $("ipDirectBarWrap").classList.toggle("hidden", !modeDirect);
-  const ipDirectUrl = ipSub && modeDirect && host && tok ? "http://" + host + ":" + port + "/" + tok + "/raw?only=direct" : "";
-  setBar($("ipDirectBar"), $("btnCopyIpDirect"), ipDirectUrl, modeDirect ? (tok ? "请先填写直连订阅地址" : "尚未部署，部署后自动生成订阅地址") : "");
+  $("ipSubHostPart").textContent = host ? "http://" + host + ":" : (ipSub ? "请先填写直连地址" : "");
+  $("ipSubTokenPart").textContent = host && tok ? "/" + tok + "/raw?only=argo" : (host ? "（尚未部署）" : "");
+  $("btnCopyIpSub").disabled = !ipArgoUrl;
+  $("btnCopyIpSub").dataset.url = ipArgoUrl;
+  // 直连订阅栏 (直连卡里, 域名同样自动取直连地址; 直连卡只在直连模式下显示)
+  const directUrl = modeDirect && host && tok ? "http://" + host + ":" + port + "/" + tok + "/raw?only=direct" : "";
+  setBar($("directSubBar"), $("btnCopyDirectSub"), directUrl, modeDirect ? (tok ? "请先填写直连地址" : "尚未部署，部署后自动生成订阅地址") : "");
   $("subPreviewHint").classList.toggle("hidden", panelSub || ipSub);
 }
 $("argoPanelEnabled").addEventListener("change", updateArgoPanelBox);
 $("subPanelEnabled").addEventListener("change", updateSubPreview);
 $("subIpEnabled").addEventListener("change", updateSubPreview);
 $("argoPanelDomain").addEventListener("input", updateSubPreview);
-$("directSubHost").addEventListener("input", updateSubPreview);
+$("directAddress").addEventListener("input", updateSubPreview);
 $("subPort").addEventListener("input", updateSubPreview);
 $("panelPath").addEventListener("input", updateSubPreview);
 // 订阅栏 / 面板地址复制按钮 (地址存在 dataset.url 里, 由 updateSubPreview 维护)
 $("btnCopyPanelAddr").onclick = () => copyText($("btnCopyPanelAddr").dataset.url, "面板地址已复制。", $("deployOut"));
 $("btnCopyPanelSub").onclick = () => copyText($("panelSubBar").dataset.url, "面板订阅地址已复制。", $("deployOut"));
-$("btnCopyIpSub").onclick = () => copyText($("ipSubBar").dataset.url, "IP 域名订阅地址已复制。", $("deployOut"));
-$("btnCopyIpDirect").onclick = () => copyText($("ipDirectBar").dataset.url, "直连订阅地址已复制。", $("deployOut"));
+$("btnCopyIpSub").onclick = () => copyText($("btnCopyIpSub").dataset.url, "IP 域名订阅地址已复制。", $("deployOut"));
+$("btnCopyDirectSub").onclick = () => copyText($("directSubBar").dataset.url, "直连订阅地址已复制。", $("deployOut"));
 // 协议名过长时以省略号截断, 悬停显示全名。
 document.querySelectorAll(".proto label").forEach(l => { l.title = l.textContent.trim(); });
 
@@ -1185,7 +1180,7 @@ function collectConfig() {
     // 直连订阅地址在直连配置里; 面板访问路径在 ARGO 面板设置里。
     sub_host: "",
     sub_port: parseInt($("subPort").value, 10) || 18080,
-    direct_sub_host: $("directSubHost").value.trim().split(":")[0],
+    direct_sub_host: $("directAddress").value.trim().split(":")[0],
     argo_panel_enabled: $("argoPanelEnabled").checked,
     argo_panel_domain: $("argoPanelDomain").value.trim(),
     argo_panel_port: parseInt($("argoPanelPort").value, 10) || 0,
@@ -1236,7 +1231,6 @@ function fillConfig(c) {
   document.querySelectorAll(".xp").forEach(el => { el.checked = !!(c.xray_protocols && c.xray_protocols[el.value] != null); const p = $("port_" + el.value); if (p && c.xray_protocols && c.xray_protocols[el.value] != null) p.value = c.xray_protocols[el.value]; });
   document.querySelectorAll(".sp").forEach(el => { el.checked = !!(c.singbox_protocols && c.singbox_protocols[el.value] != null); const p = $("port_" + el.value); if (p && c.singbox_protocols && c.singbox_protocols[el.value] != null) p.value = c.singbox_protocols[el.value]; });
   $("optAddrSingle").value = ((c.opt_addrs || []).map(cleanOptAddr).filter(Boolean).join("\n") || "cloudflare.com");
-  $("directSubHost").value = c.direct_sub_host || "";
   $("subPort").value = c.sub_port || 18080;
   $("argoPanelEnabled").checked = !!c.argo_panel_enabled;
   $("argoPanelDomain").value = c.argo_panel_domain || "";
