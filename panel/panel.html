@@ -616,7 +616,7 @@
     <div id="tab-sub" class="hidden">
       <div class="card">
         <h2>订阅地址</h2>
-        <p class="hint">面板订阅：须先配置 ARGO 面板并开启面板订阅。IP/域名订阅：须先配置 IP/域名面板并开启 IP/域名订阅。裂变请用订阅生成器或其它工具手动完成。</p>
+        <p class="hint">汇总订阅：包含本机节点与已同步的远程节点，裂变在面板上按优选地址完成，与 ARGO 面板、IP/域名面板开关无关。IP/域名订阅：须先配置 IP/域名面板并开启 IP/域名订阅。全部刷新：重新从各远程节点拉取原生订阅。</p>
         <div class="addr-label">Argo 原生订阅地址</div>
         <div class="addr-row"><div class="addr empty" id="subRaw" data-hint="尚未部署">尚未部署</div><button class="sm" id="btnCopyRaw">复制</button></div>
         <div class="addr-label">Argo 动态订阅地址（原生 × 优选地址）</div>
@@ -627,6 +627,7 @@
         <div class="addr-row"><div class="addr empty" id="subIpArgoMerged" data-hint="未开启 IP 订阅">未开启 IP 订阅</div><button class="sm" id="btnCopyIpArgoMerged">复制</button></div>
         <div class="addr-label">直连订阅地址</div>
         <div class="addr-row"><div class="addr empty" id="subDirect" data-hint="未填直连订阅地址">未填直连订阅地址</div><button class="sm" id="btnCopyDirect">复制</button></div>
+        <div class="btnrow"><button id="btnSubRefreshAll" class="ghost">全部刷新</button></div>
         <div id="subOut" class="status info"></div>
       </div>
     </div>
@@ -799,7 +800,7 @@
       <div class="card">
         <h2>SSH 部署</h2>
         <p class="hint">添加 VPS 后打勾选中，再到部署页点「开始部署」或「清除部署」。</p>
-        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th style="width:36px;"><input type="checkbox" id="sshCheckAll" title="全选"></th><th>名称</th><th>地址</th><th>认证</th><th>连通</th><th>部署状态</th><th>日志</th></tr></thead><tbody id="sshBody"><tr><td colspan="7" class="muted">暂无节点，先在下方添加。</td></tr></tbody></table></div>
+        <div style="overflow-x:auto;"><table class="out-table"><thead><tr><th style="width:36px;"><input type="checkbox" id="sshCheckAll" title="全选"></th><th>名称</th><th>地址</th><th>认证</th><th>连通</th><th>部署状态</th><th>订阅同步</th><th>日志</th></tr></thead><tbody id="sshBody"><tr><td colspan="8" class="muted">暂无节点，先在下方添加。</td></tr></tbody></table></div>
         <div class="btnrow"><button id="btnSshRefresh" class="ghost">刷新列表</button></div>
         <div id="sshOut" class="status info"></div>
         <h3 class="step-h">添加节点</h3>
@@ -941,7 +942,7 @@ async function loadStatus() {
       const sub = s.subscription;
       // Argo 订阅地址已带 ?only=argo, 格式参数用 & 追加
       const withFmt = (u, f) => u ? u + (u.indexOf("?") >= 0 ? "&" : "?") + "format=" + f : "";
-      const argoHint = sub.argo_panel_enabled === undefined ? "尚未部署" : (!sub.argo_panel_enabled ? "未配置 ARGO 面板" : (!sub.sub_panel_enabled ? "面板订阅未开启" : "尚未部署"));
+      const argoHint = "未配置 ARGO 面板";
       const directHint = sub.direct_sub_enabled === undefined ? (sub.sub_ip_enabled === undefined ? "未填直连订阅地址" : (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址")) : (!sub.direct_sub_enabled ? (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址") : "");
       const ipHint = sub.ip_sub_enabled === undefined ? (sub.sub_ip_enabled === undefined ? "未开启 IP 订阅" : (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未开启 IP 订阅")) : (!sub.ip_sub_enabled ? (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未配置 IP/域名面板") : "");
       setAddr("ovSubAuto", withFmt(sub.merged_url, "auto"), argoHint);
@@ -1989,10 +1990,20 @@ $("btnCopyMerged").onclick = () => copyAddr("subMerged", "subOut");
 $("btnCopyIpArgo").onclick = () => copyAddr("subIpArgo", "subOut");
 $("btnCopyIpArgoMerged").onclick = () => copyAddr("subIpArgoMerged", "subOut");
 $("btnCopyDirect").onclick = () => copyAddr("subDirect", "subOut");
+$("btnSubRefreshAll").onclick = async () => {
+  setOut($("subOut"), "正在从各远程节点拉取原生订阅…", "info");
+  try {
+    const r = await api("/api/sub/refresh-all", {method: "POST"});
+    const okN = (r.results || []).filter(x => x.ok).length;
+    const bad = (r.results || []).filter(x => !x.ok);
+    setOut($("subOut"), "订阅已刷新：成功 " + okN + " 个" + (bad.length ? "，失败 " + bad.length + " 个：" + bad.map(x => x.name + "（" + x.message + "）").join("、") : ""), bad.length ? "err" : "ok");
+    loadSubscription(); loadStatus();
+  } catch (e) { setOut($("subOut"), e.message, "err"); }
+};
 async function loadSubscription() {
   try {
     const s = await api("/api/subscription");
-    const argoHint = s.argo_panel_enabled === undefined ? "尚未部署" : (!s.argo_panel_enabled ? "未配置 ARGO 面板" : (!s.sub_panel_enabled ? "面板订阅未开启" : "尚未部署"));
+    const argoHint = "未配置 ARGO 面板";
     const directHint = s.direct_sub_enabled === undefined ? (s.sub_ip_enabled === undefined ? "未填直连订阅地址" : (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址")) : (!s.direct_sub_enabled ? (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址") : "");
     const ipHint = s.ip_sub_enabled === undefined ? (s.sub_ip_enabled === undefined ? "未开启 IP 订阅" : (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未开启 IP 订阅")) : (!s.ip_sub_enabled ? (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未配置 IP/域名面板") : "");
     setAddr("subRaw", s.raw_url, argoHint);
@@ -2289,15 +2300,26 @@ function renderSshDeploy() {
   const body = $("sshBody");
   if (!body) return;
   body.innerHTML = "";
-  if (!nodes.length) { body.innerHTML = '<tr><td colspan="7" class="muted">暂无节点，先在下方添加。</td></tr>'; syncSshCheckAll(); return; }
+  if (!nodes.length) { body.innerHTML = '<tr><td colspan="8" class="muted">暂无节点，先在下方添加。</td></tr>'; syncSshCheckAll(); return; }
   nodes.forEach(n => {
     const dep = n.deploy || {};
+    const sub = n.sub || {};
+    const subLabel = sub.synced ? ("已同步 " + String(sub.pulled_at || "").slice(5, 16)) : "未同步";
     const tr = document.createElement("tr");
-    tr.innerHTML = "<td><input type='checkbox' class='ssh-check' data-id='" + n.id + "'></td><td>" + esc(n.name) + "</td><td class='mono'>" + esc(n.host) + ":" + (n.ssh_port || 22) + "</td><td>" + (n.auth === "key" ? "密钥" : "密码接入") + "</td><td>" + esc(n.status || "—") + "</td><td>" + nodeDeployLabel(dep.state) + "</td><td><button type='button' class='sm ghost' data-log='1'>查看日志</button></td>";
+    tr.innerHTML = "<td><input type='checkbox' class='ssh-check' data-id='" + n.id + "'></td><td>" + esc(n.name) + "</td><td class='mono'>" + esc(n.host) + ":" + (n.ssh_port || 22) + "</td><td>" + (n.auth === "key" ? "密钥" : "密码接入") + "</td><td>" + esc(n.status || "—") + "</td><td>" + nodeDeployLabel(dep.state) + "</td><td>" + esc(subLabel) + " <button type='button' class='sm ghost' data-subrefresh='1'>刷新</button></td><td><button type='button' class='sm ghost' data-log='1'>查看日志</button></td>";
     const c = tr.querySelector(".ssh-check");
     c.checked = sshChecked.has(n.id);
     c.onchange = () => { if (c.checked) sshChecked.add(n.id); else sshChecked.delete(n.id); syncSshCheckAll(); };
     tr.querySelector("[data-log]").onclick = () => sshLogModalOpen([n], "deploy", false);
+    tr.querySelector("[data-subrefresh]").onclick = async () => {
+      const rb = tr.querySelector("[data-subrefresh]");
+      rb.disabled = true; rb.textContent = "同步中…";
+      try {
+        const r = await api("/api/nodes/" + n.id + "/sub/refresh", {method: "POST"});
+        setOut($("deployOut"), "节点「" + n.name + "」" + (r.message || "订阅已同步"), "ok");
+      } catch (e) { setOut($("deployOut"), "节点「" + n.name + "」订阅同步失败：" + e.message, "err"); }
+      loadNodes().then(renderSshDeploy);
+    };
     body.appendChild(tr);
   });
   syncSshCheckAll();

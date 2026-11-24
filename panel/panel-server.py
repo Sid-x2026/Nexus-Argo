@@ -29,11 +29,12 @@
 #   GET  /api/deploy/status       部署状态 (idle/running/ok/failed)
 #   GET  /api/deploy/log?offset=N 部署日志增量 (按字节偏移)
 #   GET  /api/subscription        订阅地址 (面板 / IP 两种拉取方式)
-#   GET  /<name>/raw|merged        面板订阅 (公开, 免登录):
+#   GET  /<name>/raw|merged        面板订阅 (公开, 免登录): 汇总订阅
+#        (本机节点 + 各远程节点缓存的原生, 裂变在面板上现算, 只读缓存):
 #        <name> 是订阅地址里的随机口令 (8 位字母数字, 生成一次存配置里,
 #        旧的 UUID 也认), ?only=argo 隧道节点 / ?only=direct 直连节点
-#        (含 Reality)。面板收到后转发给本机 nexus-sub; ARGO 订阅地址
-#        = ARGO 面板域名 + 随机口令 (须先配 ARGO 面板并开面板订阅),
+#        (含 Reality)。与 ARGO 面板/IP 域名订阅开关无关。
+#        ARGO 订阅地址 = ARGO 面板域名 + 随机口令,
 #        IP域名订阅地址 = 直连 VPS 域名或 IP + 订阅端口 + 随机口令
 #        (须开 IP域名订阅; 没配直连时拉到的是 Argo 节点)。
 #   GET  /api/cert               证书状态 (是否已部署 / 颁发给谁 / 到期时间 / 续期方式)
@@ -61,12 +62,15 @@
 #   GET  /api/nodes/<id>/deploy/log?offset=N  节点部署日志增量
 #   GET  /api/nodes/<id>/clear/status  节点清除状态
 #   GET  /api/nodes/<id>/clear/log?offset=N  节点清除日志增量
+#   POST /api/nodes/<id>/sub/refresh  手动同步某节点的原生订阅 (拉 raw.txt 存缓存)
+#   POST /api/sub/refresh-all         全部刷新: 逐个同步各远程节点的原生订阅
 #
 # 安全边界: 面板用账号密码登录 (默认 admin, 密码安装时随机生成,
 # 只存 salt+sha256); 部署是后台任务, 浏览器断开不影响; 部署时
 # 保留面板自身的隧道路由, cloudflared 重启导致页面短暂断开时
 # 前端自动重连。订阅地址本身就是凭证, 不要发给不该拿到节点的人。
 
+import base64
 import datetime
 import hashlib
 import ipaddress
@@ -550,6 +554,69 @@ def _node_clear_log_append(node_id, data):
             f.write(data)
     except OSError:
         pass
+
+
+# ---- 订阅汇总: 远程节点原生订阅缓存 (PANEL_DIR/sub_cache/<node_id>/) ----
+# 部署成功后从节点拉 /opt/nexus-argo/sub/raw.txt 存下来, 只存原生;
+# 裂变在面板上现算。客户端拉订阅只读缓存, 不直连节点。
+SUB_CACHE_DIR = os.path.join(PANEL_DIR, "sub_cache")
+_NODE_SUB_REMOTE = "/opt/nexus-argo/sub/raw.txt"
+
+
+def _sub_cache_dir(node_id):
+    return os.path.join(SUB_CACHE_DIR, node_id)
+
+
+def _sub_cache_raw_path(node_id):
+    return os.path.join(_sub_cache_dir(node_id), "raw.txt")
+
+
+def _sub_cache_meta_path(node_id):
+    return os.path.join(_sub_cache_dir(node_id), "meta.json")
+
+
+def _sub_cache_meta(node_id):
+    return _load_json(_sub_cache_meta_path(node_id), {})
+
+
+def _sub_cache_status(node_id):
+    """某节点的订阅同步状态, 供 /api/nodes 与 /api/status 用。"""
+    meta = _sub_cache_meta(node_id)
+    ok = bool(meta.get("pulled_at")) and os.path.isfile(_sub_cache_raw_path(node_id))
+    return {"synced": ok,
+            "pulled_at": meta.get("pulled_at") or None,
+            "count": int(meta.get("count") or 0),
+            "name": meta.get("name") or ""}
+
+
+def _pull_node_sub(node):
+    """从节点拉原生订阅文件, 存进 sub_cache/<id>/raw.txt + meta.json。
+    只拉原生。失败保留旧缓存, 返回 (False, 原因); 绝不抛异常
+    (调用方是部署线程, 拉取失败也不能影响部署结果)。"""
+    nid = node["id"]
+    try:
+        rc, out, err = _ssh_cmd(node, "cat " + _NODE_SUB_REMOTE, timeout=30)
+        if rc != 0:
+            detail = ((out or b"") + (err or b"")).decode("utf-8", "replace").strip()
+            return False, "SSH 拉取失败" + (f": {detail[-120:]}" if detail else "")
+        lines = [l.strip() for l in (out or b"").decode("utf-8", "replace").splitlines()
+                 if l.strip() and "://" in l]
+        if not lines:
+            return False, "节点上原生订阅为空, 未覆盖旧缓存"
+        try:
+            os.makedirs(_sub_cache_dir(nid), exist_ok=True)
+            with open(_sub_cache_raw_path(nid), "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+            _save_json(_sub_cache_meta_path(nid), {
+                "node_id": nid, "name": node.get("name") or "",
+                "host": node.get("host") or "",
+                "pulled_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "count": len(lines)})
+        except OSError as e:
+            return False, f"写缓存失败: {e}"
+        return True, f"已同步 {len(lines)} 条原生节点"
+    except Exception as e:
+        return False, f"同步异常: {e}"
 
 
 def _ensure_panel_key():
@@ -1480,9 +1547,9 @@ def _ip_sub_on(cfg):
 
 def subscription_urls(cfg, host=None, scheme=None):
     """订阅地址 (按当前配置算)。
-    ARGO 订阅由面板提供: ARGO 面板域名 + 随机口令, 只含隧道节点
-    (原生 raw / 动态 merged, 裂变后也在里面); 没配 ARGO 面板或没开
-    面板订阅时不提供。
+    ARGO 订阅由面板提供: ARGO 面板域名 + 随机口令, 内容是汇总订阅
+    (本机节点 + 各远程节点缓存的原生, 裂变在面板上现算); 只须配了
+    ARGO 面板域名, 与面板订阅/IP 域名订阅两个开关无关。
     IP域名订阅由 IP/域名面板提供: 面板 IP 或域名 + 订阅端口 + 随机口令;
     没配直连时拉到的是 Argo 节点 (ip_argo_url); 没配 IP/域名面板或
     没开 IP域名订阅时不提供。直连订阅由直连地址提供 (direct_url,
@@ -1495,7 +1562,10 @@ def subscription_urls(cfg, host=None, scheme=None):
     argo_on = _argo_sub_on(cfg)
     ip_on = _ip_sub_on(cfg)
     direct_on = _as_bool(cfg.get("sub_ip_enabled"), True)
-    base = f"https://{(cfg.get('argo_panel_domain') or '').strip()}" if argo_on else ""
+    # 汇总订阅地址: 只要配了 ARGO 面板域名就提供, 与面板订阅/IP 域名
+    # 订阅两个开关无关 (开关都关着也显示, 内容是汇总订阅)。
+    _domain = (cfg.get("argo_panel_domain") or "").strip()
+    base = f"https://{_domain}" if _domain else ""
     ip_base = _ip_sub_base(cfg) if ip_on else None
     direct_base = _direct_sub_base(cfg) if direct_on else None
     out = {
@@ -1548,6 +1618,136 @@ def _ensure_sub_name(cfg):
     if not name or name == "nexus":
         cfg["sub_name"] = _gen_sub_token()
     return cfg["sub_name"]
+
+
+# ---- 订阅汇总: 裂变 (原样移植自 web/sub-server.py) ----
+# sub-server.py 是按节点环境变量读配置的独立服务, 不能干净 import
+# (import 会读面板进程的环境变量, OPT_ADDRS 等默认值会错), 所以把
+# 纯函数原样搬过来, 逻辑与节点 merged.txt 一致 (只换链接里的 host,
+# 其余原样保留, SNI 不变; install.sh 的 merged.txt 也是同一规则)。
+_AGG_FISSION_RE = re.compile(r"^([a-zA-Z0-9+.-]+://[^@]+@)([^:/?#]+)(:\d+.*)$")
+_AGG_ADDR_RE = re.compile(r"^[A-Za-z0-9._-]+(:\d+)?$")
+
+
+def _agg_fission_link(link, addr):
+    m = _AGG_FISSION_RE.match(link)
+    if not m:
+        return None
+    return m.group(1) + addr + m.group(3)
+
+
+def _agg_fission(lines, addrs):
+    out = []
+    for link in lines:
+        for addr in addrs:
+            f = _agg_fission_link(link, addr)
+            if f:
+                out.append(f)
+    return out
+
+
+def _agg_parse_addrs(query, default_addrs):
+    """?addrs=a,b 换优选地址 (最多 20 个, 只接受主机名/IP 字符);
+    不带用面板优选地址。"""
+    raw = (query.get("addrs", [""])[0] or "")
+    addrs = [a.strip() for a in raw.split(",") if a.strip()]
+    if not addrs:
+        return list(default_addrs)
+    addrs = [a for a in addrs if _AGG_ADDR_RE.match(a)][:20]
+    return addrs or list(default_addrs)
+
+
+def _agg_decode_subscription(text):
+    """订阅内容解析: 明文按行取, base64 解开再按行取 (与 nexus-sub 一致)。"""
+    trimmed = (text or "").strip()
+    if not trimmed:
+        return []
+    if "://" in trimmed:
+        return [l.strip() for l in trimmed.splitlines() if l.strip()]
+    try:
+        cleaned = re.sub(r"\s+", "", trimmed)
+        std = cleaned.replace("-", "+").replace("_", "/")
+        padded = std + "=" * ((4 - len(std) % 4) % 4)
+        decoded = base64.b64decode(padded).decode("utf-8")
+        lines = [l.strip() for l in decoded.splitlines() if l.strip()]
+        if lines and any("://" in l for l in lines):
+            return lines
+    except Exception:
+        pass
+    return [l.strip() for l in trimmed.splitlines() if l.strip()]
+
+
+def _agg_encode_subscription(lines):
+    text = "\n".join(lines) + ("\n" if lines else "")
+    return base64.b64encode(text.encode()).decode()
+
+
+def _agg_link_kind(link, argo_prefix, direct_prefix):
+    """链接归属: 按备注第一段 (前缀丨...) 区分; 备注里的 丨Xray丨 /
+    丨Singbox丨 是隧道节点的另一特征 (install.sh 健康检查也用它计数)。
+    无备注或未知备注按隧道节点处理 (直连链接一律带直连前缀)。"""
+    try:
+        remark = urllib.parse.unquote(urllib.parse.urlparse(link).fragment or "")
+    except Exception:
+        remark = ""
+    first = remark.split("丨")[0] if remark else ""
+    if first == argo_prefix:
+        return "argo"
+    if first == direct_prefix:
+        return "direct"
+    if "丨Xray丨" in remark or "丨Singbox丨" in remark:
+        return "argo"
+    return "argo"
+
+
+def _agg_read_links_file(path):
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return _agg_decode_subscription(f.read())
+    except OSError:
+        return []
+
+
+def _agg_all_native_links():
+    """汇总原生链接: 本机 $WORKDIR/sub/raw.txt (有就读, 没部署就是空)
+    + 各远程节点的 sub_cache/<id>/raw.txt (按节点列表顺序)。
+    有缓存文件就进汇总 (删节点 / 清除成功时会删缓存, 不再进汇总);
+    部署失败不影响已缓存的订阅 (节点多半还在跑上一次的部署)。
+    返回 (links, 已同步节点数)。"""
+    links = _agg_read_links_file(os.path.join(WORKDIR, "sub", "raw.txt"))
+    synced = 0
+    for n in load_nodes():
+        cached = _agg_read_links_file(_sub_cache_raw_path(n["id"]))
+        if cached:
+            synced += 1
+            links += cached
+    return links, synced
+
+
+def _agg_build(cfg, query, kind):
+    """汇总订阅内容 (按 sub-server.py 的 only= 语义)。
+    kind=raw: 原生 (本机 + 各远程缓存); kind=merged: 面板现算的裂变
+    (隧道节点按优选地址裂变, 直连节点原样跟上)。
+    ?only=argo 只取隧道节点, ?only=direct 只取直连节点 (含 Reality),
+    不带取全部; ?addrs= 换优选地址, 不带用面板优选地址。"""
+    links, _synced = _agg_all_native_links()
+    only = (query.get("only", [""])[0] or "").strip().lower()
+    argo_prefix = cfg.get("argo_prefix") or "Argo"
+    direct_prefix = cfg.get("direct_prefix") or "直连"
+    tunnel = [l for l in links if _agg_link_kind(l, argo_prefix, direct_prefix) == "argo"]
+    direct = [l for l in links if _agg_link_kind(l, argo_prefix, direct_prefix) == "direct"]
+    if kind == "raw":
+        if only == "argo":
+            return tunnel
+        if only == "direct":
+            return direct
+        return links
+    addrs = _agg_parse_addrs(query, [a for a in (cfg.get("opt_addrs") or []) if a] or ["cloudflare.com"])
+    if only == "argo":
+        return _agg_fission(tunnel, addrs)
+    if only == "direct":
+        return direct
+    return _agg_fission(tunnel, addrs) + direct
 
 
 def _panel_path():
@@ -1725,6 +1925,8 @@ def _node_clear_worker(node):
         _node_clear_log_append(nid, f"[nexus-panel] 远程清除异常: {e}\n".encode())
     elapsed = int(time.time() - started)
     if code == 0:
+        # 清除成功: 节点上的部署已没了, 缓存的订阅不能再进汇总, 一并删掉。
+        shutil.rmtree(_sub_cache_dir(nid), ignore_errors=True)
         _set_node_deploy_status(nid, "idle")
         _set_node_clear_status(nid, "ok", exit_code=0, elapsed_s=elapsed,
                                finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1812,6 +2014,15 @@ def _node_deploy_worker(node, cfg):
         _node_log_append(nid, f"[nexus-panel] 远程部署异常: {e}\n".encode())
     elapsed = int(time.time() - started)
     if code == 0:
+        # 部署成功: 拉一次原生订阅存面板上 (只读缓存, 失败不影响部署结果)。
+        try:
+            _ok, _msg = _pull_node_sub(node)
+            if _ok:
+                _node_log_append(nid, f"[nexus-panel] 订阅已同步: {_msg}\n".encode())
+            else:
+                _node_log_append(nid, f"[nexus-panel] 订阅同步失败 (不影响部署): {_msg}\n".encode())
+        except Exception as e:
+            _node_log_append(nid, f"[nexus-panel] 订阅同步异常 (不影响部署): {e}\n".encode())
         _set_node_deploy_status(nid, "ok", exit_code=0, elapsed_s=elapsed,
                                 finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
                                 message="远程部署完成, 健康检查通过")
@@ -2147,50 +2358,64 @@ class Handler(BaseHTTPRequestHandler):
 
     def _proxy_sub(self, url):
         """面板订阅代理: /<name>/raw|merged[?only=...&format=...]
-        转发给本机 nexus-sub (127.0.0.1:订阅内部端口), 面板域名/IP 直接出订阅。
-        第一段是订阅口令: 随机口令或节点 UUID 都认 (UUID 是旧地址的兼容);
-        转发时统一换成本机部署的节点 UUID (nexus-sub 只认它), 口令不对直接 404。
-        旧的两段地址 /<name>/<sub_path>/raw|merged 也还认 (兼容已导入的客户端)。
+        汇总订阅: 本机原生 + 各远程节点缓存的原生拼起来, 裂变在面板上
+        现算, 只读缓存不连节点; 与 ARGO 面板/IP 域名面板开关无关
+        (开关都关着也提供)。
+        第一段是订阅口令: 随机口令或节点 UUID 都认 (UUID 是旧地址的兼容)。
+        旧的两段地址 /<name>/<sub_path>/raw|merged 与带 format= 的请求
+        仍按旧办法转发给本机 nexus-sub (只含本机节点, 格式转换在它那里做)。
         直连订阅不走这里 (从直连 VPS 上直接拉)。"""
         cfg = load_config()
         sub_path = cfg.get("sub_path") or "sub"
         sub_name = _ensure_sub_name(cfg)
         node_uuid = cfg.get("node_uuid") or ""
         path = url.path
+        query = urllib.parse.parse_qs(url.query or "")
         m = re.match(r"^/([^/]+)/(raw|merged)$", path)
+        legacy = False
         if m:
-            seg = m.group(1)
+            seg, kind = m.group(1), m.group(2)
             if seg != sub_name and seg != node_uuid:
                 self._send_json({"error": "订阅口令不正确"}, 404)
                 return
+        else:
+            m = re.match(r"^/([^/]+)/" + re.escape(sub_path) + r"/(raw|merged)$", path)
+            if not m:
+                self._send_json({"error": "未知订阅地址"}, 404)
+                return
+            seg, kind = m.group(1), m.group(2)
+            if seg != sub_name and seg != node_uuid:
+                self._send_json({"error": "订阅口令不正确"}, 404)
+                return
+            legacy = True
+        if legacy or "format" in query:
+            # 旧行为: 转发给本机 nexus-sub (只含本机节点)。
+            # 开关不做门控 (与汇总订阅一致: 订阅只认口令, 不认开关)。
             if not node_uuid:
                 self._send_json({"error": "订阅服务未运行, 请先部署"}, 502)
                 return
-            path = f"/{node_uuid}/{m.group(2)}"
-        else:
-            m = re.match(r"^/([^/]+)/" + re.escape(sub_path) + r"/(raw|merged)$", path)
-            if m:
-                seg = m.group(1)
-                if seg != sub_name and seg != node_uuid:
-                    self._send_json({"error": "订阅口令不正确"}, 404)
-                    return
-                if not node_uuid:
-                    self._send_json({"error": "订阅服务未运行, 请先部署"}, 502)
-                    return
-                path = f"/{node_uuid}/{sub_path}/{m.group(2)}"
-        # 订阅开关门控 (只拦新地址带的 ?only=, 不带 only 的旧组合地址仍放行,
-        # 已导入客户端的旧订阅不断): ARGO 订阅须配 ARGO 面板且开面板订阅,
-        # IP域名订阅须开 IP域名订阅开关。
-        _only = (urllib.parse.parse_qs(url.query or "").get("only") or [""])[0]
-        if _only == "argo" and not _argo_sub_on(cfg):
-            self._send_json({"error": "ARGO 订阅未启用 (请先配置 ARGO 面板并开启面板订阅)"}, 404)
+            fwd = f"/{node_uuid}/{sub_path}/{kind}" if legacy else f"/{node_uuid}/{kind}"
+            self._proxy_forward(fwd, url.query)
             return
-        if _only == "direct" and not _as_bool(cfg.get("sub_ip_enabled"), True):
-            self._send_json({"error": "IP域名订阅未开启"}, 404)
+        # 汇总订阅: 只读缓存, 不连节点。
+        links = _agg_build(cfg, query, kind)
+        if not links:
+            self._send_json({"error": "订阅为空, 请先部署或同步节点"}, 502)
             return
+        data = _agg_encode_subscription(links).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _proxy_forward(self, path, query):
+        """转发给本机 nexus-sub (旧行为: 旧两段地址与 format= 转换)。"""
+        cfg = load_config()
         target = f"http://127.0.0.1:{cfg.get('sub_port') or 18080}{path}"
-        if url.query:
-            target += "?" + url.query
+        if query:
+            target += "?" + query
         try:
             req = urllib.request.Request(target, method="GET")
             with urllib.request.urlopen(req, timeout=20) as r:
@@ -2279,6 +2504,7 @@ class Handler(BaseHTTPRequestHandler):
             for n in load_nodes():
                 _d = dict(n)
                 _d["deploy"] = _node_deploy_status(n["id"])
+                _d["sub"] = _sub_cache_status(n["id"])
                 remote_nodes.append(_d)
             self._send_json({
                 "deployed": _is_deployed(),
@@ -2385,6 +2611,7 @@ class Handler(BaseHTTPRequestHandler):
             for n in load_nodes():
                 d = dict(n)
                 d["deploy"] = _node_deploy_status(n["id"])
+                d["sub"] = _sub_cache_status(n["id"])
                 out.append(d)
             self._send_json({"nodes": out})
             return
@@ -2964,6 +3191,56 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "message": "远程清除已开始, 看日志跟进"})
             return
 
+        _m = re.match(r"^/api/nodes/([0-9a-f]+)/sub/refresh$", path)
+        if _m:
+            # 手动同步某节点的原生订阅: 从节点拉 raw.txt 存缓存, 失败保留旧缓存。
+            node = _find_node(_m.group(1))
+            if not node:
+                self._send_json({"error": "节点不存在"}, 404)
+                return
+            nid = node["id"]
+            with _node_lock(nid):
+                th = _node_deploy_threads.get(nid)
+                if th is not None and th.is_alive():
+                    self._send_json({"error": "该节点正在部署, 请等它完成再同步订阅"}, 409)
+                    return
+                th = _node_clear_threads.get(nid)
+                if th is not None and th.is_alive():
+                    self._send_json({"error": "该节点正在清除, 请等它完成再同步订阅"}, 409)
+                    return
+            ok, msg = _pull_node_sub(node)
+            if ok:
+                self._send_json({"ok": True, "message": msg, "sub": _sub_cache_status(nid)})
+            else:
+                self._send_json({"error": msg, "sub": _sub_cache_status(nid)}, 502)
+            return
+
+        if path == "/api/sub/refresh-all":
+            # 全部刷新: 逐个从各远程节点拉原生订阅。未完成密钥接入或正在
+            # 部署/清除的节点跳过 (记原因); 单个失败不影响其它节点, 旧缓存保留。
+            results = []
+            for node in load_nodes():
+                nid = node["id"]
+                if node.get("auth") != "key":
+                    results.append({"id": nid, "name": node.get("name") or "",
+                                    "ok": False, "message": "该节点尚未完成密钥接入"})
+                    continue
+                with _node_lock(nid):
+                    th = _node_deploy_threads.get(nid)
+                    busy = th is not None and th.is_alive()
+                    if not busy:
+                        th = _node_clear_threads.get(nid)
+                        busy = th is not None and th.is_alive()
+                if busy:
+                    results.append({"id": nid, "name": node.get("name") or "",
+                                    "ok": False, "message": "该节点正在部署或清除, 请等它完成"})
+                    continue
+                ok, msg = _pull_node_sub(node)
+                results.append({"id": nid, "name": node.get("name") or "",
+                                "ok": ok, "message": msg})
+            self._send_json({"ok": True, "results": results})
+            return
+
         _m = re.match(r"^/api/nodes/([0-9a-f]+)/deploy$", path)
         if _m:
             node = _find_node(_m.group(1))
@@ -3035,6 +3312,7 @@ class Handler(BaseHTTPRequestHandler):
                     os.remove(p)
                 except OSError:
                     pass
+            shutil.rmtree(_sub_cache_dir(nid), ignore_errors=True)
             with _CERT_TASKS_LOCK:
                 CERT_TASKS.pop(nid, None)
         self._send_json({"ok": True, "message": "节点已删除"})
