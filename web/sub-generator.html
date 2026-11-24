@@ -301,11 +301,12 @@ function getAddr(id) { return ($(id).dataset.url || "").trim(); }
 const _cfgTok = new URLSearchParams(location.search).get("token") || "nexus";
 fetch("/config.json?token=" + encodeURIComponent(_cfgTok)).then(r => r.json()).then(c => {
   cfg = c;
-  if (c.uuid) setAddr("rawUrl", location.origin + "/sub/raw/" + c.uuid);
+  if (c.sub_name || c.uuid) setAddr("rawUrl", location.origin + "/" + (c.sub_name || c.uuid) + "/raw");
   if (c.opt_addrs && c.opt_addrs.length) $("addrs").value = c.opt_addrs.join("\n");
   if (c.uuid) loadNative();
 }).catch(() => {
   $("addrs").value = PRESETS.join("\n");
+  const _go = $("genOut"); if (_go) _go.innerHTML = '<span class="err">未取到部署配置：请在地址栏加上 ?token=&lt;订阅口令&gt; 再打开（订阅口令是订阅地址里域名后面那一段）</span>';
 });
 // --- 原生订阅 ---
 // 原生订阅地址部署时就定好了，只读；打开页面就静默拉一次原生节点（只记个数，不展示列表）
@@ -599,8 +600,8 @@ async function doFission() {
   const addrs = parseAddrs();
   if (!addrs.length) { $("genOut").innerHTML = '<span class="err">请先填写优选地址</span>'; return null; }
   let url;
-  if (cfg.uuid) {
-    url = location.origin + "/sub/merged/" + cfg.uuid + "?addrs=" + encodeURIComponent(addrs.join(","));
+  if (cfg.sub_name || cfg.uuid) {
+    url = location.origin + "/" + (cfg.sub_name || cfg.uuid) + "/merged?addrs=" + encodeURIComponent(addrs.join(","));
   } else {
     $("genOut").innerHTML = '<span class="err">未获取到 UUID，请确认原生订阅地址是否正确</span>'; return null;
   }

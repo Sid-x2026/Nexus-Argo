@@ -16,7 +16,8 @@
 #     ENABLE_XRAY, ENABLE_SINGBOX,
 #     OPT_ADDRS (默认优选地址, 不带 ?addrs= 时用它),
 #     SUB_PORT (监听端口, 默认 18080),
-#     SUB_PATH (订阅路径前缀, 默认 sub, 面板自定义订阅地址),
+#     SUB_PATH (旧订阅地址的第二段, 默认 sub, 只给旧地址兼容用,
+#       新地址只有一段随机口令, 见下),
 #     ENABLE_DIRECT, DIRECT_DOMAIN, DIRECT_XRAY_TLS,
 #     DIRECT_XRAY_TLS_PORT,
 #     DIRECT_SB_TLS, DIRECT_SB_TLS_PORT (直连节点, 原样进订阅, 不裂变)
@@ -45,15 +46,18 @@
 #     <SUB_DOMAIN> -> http://127.0.0.1:<SUB_PORT>
 #
 # 路由 (输出一律标准 base64, 和 Worker / v3 静态文件格式一致,
-# 客户端不用改设置; SUB_PATH 默认 sub, 可改):
+# 客户端不用改设置):
 #   GET /                              订阅生成器面板 (sub-generator.html)
 #   GET /config.json?token=<name>      部署时的 UUID / 默认优选地址, 供面板用
 #   GET /help.txt                      纯文本说明
-#   GET /<name>/<SUB_PATH>/raw         原生订阅, 1 协议 = 1 节点
-#       <name> 是订阅地址里的固定名字 (默认 nexus), 旧的 UUID 也认;
-#       ?only=argo 只取隧道节点, ?only=direct 只取直连节点 (含 Reality)
+#   GET /<name>/raw                    原生订阅, 1 协议 = 1 节点
+#       <name> 是订阅地址里的随机口令 (8 位字母数字, 面板生成一次存着),
+#       旧的 UUID 也认; ?only=argo 只取隧道节点, ?only=direct 只取
+#       直连节点 (含 Reality)
+#   GET /<name>/<SUB_PATH>/raw         旧地址, 兼容保留
 #   GET /<SUB_PATH>/raw/<uuid>         旧地址, 兼容保留
-#   GET /<name>/<SUB_PATH>/merged?addrs=a,b
+#   GET /<name>/merged?addrs=a,b
+#   GET /<name>/<SUB_PATH>/merged?addrs=a,b   旧地址, 兼容保留
 #   GET /<SUB_PATH>/merged/<uuid>?addrs=a,b   旧地址, 兼容保留
 #       动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上;
 #       不带 addrs 就用部署时的 OPT_ADDRS
@@ -166,30 +170,32 @@ REALITY_ENC_CLIENT = os.environ.get("REALITY_ENC_CLIENT", "").strip() or "none"
 
 HELP = (
     "Nexus-Argo 动态订阅\n\n"
-    "订阅地址里用固定名字 (默认 nexus, 代替原来的 UUID; 旧的 UUID 地址仍认)。\n\n"
-    f"GET /<name>/{SUB_PATH}/raw\n"
+    "订阅地址里用随机口令 (8 位字母数字, 面板生成一次存着, 代替原来的 UUID;\n"
+    "旧的 UUID 地址仍认)。\n\n"
+    "GET /<name>/raw\n"
     "    原生订阅 (隧道 + 直连); ?only=argo 只取隧道节点,\n"
     "    ?only=direct 只取直连节点 (含 Reality)\n\n"
-    f"GET /<name>/{SUB_PATH}/merged?addrs=a,b,c\n"
+    "GET /<name>/merged?addrs=a,b,c\n"
     "    动态订阅: 隧道节点按 addrs 现场裂变, 直连节点原样跟上\n"
     "    不带 addrs: 用部署时的优选地址\n\n"
-    f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=singbox\n"
+    "GET /<name>/merged?addrs=a,b,c&format=singbox\n"
     "    Sing-box 订阅: 只去掉 xhttp 节点与带 VLESS 加密层的节点\n"
     "    (base64, Sing-box 没有 xhttp 传输、也不支持 VLESS Encryption;\n"
     "    trojan/vmess/ss/hysteria2/vless 含 reality 都保留, 开了\n"
     "    加密层的 Reality 节点除外)\n\n"
-    f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=clash\n"
+    "GET /<name>/merged?addrs=a,b,c&format=clash\n"
     "    Clash 订阅: Mihomo YAML (xhttp 需 Mihomo 1.19+, 带\n"
     "    VLESS 加密层的节点除外; 支持 trojan/vmess/ss/\n"
     "    hysteria2/vless-reality)\n\n"
     "直连协议: Xray VLESS 明文 TCP / TLS / Reality / 明文 WS / gRPC+TLS /\n"
     "Trojan+TLS、VMess+WS+TLS; Sing-box VLESS+TLS、Trojan+TLS、\n"
     "Shadowsocks (aes-256-gcm)、Hysteria2。直连节点原样进订阅, 不裂变。\n\n"
-    f"GET /{SUB_PATH}/merged/<uuid>?addrs=a,b,c&format=auto\n"
+    "GET /<name>/merged?addrs=a,b,c&format=auto\n"
     "    通用订阅: 按客户端 User-Agent 自适应 (Clash 系返回 YAML,\n"
     "    Sing-box 系返回去掉 xhttp 后的 base64, 其余返回 base64)\n\n"
-    f"GET /{SUB_PATH}/merged?url=<外部订阅地址>&addrs=a,b,c\n"
-    "    外部订阅裂变\n\n"
+    "GET /<name>/merged?url=<外部订阅地址>&addrs=a,b,c\n"
+    "    外部订阅裂变 (不用口令)\n\n"
+    "旧地址 /<name>/sub/raw|merged 与 /sub/raw|merged/<uuid> 仍认。\n\n"
     "不走 Worker, 裂变在 VPS 本地完成。\n"
 )
 
@@ -683,6 +689,23 @@ def _raw_links(query):
     return native_links()
 
 
+def _external_merged(query):
+    """外部订阅裂变: ?url=<外部订阅地址> 拉回来按 addrs 裂变。
+    返回 (links, err): err 为 None 时成功, 否则为 (状态码, 说明)。"""
+    external = (query.get("url", [""])[0] or "").strip()
+    if not external:
+        return None, None
+    if not external.startswith(("http://", "https://")):
+        return None, (400, "url 必须是 http(s) 地址")
+    try:
+        req = urllib.request.Request(external, headers={"User-Agent": "nexus-sub"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            lines = decode_subscription(r.read().decode("utf-8", "replace"))
+    except Exception as e:
+        return None, (502, f"拉取外部订阅失败: {e}")
+    return fission(lines, parse_addrs(query)), None
+
+
 def _merged_links(query):
     only = _only_of(query)
     addrs = parse_addrs(query)
@@ -837,6 +860,33 @@ class Handler(BaseHTTPRequestHandler):
             self._send("\n".join(_merged_links(query)) + "\n")
             return
 
+        # 短地址 /<name>/raw|merged (一段随机口令, 新版面板用的就是它)。
+        raw_m = re.match(r"^/([^/]+)/raw$", path)
+        if raw_m:
+            if not _tok_ok(raw_m.group(1)):
+                self._send("口令不匹配", 404)
+                return
+            links = _raw_links(query)
+            if not links:
+                self._send(_empty_msg(query), 500)
+                return
+            self._send_links(links, query)
+            return
+
+        merged_m = re.match(r"^/([^/]+)/merged$", path)
+        if merged_m:
+            merged, err = _external_merged(query)
+            if err:
+                self._send(err[1], err[0])
+                return
+            if merged is None:
+                if not _tok_ok(merged_m.group(1)):
+                    self._send("口令不匹配: /<name>/merged?addrs=a,b,c", 404)
+                    return
+                merged = _merged_links(query)
+            self._send_links(merged, query)
+            return
+
         raw_m = re.match(r"^/([^/]+)/" + re.escape(SUB_PATH) + r"/raw$", path)
         if raw_m:
             if not _tok_ok(raw_m.group(1)):
@@ -871,21 +921,11 @@ class Handler(BaseHTTPRequestHandler):
 
         merged_m = re.match(r"^/" + re.escape(SUB_PATH) + r"/merged(?:/(.+))?$", path)
         if merged_m:
-            addrs = parse_addrs(query)
-            external = (query.get("url", [""])[0] or "").strip()
-            if external:
-                if not external.startswith(("http://", "https://")):
-                    self._send("url 必须是 http(s) 地址", 400)
-                    return
-                try:
-                    req = urllib.request.Request(external, headers={"User-Agent": "nexus-sub"})
-                    with urllib.request.urlopen(req, timeout=10) as r:
-                        lines = decode_subscription(r.read().decode("utf-8", "replace"))
-                except Exception as e:
-                    self._send(f"拉取外部订阅失败: {e}", 502)
-                    return
-                merged = fission(lines, addrs)
-            else:
+            merged, err = _external_merged(query)
+            if err:
+                self._send(err[1], err[0])
+                return
+            if merged is None:
                 if not merged_m.group(1) or not _tok_ok(merged_m.group(1)):
                     self._send(f"口令不匹配: /{SUB_PATH}/merged/<uuid>?addrs=a,b,c", 404)
                     return
