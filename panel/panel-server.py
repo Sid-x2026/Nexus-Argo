@@ -188,6 +188,10 @@ DEFAULT_CONFIG = {
     "argo_panel_enabled": False,
     "argo_panel_domain": "",
     "argo_panel_port": PANEL_PORT,
+    # IP/域名面板: 可选, 与 ARGO 面板平行。打开后填面板的 IP 或域名
+    # (IP 订阅的地址从这里取); 直连地址只管直连协议, 不再给 IP 订阅用。
+    "ip_panel_enabled": False,
+    "ip_panel_host": "",
     # 面板访问路径 (自定义段, 默认 Nexus): 面板地址 =
     # https://<ARGO 面板域名>/<panel_path>, 部署页 ARGO 面板里改,
     # 保存后即按新路径提供面板 (不用重启, 见 _panel_path)。
@@ -864,6 +868,14 @@ def validate_config(raw):
             errors.append("ARGO 面板域名格式不正确, 请填隧道绑定的面板域名")
         if not _port_ok(cfg["argo_panel_port"]):
             errors.append("ARGO 面板端口必须是 1-65535 的端口")
+    # IP/域名面板 (可选): 打开时 IP 或域名必填, 须是域名或 IP;
+    # 地址里带了端口也只取主机部分。没打开时只保留已保存的值, 不校验。
+    cfg["ip_panel_enabled"] = _as_bool(cfg.get("ip_panel_enabled"), False)
+    _iph = str(cfg.get("ip_panel_host") or "").strip().split(":")[0]
+    if cfg["ip_panel_enabled"] and not (_is_domain(_iph) or _is_ipv4(_iph)):
+        errors.append("IP/域名面板地址格式不正确, 请填 IP 或域名")
+        _iph = ""
+    cfg["ip_panel_host"] = _iph
     # 订阅开关: 各自独立, 可同时开; 默认全开 (与旧行为一致)。
     cfg["sub_panel_enabled"] = _as_bool(cfg.get("sub_panel_enabled"), True)
     cfg["sub_ip_enabled"] = _as_bool(cfg.get("sub_ip_enabled"), True)
@@ -1404,6 +1416,22 @@ def _direct_sub_base(cfg):
     return f"http://{_hh}:{_port}"
 
 
+def _ip_sub_base(cfg):
+    """IP 订阅 base: IP/域名面板里填的 IP 或域名。
+    IP 订阅从 IP/域名面板的地址上拉, 固定走 http + 订阅端口
+    (默认 18080, 地址里带了端口的旧配置仍认那个端口)。
+    没配 IP/域名面板时返回 None (不显示 IP 订阅)。
+    直连地址只管直连协议, 不再给 IP 订阅用。"""
+    _h = (cfg.get("ip_panel_host") or "").strip()
+    if not _h:
+        return None
+    _hh, _pp = _split_host_port(_h)
+    if not _hh or not (_is_domain(_hh) or _is_ipv4(_hh)):
+        return None
+    _port = _pp if ":" in _h else (cfg.get("sub_port") or 18080)
+    return f"http://{_hh}:{_port}"
+
+
 def _argo_sub_on(cfg):
     """ARGO 订阅可用: 配了 ARGO 面板 (域名非空) 且面板订阅开关开了。"""
     return (bool(cfg.get("argo_panel_enabled"))
@@ -1411,23 +1439,33 @@ def _argo_sub_on(cfg):
             and _as_bool(cfg.get("sub_panel_enabled"), True))
 
 
+def _ip_sub_on(cfg):
+    """IP 订阅可用: 配了 IP/域名面板 (IP 或域名非空) 且 IP 订阅开关开了。"""
+    return (bool(cfg.get("ip_panel_enabled"))
+            and bool((cfg.get("ip_panel_host") or "").strip())
+            and _as_bool(cfg.get("sub_ip_enabled"), True))
+
+
 def subscription_urls(cfg, host=None, scheme=None):
     """订阅地址 (按当前配置算)。
     ARGO 订阅由面板提供: ARGO 面板域名 + 随机口令, 只含隧道节点
     (原生 raw / 动态 merged, 裂变后也在里面); 没配 ARGO 面板或没开
     面板订阅时不提供。
-    IP域名订阅由直连 VPS 提供: 用户填的域名或 IP + 订阅端口 + 随机口令;
-    没配直连时拉到的是 Argo 节点 (ip_argo_url), 配了直连还有直连节点
-    (direct_url, Reality 也在直连里); 没开 IP域名订阅时不提供。
+    IP域名订阅由 IP/域名面板提供: 面板 IP 或域名 + 订阅端口 + 随机口令;
+    没配直连时拉到的是 Argo 节点 (ip_argo_url); 没配 IP/域名面板或
+    没开 IP域名订阅时不提供。直连订阅由直连地址提供 (direct_url,
+    Reality 也在直连里), 直连地址只管直连协议。
     订阅地址里不再放节点 UUID (随机口令代替), UUID 只留在订阅内容里。
     host / scheme 保留兼容 (旧版按访问地址推导面板地址, 现改用配置
     里的 ARGO 面板域名)。"""
     sub_name = _ensure_sub_name(cfg)
     sub_path = cfg.get("sub_path") or "sub"
     argo_on = _argo_sub_on(cfg)
-    ip_on = _as_bool(cfg.get("sub_ip_enabled"), True)
+    ip_on = _ip_sub_on(cfg)
+    direct_on = _as_bool(cfg.get("sub_ip_enabled"), True)
     base = f"https://{(cfg.get('argo_panel_domain') or '').strip()}" if argo_on else ""
-    direct_base = _direct_sub_base(cfg) if ip_on else None
+    ip_base = _ip_sub_base(cfg) if ip_on else None
+    direct_base = _direct_sub_base(cfg) if direct_on else None
     out = {
         "sub_host": cfg.get("sub_host") or "",
         "sub_domain": cfg.get("sub_domain") or "",
@@ -1438,16 +1476,19 @@ def subscription_urls(cfg, host=None, scheme=None):
         "argo_panel_enabled": bool(cfg.get("argo_panel_enabled")),
         "argo_panel_domain": (cfg.get("argo_panel_domain") or "").strip(),
         "argo_panel_port": cfg.get("argo_panel_port") or PANEL_PORT,
+        "ip_panel_enabled": bool(cfg.get("ip_panel_enabled")),
+        "ip_panel_host": (cfg.get("ip_panel_host") or "").strip(),
         "panel_path": (cfg.get("panel_path") or "Nexus").strip().strip("/") or "Nexus",
         "sub_panel_enabled": _as_bool(cfg.get("sub_panel_enabled"), True),
-        "sub_ip_enabled": ip_on,
+        "sub_ip_enabled": direct_on,
         "argo_sub_enabled": argo_on,
         "ip_sub_enabled": ip_on,
+        "direct_sub_enabled": bool(direct_base),
         "raw_url": f"{base}/{sub_name}/raw?only=argo" if base else "",
         "merged_url": f"{base}/{sub_name}/merged?only=argo" if base else "",
         "direct_url": f"{direct_base}/{sub_name}/raw?only=direct" if direct_base else "",
-        "ip_argo_url": f"{direct_base}/{sub_name}/raw?only=argo" if direct_base else "",
-        "ip_argo_merged_url": f"{direct_base}/{sub_name}/merged?only=argo" if direct_base else "",
+        "ip_argo_url": f"{ip_base}/{sub_name}/raw?only=argo" if ip_base else "",
+        "ip_argo_merged_url": f"{ip_base}/{sub_name}/merged?only=argo" if ip_base else "",
         "generator_url": "",
         "raw_count": _count_lines(os.path.join(WORKDIR, "sub", "raw.txt")),
         "merged_count": _count_lines(os.path.join(WORKDIR, "sub", "merged.txt")),

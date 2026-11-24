@@ -487,6 +487,15 @@
                 <p class="hint">复制后直接打开面板；自定义段是面板的访问路径（默认 Nexus），改后部署保存才生效。</p>
               </div>
             </div>
+            <div style="margin-top:10px;">
+              <label class="pill"><input type="checkbox" id="ipPanelEnabled"> IP/域名面板</label>
+              <span class="hint" style="display:inline;">可选：面板的 IP 或域名入口，IP 订阅从这里拉。</span>
+              <div id="ipPanelFields" class="hidden" style="margin-top:8px;">
+                <label class="f">面板 IP 或域名 <span class="req">* 必填</span></label>
+                <input type="text" id="ipPanelHost" class="mono" placeholder="例如 195.72.189.180 或 panel.example.com" style="max-width:300px;">
+                <p class="hint" style="margin-top:6px;">IP 订阅的地址从这里取（直连地址只管直连协议）；端口在 IP 订阅栏里改。</p>
+              </div>
+            </div>
           </div>
           </div>
           <div class="sec-card tunnel">
@@ -500,15 +509,6 @@
                   <button type="button" class="sm" id="btnCopyPanelSub">复制</button>
                 </span>
               </div>
-              <div id="panelSubArea" style="margin-top:6px;">
-                <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                  <div style="flex:none; width:120px;">
-                    <label class="f">Argo 前缀 <span class="opt">选填</span></label>
-                    <input type="text" id="argoPrefix" value="Argo" style="width:100px;">
-                  </div>
-                </div>
-                <p class="hint">Argo 前缀是隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。订阅口令由面板自动生成，地址换了请重新导入。</p>
-              </div>
             </div>
             <div style="margin-top:8px;">
               <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -521,11 +521,18 @@
                 </span>
               </div>
               <div id="ipSubArea" style="margin-top:6px;">
-                <p class="hint">从直连 VPS 的域名或 IP 上拉；域名自动取直连卡里的直连地址，端口在地址栏里改，改后需重新部署；只开面板订阅时不用开。没配直连时，IP 订阅拉到的是 Argo 节点；直连订阅地址在直连卡里看。</p>
+                <p class="hint">从 IP/域名面板的 IP 或域名上拉；域名/IP 在左边的 IP/域名面板里填，端口在地址栏里改，改后需重新部署；只开面板订阅时不用开。没配直连时，IP 订阅拉到的是 Argo 节点；直连订阅地址在直连卡里看。</p>
               </div>
             </div>
-            <p class="hint">两个开关可同时开。面板订阅须先配置 ARGO 面板。</p>
+            <p class="hint">两个开关可同时开。面板订阅须先配置 ARGO 面板；IP 订阅须先配置 IP/域名面板。</p>
             <p id="subPreviewHint" class="hint hidden">未开启任何订阅。</p>
+            <div style="margin-top:10px; border-top:1px solid #c7d2fe; padding-top:10px;">
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <label class="f" style="margin:0; white-space:nowrap;">Argo 前缀 <span class="opt">选填</span></label>
+                <input type="text" id="argoPrefix" value="Argo" style="width:150px;">
+              </div>
+              <p class="hint">Argo 前缀是隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。订阅口令由面板自动生成，地址换了请重新导入。</p>
+            </div>
           </div>
           </div>
           </div>
@@ -608,7 +615,7 @@
     <div id="tab-sub" class="hidden">
       <div class="card">
         <h2>订阅地址</h2>
-        <p class="hint">面板订阅走 Argo 隧道拉节点（需先配置 ARGO 面板并开启面板订阅）；IP域名订阅直接从 VPS 的域名或 IP 上拉，IP 订阅也能拉 Argo 节点（需开启 IP域名订阅）。裂变请用订阅生成器或其它工具手动完成，本面板不做裂变。</p>
+        <p class="hint">面板订阅走 Argo 隧道拉节点（需先配置 ARGO 面板并开启面板订阅）；IP域名订阅从 IP/域名面板的 IP 或域名上拉，IP 订阅也能拉 Argo 节点（需配置 IP/域名面板并开启 IP域名订阅）。裂变请用订阅生成器或其它工具手动完成，本面板不做裂变。</p>
         <div class="addr-label">Argo 原生订阅地址</div>
         <div class="addr-row"><div class="addr empty" id="subRaw" data-hint="尚未部署">尚未部署</div><button class="sm" id="btnCopyRaw">复制</button></div>
         <div class="addr-label">Argo 动态订阅地址（原生 × 优选地址）</div>
@@ -944,14 +951,15 @@ async function loadStatus() {
       // Argo 订阅地址已带 ?only=argo, 格式参数用 & 追加
       const withFmt = (u, f) => u ? u + (u.indexOf("?") >= 0 ? "&" : "?") + "format=" + f : "";
       const argoHint = sub.argo_panel_enabled === undefined ? "尚未部署" : (!sub.argo_panel_enabled ? "未配置 ARGO 面板" : (!sub.sub_panel_enabled ? "面板订阅未开启" : "尚未部署"));
-      const directHint = sub.sub_ip_enabled === undefined ? "未填直连订阅地址" : (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址");
+      const directHint = sub.direct_sub_enabled === undefined ? (sub.sub_ip_enabled === undefined ? "未填直连订阅地址" : (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址")) : (!sub.direct_sub_enabled ? (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址") : "");
+      const ipHint = sub.ip_sub_enabled === undefined ? (sub.sub_ip_enabled === undefined ? "未开启 IP 订阅" : (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未开启 IP 订阅")) : (!sub.ip_sub_enabled ? (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未配置 IP/域名面板") : "");
       setAddr("ovSubAuto", withFmt(sub.merged_url, "auto"), argoHint);
       setAddr("ovSubV2ray", sub.raw_url || "", argoHint);
       setAddr("ovSubSingbox", withFmt(sub.merged_url, "singbox"), argoHint);
       setAddr("ovSubClash", withFmt(sub.merged_url, "clash"), argoHint);
       setAddr("ovSubIos", withFmt(sub.merged_url, "auto"), argoHint);
       setAddr("ovSubDirect", sub.direct_url || "", directHint);
-      setAddr("ovSubIpArgo", sub.ip_argo_url || "", sub.sub_ip_enabled === undefined ? "未开启 IP 订阅" : (!sub.sub_ip_enabled ? "IP域名订阅未开启" : "未开启 IP 订阅"));
+      setAddr("ovSubIpArgo", sub.ip_argo_url || "", ipHint);
     }
     if (s.subscription && s.subscription.sub_name) subToken = s.subscription.sub_name;
     updateSubPreview();
@@ -1071,8 +1079,15 @@ function updateArgoPanelBox() {
   $("subPanelEnabled").disabled = !on;
   updateSubPreview();
 }
+// ---- IP/域名面板开关 + IP 订阅开关 (与 ARGO 面板平行) ----
+function updateIpPanelBox() {
+  const on = $("ipPanelEnabled").checked;
+  $("ipPanelFields").classList.toggle("hidden", !on);
+  $("subIpEnabled").disabled = !on;
+  updateSubPreview();
+}
 // 订阅区只留开关 + 整条地址栏: 面板订阅地址由 ARGO 面板设置里的域名拼出,
-// IP域名订阅的 IP 由直连卡的订阅地址填 (可空); 完整地址在总览与订阅页查看。
+// IP域名订阅的 IP 由 IP/域名面板设置填 (可空); 完整地址在总览与订阅页查看。
 // 订阅地址: https://<域名>/<口令>/raw?only=argo, 口令是面板生成的 8 位随机串,
 // 存在 subToken 里; 未部署 (没有口令) 时地址栏显示提示, 不拼假地址。
 let subToken = "";
@@ -1082,7 +1097,9 @@ function updateSubPreview() {
   const modeDirect = $("modeDirect").checked;
   const domain = $("argoPanelDomain").value.trim();
   const panelPath = $("panelPath").value.trim() || "Nexus";
-  // 订阅域名自动取直连地址 (直连卡里填的域名或 IP, 不用再填一遍)
+  // IP 订阅的域名/IP 取自 IP/域名面板设置 (直连地址只管直连协议);
+  // 直连订阅的域名/IP 仍取直连地址。
+  const ipHost = $("ipPanelHost").value.trim().split(":")[0];
   const host = $("directAddress").value.trim().split(":")[0];
   const port = $("subPort").value.trim();
   const tok = subToken || "";
@@ -1098,16 +1115,15 @@ function updateSubPreview() {
   $("btnCopyPanelAddr").dataset.url = panelAddr;
   // 面板订阅栏 (Argo, 走隧道)
   $("panelSubBarWrap").classList.toggle("hidden", !panelSub);
-  $("panelSubArea").classList.toggle("hidden", !panelSub);
   const panelSubUrl = panelSub && domain && tok ? "https://" + domain + "/" + tok + "/raw?only=argo" : "";
   setBar($("panelSubBar"), $("btnCopyPanelSub"), panelSubUrl, panelSub ? (tok ? "请先配置 ARGO 面板域名" : "尚未部署，部署后自动生成订阅地址") : "");
   // IP 订阅栏 (一个输出框, 复合结构: http://域名: [端口输入框] /口令/raw?only=argo;
   // 端口是栏里唯一的输入框, 可以改, 改后需重新部署; 口令随机, 不可改)
   $("ipSubBarWrap").classList.toggle("hidden", !ipSub);
   $("ipSubArea").classList.toggle("hidden", !ipSub);
-  const ipArgoUrl = ipSub && host && tok ? "http://" + host + ":" + port + "/" + tok + "/raw?only=argo" : "";
-  $("ipSubHostPart").textContent = host ? "http://" + host + ":" : (ipSub ? "请先填写直连地址" : "");
-  $("ipSubTokenPart").textContent = host && tok ? "/" + tok + "/raw?only=argo" : (host ? "（尚未部署）" : "");
+  const ipArgoUrl = ipSub && ipHost && tok ? "http://" + ipHost + ":" + port + "/" + tok + "/raw?only=argo" : "";
+  $("ipSubHostPart").textContent = ipHost ? "http://" + ipHost + ":" : (ipSub ? "请先填写 IP/域名面板" : "");
+  $("ipSubTokenPart").textContent = ipHost && tok ? "/" + tok + "/raw?only=argo" : (ipHost ? "（尚未部署）" : "");
   $("btnCopyIpSub").disabled = !ipArgoUrl;
   $("btnCopyIpSub").dataset.url = ipArgoUrl;
   // 直连订阅栏 (直连卡里, 域名同样自动取直连地址; 直连卡只在直连模式下显示)
@@ -1116,9 +1132,11 @@ function updateSubPreview() {
   $("subPreviewHint").classList.toggle("hidden", panelSub || ipSub);
 }
 $("argoPanelEnabled").addEventListener("change", updateArgoPanelBox);
+$("ipPanelEnabled").addEventListener("change", updateIpPanelBox);
 $("subPanelEnabled").addEventListener("change", updateSubPreview);
 $("subIpEnabled").addEventListener("change", updateSubPreview);
 $("argoPanelDomain").addEventListener("input", updateSubPreview);
+$("ipPanelHost").addEventListener("input", updateSubPreview);
 $("directAddress").addEventListener("input", updateSubPreview);
 $("subPort").addEventListener("input", updateSubPreview);
 $("panelPath").addEventListener("input", updateSubPreview);
@@ -1184,6 +1202,8 @@ function collectConfig() {
     argo_panel_enabled: $("argoPanelEnabled").checked,
     argo_panel_domain: $("argoPanelDomain").value.trim(),
     argo_panel_port: parseInt($("argoPanelPort").value, 10) || 0,
+    ip_panel_enabled: $("ipPanelEnabled").checked,
+    ip_panel_host: $("ipPanelHost").value.trim().split(":")[0],
     panel_path: $("panelPath").value.trim() || "Nexus",
     sub_panel_enabled: $("subPanelEnabled").checked,
     sub_ip_enabled: $("subIpEnabled").checked,
@@ -1235,6 +1255,8 @@ function fillConfig(c) {
   $("argoPanelEnabled").checked = !!c.argo_panel_enabled;
   $("argoPanelDomain").value = c.argo_panel_domain || "";
   $("argoPanelPort").value = c.argo_panel_port || "";
+  $("ipPanelEnabled").checked = !!c.ip_panel_enabled;
+  $("ipPanelHost").value = c.ip_panel_host || "";
   $("panelPath").value = c.panel_path || "Nexus";
   $("subPanelEnabled").checked = c.sub_panel_enabled !== false;
   $("subIpEnabled").checked = c.sub_ip_enabled !== false;
@@ -1276,6 +1298,7 @@ function fillConfig(c) {
   $("cert_pem").value = c.cert_pem || "";
   $("cert_key").value = c.cert_key || "";
   updateArgoPanelBox();
+  updateIpPanelBox();
   toggleMode();
 }
 async function loadConfig() {
@@ -1977,11 +2000,12 @@ async function loadSubscription() {
   try {
     const s = await api("/api/subscription");
     const argoHint = s.argo_panel_enabled === undefined ? "尚未部署" : (!s.argo_panel_enabled ? "未配置 ARGO 面板" : (!s.sub_panel_enabled ? "面板订阅未开启" : "尚未部署"));
-    const directHint = s.sub_ip_enabled === undefined ? "未填直连订阅地址" : (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址");
+    const directHint = s.direct_sub_enabled === undefined ? (s.sub_ip_enabled === undefined ? "未填直连订阅地址" : (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址")) : (!s.direct_sub_enabled ? (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未填直连订阅地址") : "");
+    const ipHint = s.ip_sub_enabled === undefined ? (s.sub_ip_enabled === undefined ? "未开启 IP 订阅" : (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未开启 IP 订阅")) : (!s.ip_sub_enabled ? (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未配置 IP/域名面板") : "");
     setAddr("subRaw", s.raw_url, argoHint);
     setAddr("subMerged", s.merged_url, argoHint);
-    setAddr("subIpArgo", s.ip_argo_url, s.sub_ip_enabled === undefined ? "未开启 IP 订阅" : (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未开启 IP 订阅"));
-    setAddr("subIpArgoMerged", s.ip_argo_merged_url, s.sub_ip_enabled === undefined ? "未开启 IP 订阅" : (!s.sub_ip_enabled ? "IP域名订阅未开启" : "未开启 IP 订阅"));
+    setAddr("subIpArgo", s.ip_argo_url, ipHint);
+    setAddr("subIpArgoMerged", s.ip_argo_merged_url, ipHint);
     setAddr("subDirect", s.direct_url, directHint);
     if (s.sub_name) { subToken = s.sub_name; updateSubPreview(); }
   } catch (e) {}
