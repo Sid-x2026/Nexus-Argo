@@ -458,7 +458,7 @@
         <div id="tunnelFields" class="mode-box tunnel">
           <h4>Argo 安全配置</h4>
           <div class="sec-card tunnel">
-          <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px 24px; align-items:start;">
+          <div style="display:grid; grid-template-columns:minmax(0,1fr) 5px minmax(0,1fr); gap:16px 12px; align-items:stretch;">
           <div>
           <label class="f">cloudflare Argo Tunnel Token <span class="req">* 必填</span></label>
           <input type="text" id="argoToken" class="mono" placeholder="粘贴 cloudflare Argo Tunnel Token" autocomplete="off">
@@ -473,6 +473,7 @@
             </div>
           </div>
           </div>
+          <div style="grid-column:2; grid-row:1 / span 3; background:#6366f1; border-radius:2px;"></div>
           <div>
           <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><div style="display:flex; gap:8px; align-items:center;"><textarea id="optAddrSingle" class="mono" rows="7">cloudflare.com</textarea><button class="ghost sm" id="btnOptAddr" type="button" style="flex:none;">使用优化地址</button></div><span id="optAddrOut" class="hint" style="margin:0;"></span><p class="hint">点「使用优化地址」自动测速，从优选域名池取延迟最低的 6 个填入，最多 6 个。测速前请先关闭代理（测本地直连延迟）。</p></div>
           </div>
