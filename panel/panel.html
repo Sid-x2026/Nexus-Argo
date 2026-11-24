@@ -471,7 +471,11 @@
               <p class="hint" style="margin-top:6px;">Zero Trust 路由：Sing-box 域名 → 127.0.0.1:Sing-box 端口。</p>
             </div>
           </div>
-          <div style="margin-top:12px; border-top:1px solid #c7d2fe; padding-top:10px;">
+          </div>
+          <div class="sec-card tunnel">
+          <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><div style="display:flex; gap:8px; align-items:center;"><textarea id="optAddrSingle" class="mono" rows="7">cloudflare.com</textarea><button class="ghost sm" id="btnOptAddr" type="button" style="flex:none;">使用优化地址</button></div><span id="optAddrOut" class="hint" style="margin:0;"></span><p class="hint">点「使用优化地址」自动测速，从优选域名池取延迟最低的 6 个填入，最多 6 个。测速前请先关闭代理（测本地直连延迟）。</p></div>
+          </div>
+          <div class="sec-card tunnel">
             <label class="pill"><input type="checkbox" id="argoPanelEnabled"> ARGO 面板</label>
             <span class="hint" style="display:inline;">可选：把面板本身接进 Argo 隧道，才可用 ARGO 订阅。</span>
             <div id="argoPanelFields" class="hidden" style="margin-top:8px;">
@@ -487,43 +491,39 @@
                 <p class="hint">复制后直接打开面板；自定义段是面板的访问路径（默认 Nexus），改后部署保存才生效。</p>
               </div>
             </div>
-            <div style="margin-top:10px;">
-              <label class="pill"><input type="checkbox" id="ipPanelEnabled"> IP/域名面板</label>
-              <span class="hint" style="display:inline;">可选：面板的 IP 或域名入口，IP 订阅从这里拉。</span>
-              <div id="ipPanelFields" class="hidden" style="margin-top:8px;">
-                <label class="f">面板 IP 或域名 <span class="req">* 必填</span></label>
-                <input type="text" id="ipPanelHost" class="mono" placeholder="例如 195.72.189.180 或 panel.example.com" style="max-width:300px;">
-                <p class="hint" style="margin-top:6px;">IP 订阅的地址从这里取（直连地址只管直连协议）；端口在 IP 订阅栏里改。</p>
-              </div>
-            </div>
-          </div>
           </div>
           <div class="sec-card tunnel">
-          <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><div style="display:flex; gap:8px; align-items:center;"><textarea id="optAddrSingle" class="mono" rows="7">cloudflare.com</textarea><button class="ghost sm" id="btnOptAddr" type="button" style="flex:none;">使用优化地址</button></div><span id="optAddrOut" class="hint" style="margin:0;"></span><p class="hint">点「使用优化地址」自动测速，从优选域名池取延迟最低的 6 个填入，最多 6 个。测速前请先关闭代理（测本地直连延迟）。</p></div>
-          <div style="margin-top:10px; border-top:1px solid #c7d2fe; padding-top:10px;">
-            <div>
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <label class="pill"><input type="checkbox" id="subPanelEnabled" checked> 面板订阅</label>
-                <span id="panelSubBarWrap" style="display:flex; gap:8px; align-items:center; flex:1 1 220px; min-width:0;">
-                  <input type="text" id="panelSubBar" class="mono" readonly style="flex:1 1 0; min-width:0;">
-                  <button type="button" class="sm" id="btnCopyPanelSub">复制</button>
-                </span>
-              </div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <label class="pill" style="min-width:128px; justify-content:center;"><input type="checkbox" id="subPanelEnabled" checked> 面板订阅</label>
+              <span id="panelSubBarWrap" style="display:flex; gap:8px; align-items:center; flex:1 1 220px; min-width:0;">
+                <input type="text" id="panelSubBar" class="mono" readonly style="flex:1 1 0; min-width:0;">
+                <button type="button" class="sm" id="btnCopyPanelSub">复制</button>
+              </span>
             </div>
-            <div style="margin-top:8px;">
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <label class="pill"><input type="checkbox" id="subIpEnabled" checked> IP域名订阅</label>
-                <span id="ipSubBarWrap" style="display:flex; gap:6px; align-items:center; flex:1 1 220px; min-width:0;">
-                  <span id="ipSubHostPart" class="mono" style="font-size:13.5px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px;">http://</span>
-                  <input type="number" id="subPort" value="18080" min="1" max="65535" class="mono" style="width:80px; flex:none; text-align:center;">
-                  <span id="ipSubTokenPart" class="mono" style="font-size:13.5px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 1 0; min-width:0;">/raw?only=argo</span>
-                  <button type="button" class="sm" id="btnCopyIpSub">复制</button>
-                </span>
-              </div>
-              <div id="ipSubArea" style="margin-top:6px;">
-                <p class="hint">从 IP/域名面板的 IP 或域名上拉；域名/IP 在左边的 IP/域名面板里填，端口在地址栏里改，改后需重新部署；只开面板订阅时不用开。没配直连时，IP 订阅拉到的是 Argo 节点；直连订阅地址在直连卡里看。</p>
-              </div>
+          </div>
+          <div class="sec-card tunnel">
+            <label class="pill"><input type="checkbox" id="ipPanelEnabled"> IP/域名面板</label>
+            <span class="hint" style="display:inline;">可选：面板的 IP 或域名入口，IP 订阅从这里拉。</span>
+            <div id="ipPanelFields" class="hidden" style="margin-top:8px;">
+              <label class="f">面板 IP 或域名 <span class="req">* 必填</span></label>
+              <input type="text" id="ipPanelHost" class="mono" placeholder="例如 195.72.189.180 或 panel.example.com" style="max-width:300px;">
+              <p class="hint" style="margin-top:6px;">IP 订阅的地址从这里取（直连地址只管直连协议）；端口在 IP 订阅栏里改。</p>
             </div>
+          </div>
+          <div class="sec-card tunnel">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <label class="pill" style="min-width:128px; justify-content:center;"><input type="checkbox" id="subIpEnabled" checked> IP/域名订阅</label>
+              <span id="ipSubBarWrap" style="display:flex; gap:8px; align-items:center; flex:1 1 220px; min-width:0;">
+                <span style="display:flex; gap:6px; align-items:center; flex:1 1 0; min-width:0; border:1px solid #e2e8f0; border-radius:12px; background:#fff; padding:5px 9px; box-sizing:border-box;">
+                  <span id="ipSubHostPart" class="mono" style="font-size:12.7px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px;">http://</span>
+                  <input type="number" id="subPort" value="18080" min="1" max="65535" class="mono" style="width:80px; flex:none; text-align:center; border:none; background:transparent; padding:0; box-shadow:none;">
+                  <span id="ipSubTokenPart" class="mono" style="font-size:12.7px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 1 0; min-width:0;">/raw?only=argo</span>
+                </span>
+                <button type="button" class="sm" id="btnCopyIpSub">复制</button>
+              </span>
+            </div>
+          </div>
+          <div class="sec-card tunnel" style="grid-column:1 / -1;">
             <p class="hint">两个开关可同时开。面板订阅须先配置 ARGO 面板；IP 订阅须先配置 IP/域名面板。</p>
             <p id="subPreviewHint" class="hint hidden">未开启任何订阅。</p>
             <div style="margin-top:10px; border-top:1px solid #c7d2fe; padding-top:10px;">
@@ -533,7 +533,6 @@
               </div>
               <p class="hint">Argo 前缀是隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。订阅口令由面板自动生成，地址换了请重新导入。</p>
             </div>
-          </div>
           </div>
           </div>
         </div>
@@ -1113,14 +1112,16 @@ function updateSubPreview() {
   const panelAddr = domain ? "https://" + domain + "/" + panelPath : "";
   $("btnCopyPanelAddr").disabled = !panelAddr;
   $("btnCopyPanelAddr").dataset.url = panelAddr;
-  // 面板订阅栏 (Argo, 走隧道)
-  $("panelSubBarWrap").classList.toggle("hidden", !panelSub);
+  // 面板订阅栏 (Argo, 走隧道): 左边 ARGO 面板开了、订阅开关也开了才显示
+  const panelSubShown = $("argoPanelEnabled").checked && panelSub;
+  $("panelSubBarWrap").classList.toggle("hidden", !panelSubShown);
   const panelSubUrl = panelSub && domain && tok ? "https://" + domain + "/" + tok + "/raw?only=argo" : "";
   setBar($("panelSubBar"), $("btnCopyPanelSub"), panelSubUrl, panelSub ? (tok ? "请先配置 ARGO 面板域名" : "尚未部署，部署后自动生成订阅地址") : "");
   // IP 订阅栏 (一个输出框, 复合结构: http://域名: [端口输入框] /口令/raw?only=argo;
   // 端口是栏里唯一的输入框, 可以改, 改后需重新部署; 口令随机, 不可改)
-  $("ipSubBarWrap").classList.toggle("hidden", !ipSub);
-  $("ipSubArea").classList.toggle("hidden", !ipSub);
+  // 左边 IP/域名面板开了、订阅开关也开了才显示
+  const ipSubShown = $("ipPanelEnabled").checked && ipSub;
+  $("ipSubBarWrap").classList.toggle("hidden", !ipSubShown);
   const ipArgoUrl = ipSub && ipHost && tok ? "http://" + ipHost + ":" + port + "/" + tok + "/raw?only=argo" : "";
   $("ipSubHostPart").textContent = ipHost ? "http://" + ipHost + ":" : (ipSub ? "请先填写 IP/域名面板" : "");
   $("ipSubTokenPart").textContent = ipHost && tok ? "/" + tok + "/raw?only=argo" : (ipHost ? "（尚未部署）" : "");
@@ -1129,7 +1130,7 @@ function updateSubPreview() {
   // 直连订阅栏 (直连卡里, 域名同样自动取直连地址; 直连卡只在直连模式下显示)
   const directUrl = modeDirect && host && tok ? "http://" + host + ":" + port + "/" + tok + "/raw?only=direct" : "";
   setBar($("directSubBar"), $("btnCopyDirectSub"), directUrl, modeDirect ? (tok ? "请先填写直连地址" : "尚未部署，部署后自动生成订阅地址") : "");
-  $("subPreviewHint").classList.toggle("hidden", panelSub || ipSub);
+  $("subPreviewHint").classList.toggle("hidden", panelSubShown || ipSubShown);
 }
 $("argoPanelEnabled").addEventListener("change", updateArgoPanelBox);
 $("ipPanelEnabled").addEventListener("change", updateIpPanelBox);
