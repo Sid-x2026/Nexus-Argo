@@ -69,8 +69,8 @@
   .mode-box.direct h4 { color: #4f46e5; margin: 0 0 8px; font-size: 13.5px; }
   .mode-box.tunnel { background: #eef2ff; border-left-color: #6366f1; }
   .mode-box.tunnel h4 { color: #4f46e5; margin: 0 0 8px; font-size: 13.5px; }
-  .proto { display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 4px; font-size: 14.5px; padding: 4px 6px; margin-top: 6px; }
-  .proto label { display: block !important; cursor: pointer; font-weight: 600; min-width: 0; white-space: nowrap !important; } .proto label input, .proto label .tag { margin-right: 6px; vertical-align: middle; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
+  .proto { display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 8px; font-size: 14.5px; padding: 4px 6px; margin-top: 6px; }
+  .proto label { display: block !important; cursor: pointer; font-weight: 600; min-width: 0; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; } .proto label input, .proto label .tag { margin-right: 6px; vertical-align: middle; } .proto .port { flex-shrink: 0; white-space: nowrap; font-size: 12.5px; }
   .proto input[type=checkbox] { accent-color: #6366f1; width: 16px; height: 16px; }
   .proto .port { display: flex; align-items: center; justify-content: flex-end; gap: 6px; color: #64748b; font-size: 12.5px; }
   .proto .port input { width: 56px; padding: 5px 6px; font-size: 14.5px; text-align: center; }
@@ -80,7 +80,7 @@
   .proto-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; margin-top: 10px; }
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
   .proto-wrap .row2 { grid-template-columns: 1fr 1fr; gap: 12px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) 120px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
-  .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
+  .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; } .proto-wrap:has(> #argoGroup:not(.hidden)):has(> #directGroup:not(.hidden)) { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
   #directFields .proto-wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
   @media (max-width: 900px) { #directFields .proto-wrap { grid-template-columns: 1fr; } .reality-cols { grid-template-columns: 1fr; } }
 
@@ -362,9 +362,15 @@
         <div id="directFields" class="mode-box direct hidden">
           <h4>直连安全配置 <span class="warn-inline">直连将暴露 VPS 真实 IP，仅作备用；须与隧道节点使用不同子域名。</span></h4>
           <div class="proto-wrap">
-            <div style="display:flex; flex-direction:column; gap:12px; min-width:0;">
             <div class="sec-card direct">
-              <h4>直连订阅</h4>
+              <h4>直连域名与订阅</h4>
+              <label class="f">直连地址 address <span class="opt">选填</span></label>
+              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP">
+              <p class="hint">留空用 VPS 公网 IP；ACME 须填域名并解析至 VPS IP（DNS only）。</p>
+              <label class="f">直连 SNI <span class="opt">选填</span></label>
+              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同">
+              <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
+              <div style="margin-top:10px; border-top:1px solid #c7d2fe; padding-top:10px;">
               <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
                 <div style="flex:1 1 260px; min-width:0; max-width:360px;">
                   <label class="f">订阅地址 <span class="opt">选填</span></label>
@@ -382,16 +388,7 @@
                   <p class="hint">直连节点在订阅里的名字前缀，例如：直连丨Xray-TLS。</p>
                 </div>
               </div>
-            </div>
-            <div class="sec-card direct">
-              <h4>直连域名与前缀</h4>
-              <label class="f">直连地址 address <span class="opt">选填</span></label>
-              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP">
-              <p class="hint">留空用 VPS 公网 IP；ACME 须填域名并解析至 VPS IP（DNS only）。</p>
-              <label class="f">直连 SNI <span class="opt">选填</span></label>
-              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同">
-              <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
-            </div>
+              </div>
             </div>
             <div class="sec-card direct">
               <h4>ACME 证书 <span id="certStatusLine" class="status info" style="font-size:12px; font-weight:400; margin-left:8px;">证书状态：加载中…</span></h4>
@@ -490,7 +487,6 @@
             <div>
               <label class="pill"><input type="checkbox" id="subPanelEnabled" checked> 面板订阅</label>
               <div id="panelSubArea" style="margin-top:6px;">
-                <div class="addr-row"><div class="addr" id="argoSubPreviewAddr"></div><button class="sm" id="btnCopyArgoPreview" type="button">复制</button></div>
                 <div style="display:flex; gap:12px; margin-top:6px; flex-wrap:wrap;">
                   <div style="flex:1 1 110px; min-width:0;">
                     <label class="f">订阅路径 <span class="opt">选填</span></label>
@@ -507,19 +503,17 @@
             <div style="margin-top:8px;">
               <label class="pill"><input type="checkbox" id="subIpEnabled" checked> IP域名订阅</label>
               <div id="ipSubArea" style="margin-top:6px;">
-                <div class="addr-row"><div class="addr" id="ipSubPreviewAddr"></div><button class="sm" id="btnCopyIpPreview" type="button">复制</button></div>
                 <div style="display:flex; gap:12px; margin-top:6px; flex-wrap:wrap;">
                   <div style="flex:1 1 110px; min-width:0;">
                     <label class="f">订阅路径 <span class="opt">选填</span></label>
                     <input type="text" id="subPathIp" value="sub" class="mono" style="width:100%;">
                   </div>
                 </div>
-                <p class="hint">从直连 VPS 的域名或 IP 上拉，端口见直连订阅卡的订阅端口；订阅路径与面板订阅共用同一段，改一处两处同步更新。</p>
+                <p class="hint">从直连 VPS 的域名或 IP 上拉；IP 或域名在直连卡订阅地址里填（可空），端口见直连卡；订阅路径与面板订阅共用一段。</p>
               </div>
             </div>
             <p class="hint">两个开关可同时开。面板订阅须先配置 ARGO 面板。</p>
-            <p id="subPreviewHint" class="hint hidden">未开启任何订阅，或订阅地址未填。</p>
-            <span id="subPreviewOut" class="hint"></span>
+            <p id="subPreviewHint" class="hint hidden">未开启任何订阅。</p>
           </div>
           </div>
           </div>
@@ -1053,7 +1047,7 @@ $("btnClearCert").onclick = async () => {
   if (targets.length === 1) loadCert(targets[0].id === "local" ? null : targets[0].id, targets[0].name);
   else loadCert();
 };
-// ---- ARGO 面板开关 + 订阅开关 + 订阅地址预览 ----
+// ---- ARGO 面板开关 + 订阅开关 ----
 function updateArgoPanelBox() {
   const on = $("argoPanelEnabled").checked;
   $("argoPanelFields").classList.toggle("hidden", !on);
@@ -1069,32 +1063,22 @@ function syncSubPath(fromId) {
   if ($(otherId).value !== v) $(otherId).value = v;
   updateSubPreview();
 }
+// 订阅区只留订阅路径可改, 订阅地址不在这里填: 面板订阅地址由 ARGO 面板设置里的域名拼出,
+// IP域名订阅的 IP 由直连卡的订阅地址填 (可空); 完整地址在总览与订阅页查看。
 function updateSubPreview() {
-  const path = $("subPath").value.trim() || "sub";
-  const panelOn = $("argoPanelEnabled").checked;
   const panelSub = $("subPanelEnabled").checked;
   const ipSub = $("subIpEnabled").checked;
-  const domain = $("argoPanelDomain").value.trim();
-  const dhost = $("directSubHost").value.trim().split(":")[0];
-  const dport = parseInt($("subPort").value, 10) || 18080;
-  const argoUrl = (panelOn && panelSub && domain) ? ("https://" + domain + "/nexus/" + path + "/raw?only=argo") : "";
-  const ipUrl = (ipSub && dhost) ? ("http://" + dhost + ":" + dport + "/nexus/" + path + "/raw?only=direct") : "";
   $("panelSubArea").classList.toggle("hidden", !panelSub);
   $("ipSubArea").classList.toggle("hidden", !ipSub);
-  $("subPreviewHint").classList.toggle("hidden", !!(argoUrl || ipUrl));
-  setAddr("argoSubPreviewAddr", argoUrl, panelSub ? "请先配置 ARGO 面板域名" : "");
-  setAddr("ipSubPreviewAddr", ipUrl, ipSub ? "请先填写直连订阅地址" : "");
-  $("btnCopyArgoPreview").disabled = !argoUrl;
-  $("btnCopyIpPreview").disabled = !ipUrl;
+  $("subPreviewHint").classList.toggle("hidden", panelSub || ipSub);
 }
 $("argoPanelEnabled").addEventListener("change", updateArgoPanelBox);
 $("subPanelEnabled").addEventListener("change", updateSubPreview);
 $("subIpEnabled").addEventListener("change", updateSubPreview);
 $("subPath").addEventListener("input", () => syncSubPath("subPath"));
 $("subPathIp").addEventListener("input", () => syncSubPath("subPathIp"));
-["directSubHost", "subPort", "argoPanelDomain"].forEach(id => { const el = $(id); if (el) el.addEventListener("input", updateSubPreview); });
-$("btnCopyArgoPreview").onclick = () => copyAddr("argoSubPreviewAddr", "subPreviewOut");
-$("btnCopyIpPreview").onclick = () => copyAddr("ipSubPreviewAddr", "subPreviewOut");
+// 协议名过长时以省略号截断, 悬停显示全名。
+document.querySelectorAll(".proto label").forEach(l => { l.title = l.textContent.trim(); });
 
 function certNeeded() {
   return $("modeDirect").checked && CERT_NEED_IDS.some(id => $(id).checked);
