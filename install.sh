@@ -14,15 +14,20 @@
 #   when a new var is set (even empty it falls back, non-empty wins).
 #   OPT_ADDRS (comma-separated, default cloudflare.com)
 #   SUB_DOMAIN, SUB_PORT (subscription-only service, v3.2 2026-11-19:
-#   a tiny Python stdlib server (web/sub-server.py) serving /sub/*
+#   a tiny Python stdlib server (web/sub-server.py) serving /<name>/raw|merged
 #   on 127.0.0.1:SUB_PORT, reached via one Zero Trust route
 #   SUB_DOMAIN -> 127.0.0.1:SUB_PORT. No Worker needed, and
 #   ?addrs= live fission works again — the server generates links
 #   from the same deploy-command variables, so nothing is synced
-#   in a second place. Empty SUB_DOMAIN = skip the sub service.)
-#   SUB_PATH (default sub): first path segment of subscription URLs,
-#   i.e. https://<SUB_DOMAIN>/<SUB_PATH>/raw/<uuid> — the panel's
-#   custom-subscription-address setting.
+#   in a second place. Empty SUB_DOMAIN = skip the sub service
+#   unless SUB_IP_ENABLED (IP 订阅也要用它)。
+#   SUB_IP_ENABLED (default false): IP域名订阅开着时, 订阅服务要起、
+#   订阅端口要进防火墙白名单; 只开面板订阅 (走隧道) 时不用开端口。
+#   SUB_PATH (default sub): 旧订阅地址的第二段, 只给旧地址兼容用,
+#   新地址只有一段随机口令, 见 SUB_NAME。
+#   SUB_NAME (default nexus): 订阅地址里的口令 (路径第一段); 面板部署
+#   时由面板生成一个 8 位随机口令传进来, 手动部署不传就用 nexus。
+#   节点 UUID 只留在订阅内容里的节点链接中, 不进订阅地址。
 #   ENABLE_DIRECT (default false): serve nodes straight from the VPS
 #   public IP/domain (backup only — exposes the real IP). Direct
 #   protocols (each individually checkable, [直连], address =
@@ -168,17 +173,18 @@ PANEL_PORT="${PANEL_PORT:-2053}"
 OPT_ADDRS="${OPT_ADDRS:-cloudflare.com}"
 TUNNEL_PROTOCOL="${TUNNEL_PROTOCOL:-auto}"
 # Subscription-only service (v3.2): its own domain + port, separate
-# from the web panel (127.0.0.1:8080). Serves /sub/raw/<uuid> and
-# /sub/merged/<uuid>?addrs=... (base64, live fission, no Worker).
+# from the web panel (127.0.0.1:8080). Serves /<name>/raw|merged
+# (base64, live fission, no Worker).
 # No second deployment, no env vars to keep in sync — UUID / domains /
 # client ports come from this one deploy command only.
-# Empty SUB_DOMAIN = skip it.
+# Empty SUB_DOMAIN = skip it, unless SUB_IP_ENABLED (IP 订阅也要用它)。
 SUB_DOMAIN="${SUB_DOMAIN:-}"
 SUB_PORT="${SUB_PORT:-18080}"
 SUB_PATH="${SUB_PATH:-sub}"
-# 订阅地址里的固定名字 (路径名, 默认 nexus): 代替原来放在地址里的 UUID,
-# 固定不变; 节点 UUID 只留在订阅内容里的节点链接中。
+# 订阅地址里的口令 (路径第一段): 面板部署时由面板生成一个 8 位随机口令
+# 传进来; 手动部署不传就用 nexus。节点 UUID 只留在订阅内容里。
 SUB_NAME="${SUB_NAME:-nexus}"
+SUB_IP_ENABLED="${SUB_IP_ENABLED:-false}"
 # Direct mode (backup only — exposes the VPS real IP). One self-signed
 # cert is generated at $WORKDIR/direct/ and shared by the direct inbounds.
 ENABLE_DIRECT="${ENABLE_DIRECT:-false}"
@@ -406,9 +412,10 @@ _fw_sync() {
       _want+=("80/tcp|ACME 签发与续期")
     fi
   fi
-  # 订阅服务: nexus-sub 部署在 SUB_PORT 上, 直连订阅从 VPS 的域名或 IP
-  # 上直接拉, 所以要公开该端口 (订阅路径只认固定名或 UUID, 见 sub-server.py)。
-  if [ -n "${SUB_DOMAIN:-}" ]; then
+  # 订阅服务: nexus-sub 部署在 SUB_PORT 上, IP域名订阅从 VPS 的域名
+  # 或 IP 上直接拉, 所以要公开该端口 (订阅地址只认随机口令或 UUID,
+  # 见 sub-server.py)。只开面板订阅 (走隧道) 时不用开这个端口。
+  if is_true "${SUB_IP_ENABLED:-false}"; then
     _want+=("$SUB_PORT/tcp|订阅服务")
   fi
   for _sp in "${_FW_SSH_PORTS[@]}"; do _fw_allow "$_sp/tcp" "SSH (面板连接，永久白名单)" "$_be"; done
@@ -1940,7 +1947,7 @@ if [ -f "$WORKDIR/web/nginx.conf" ] && [ -f "$WORKDIR/web/index.html" ]; then
 else
   log "WARNING: web panel files missing — skipping nexus-web-panel, nodes are unaffected"
 fi
-if [ -n "$SUB_DOMAIN" ]; then
+if [ -n "$SUB_DOMAIN" ] || is_true "${SUB_IP_ENABLED:-false}"; then
   # v3.2 subscription-only service: a tiny Python stdlib server
   # (web/sub-server.py) that generates subscriptions on the fly
   # from this deploy command's variables — so ?addrs= live fission
@@ -2000,7 +2007,7 @@ if [ -n "$SUB_DOMAIN" ]; then
     log "WARNING: web/sub-server.py missing — skipping nexus-sub, panel-local subscription still works"
   fi
 else
-  log "SUB_DOMAIN empty — skipping nexus-sub (subscription only via panel localhost)"
+  log "未设置 SUB_DOMAIN 且未开启 IP 订阅 — 跳过 nexus-sub (订阅只能走面板本机)"
 fi
 
 step "步骤 4/5  健康检查"
@@ -2014,7 +2021,7 @@ for c in nexus-xray nexus-singbox nexus-sb-dispatch nexus-argo nexus-web-panel n
     nexus-sb-dispatch) is_true "$ENABLE_SINGBOX" || continue;;
     nexus-argo) [ -n "$ARGO_TOKEN" ] || continue;;
     nexus-web-panel) docker inspect "$c" >/dev/null 2>&1 || continue;;
-    nexus-sub) [ -n "$SUB_DOMAIN" ] && docker inspect "$c" >/dev/null 2>&1 || continue;;
+    nexus-sub) docker inspect "$c" >/dev/null 2>&1 || continue;;
   esac
   sleep 2
   running="$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null || echo false)"
@@ -2034,13 +2041,13 @@ done
 # printing public links. Same check for the panel (it serves / and
 # /sub/* from the same mount).
 if command -v curl >/dev/null 2>&1; then
-  if [ -n "$SUB_DOMAIN" ] && docker inspect nexus-sub >/dev/null 2>&1; then
-    _sub_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_PATH/raw/$NODE_UUID" 2>/dev/null || true)"
+  if docker inspect nexus-sub >/dev/null 2>&1; then
+    _sub_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_NAME/raw" 2>/dev/null || true)"
     if [ -z "$_sub_body" ] || ! printf '%s' "$_sub_body" | base64 -d 2>/dev/null | grep -q '://'; then
-      echo "[nexus-argo] ERROR: nexus-sub is running but /$SUB_PATH/raw/<uuid> did not return subscription data — check: docker logs nexus-sub"
+      echo "[nexus-argo] ERROR: nexus-sub is running but /$SUB_NAME/raw did not return subscription data — check: docker logs nexus-sub"
       fail=1
     else
-      log "nexus-sub serves /$SUB_PATH/raw/<uuid> OK"
+      log "nexus-sub serves /$SUB_NAME/raw OK"
     fi
     # v3.2: prove live fission works — ?addrs= with 2 addresses must
     # return exactly 2x the tunnel-native link count, plus the direct
@@ -2055,7 +2062,7 @@ if command -v curl >/dev/null 2>&1; then
       _tunnel_n=$(grep -cE '丨(Xray|Singbox)丨' "$WORKDIR/sub/raw.txt" 2>/dev/null || true); _tunnel_n="${_tunnel_n:-0}"
       _direct_n=$(( _native_n - _tunnel_n ))
       _want=$(( _tunnel_n * 2 + _direct_n ))
-      _merged_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_PATH/merged/$NODE_UUID?addrs=cf.xreak.top,cf.3666888.xyz" 2>/dev/null || true)"
+      _merged_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_NAME/merged?addrs=cf.xreak.top,cf.3666888.xyz" 2>/dev/null || true)"
       _merged_n=$(printf '%s' "$_merged_body" | base64 -d 2>/dev/null | grep -c '://' || true)
       if [ "$_merged_n" != "$_want" ]; then
         echo "[nexus-argo] ERROR: nexus-sub ?addrs= fission check failed — expected $_want links for 2 addrs, got ${_merged_n:-0} — check: docker logs nexus-sub"
@@ -2066,7 +2073,7 @@ if command -v curl >/dev/null 2>&1; then
     fi
     # 直连订阅: 固定名 + ?only=direct, 有直连节点时必须返回直连节点数
     if [ "$fail" = "0" ] && [ "${_direct_n:-0}" -gt 0 ]; then
-      _direct_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_NAME/$SUB_PATH/raw?only=direct" 2>/dev/null || true)"
+      _direct_body="$(curl -fsS --max-time 10 "http://127.0.0.1:$SUB_PORT/$SUB_NAME/raw?only=direct" 2>/dev/null || true)"
       _direct_live=$(printf '%s' "$_direct_body" | base64 -d 2>/dev/null | grep -c '://' || true)
       if [ "$_direct_live" != "$_direct_n" ]; then
         echo "[nexus-argo] ERROR: nexus-sub direct subscription check failed — expected $_direct_n direct links, got ${_direct_live:-0} — check: docker logs nexus-sub"
@@ -2104,11 +2111,10 @@ fi
 # ---- subscription summary: print the links so the deployer can see/copy them ----
 # Native links are in $WORKDIR/sub/raw.txt (1 protocol = 1 node, address = tunnel domain).
 # Dynamic links are in $WORKDIR/sub/merged.txt (native x preferred addresses).
-# The subscription is served locally at /<name>/sub/raw|merged
-# (nexus-sub on 127.0.0.1:$SUB_PORT, fixed name $SUB_NAME instead of
-# the node UUID; ?only=argo = tunnel nodes, ?only=direct = direct
-# nodes incl. Reality). The Direct subscription is also served
-# publicly on $SUB_PORT from the VPS domain/IP.
+# The subscription is served locally at /<name>/raw|merged
+# (nexus-sub on 127.0.0.1:$SUB_PORT, 随机口令 $SUB_NAME 代替节点 UUID;
+# ?only=argo = 隧道节点, ?only=direct = 直连节点, 含 Reality)。
+# The IP 订阅 is also served publicly on $SUB_PORT from the VPS domain/IP.
 # v3.2: the public link is the subscription-only service — no Worker
 # needed. Put this URL straight into the client; it serves base64,
 # same as the Worker used to. Changing preferred addresses NO LONGER
@@ -2128,17 +2134,17 @@ sep
 echo "原生订阅文件: $WORKDIR/sub/raw.txt ($_native_n 条节点)"
 echo "动态订阅文件: $WORKDIR/sub/merged.txt ($_merged_n 条节点)"
 echo ""
-echo "${C_BOLD}本地订阅${C_RESET} (本机 127.0.0.1:$SUB_PORT, 固定名 $SUB_NAME):"
-echo "  原生: http://127.0.0.1:$SUB_PORT/$SUB_NAME/$SUB_PATH/raw"
-echo "  动态: http://127.0.0.1:$SUB_PORT/$SUB_NAME/$SUB_PATH/merged"
+echo "${C_BOLD}本地订阅${C_RESET} (本机 127.0.0.1:$SUB_PORT, 随机口令 $SUB_NAME):"
+echo "  原生: http://127.0.0.1:$SUB_PORT/$SUB_NAME/raw"
+echo "  动态: http://127.0.0.1:$SUB_PORT/$SUB_NAME/merged"
 if [ -n "${SUB_DOMAIN:-}" ]; then
   echo ""
   echo "${C_BOLD}订阅生成器面板${C_RESET} (打开就是, 上面原生订阅、下面优选IP裂变):"
-  echo "  ${C_GREEN}https://$SUB_DOMAIN/${C_RESET}"
+  echo "  ${C_GREEN}https://$SUB_DOMAIN/?token=$SUB_NAME${C_RESET}"
   echo "${C_BOLD}Argo 订阅 (隧道节点, 面板里也有, 直接加到客户端):${C_RESET}"
-  echo "  原生: ${C_GREEN}https://$SUB_DOMAIN/$SUB_NAME/$SUB_PATH/raw?only=argo${C_RESET}"
-  echo "  动态: ${C_GREEN}https://$SUB_DOMAIN/$SUB_NAME/$SUB_PATH/merged?only=argo${C_RESET}"
-  echo "  换优选地址不用重部署, 直接改 URL: https://$SUB_DOMAIN/$SUB_NAME/$SUB_PATH/merged?only=argo&addrs=cf.xreak.top,cf.3666888.xyz"
+  echo "  原生: ${C_GREEN}https://$SUB_DOMAIN/$SUB_NAME/raw?only=argo${C_RESET}"
+  echo "  动态: ${C_GREEN}https://$SUB_DOMAIN/$SUB_NAME/merged?only=argo${C_RESET}"
+  echo "  换优选地址不用重部署, 直接改 URL: https://$SUB_DOMAIN/$SUB_NAME/merged?only=argo&addrs=cf.xreak.top,cf.3666888.xyz"
   echo "  ${C_YELLOW}⚠ Zero Trust 里要有一条路由: $SUB_DOMAIN -> http://127.0.0.1:$SUB_PORT, 见 $WORKDIR/ROUTES.md${C_RESET}"
 else
   echo ""
@@ -2146,11 +2152,15 @@ else
   echo "  如需公网订阅, 重新部署时加上 SUB_DOMAIN=<订阅子域名> SUB_PORT=$SUB_PORT"
   echo "  例如: SUB_DOMAIN=sub.ahstshu.eu.cc"
 fi
-if is_true "$ENABLE_DIRECT"; then
+if is_true "${SUB_IP_ENABLED:-false}"; then
   echo ""
-  echo "${C_BOLD}直连订阅 (直连节点, 含 Reality, 从 VPS 直接拉):${C_RESET}"
+  echo "${C_BOLD}IP域名订阅 (从 VPS 域名或 IP 上直接拉):${C_RESET}"
   _dhost="${DIRECT_DOMAIN:-}"; [ -z "$_dhost" ] && _dhost="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  echo "  ${C_GREEN}http://$_dhost:$SUB_PORT/$SUB_NAME/$SUB_PATH/raw?only=direct${C_RESET}"
+  echo "  Argo 原生: ${C_GREEN}http://$_dhost:$SUB_PORT/$SUB_NAME/raw?only=argo${C_RESET}"
+  echo "  Argo 动态: ${C_GREEN}http://$_dhost:$SUB_PORT/$SUB_NAME/merged?only=argo${C_RESET}"
+  if is_true "$ENABLE_DIRECT"; then
+    echo "  直连: ${C_GREEN}http://$_dhost:$SUB_PORT/$SUB_NAME/raw?only=direct${C_RESET}"
+  fi
 fi
 if is_true "$ENABLE_DIRECT"; then
   echo ""
