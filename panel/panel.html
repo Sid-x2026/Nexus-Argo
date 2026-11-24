@@ -457,8 +457,9 @@
         </div>
         <div id="tunnelFields" class="mode-box tunnel">
           <h4>Argo 安全配置</h4>
-          <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:stretch;">
           <div class="sec-card tunnel">
+          <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px 24px; align-items:start;">
+          <div>
           <label class="f">cloudflare Argo Tunnel Token <span class="req">* 必填</span></label>
           <input type="text" id="argoToken" class="mono" placeholder="粘贴 cloudflare Argo Tunnel Token" autocomplete="off">
           <div class="row2">
@@ -472,10 +473,10 @@
             </div>
           </div>
           </div>
-          <div class="sec-card tunnel">
+          <div>
           <div class="optaddr-row"><label class="f">优选地址（仅隧道节点） <span class="opt">选填</span></label><div style="display:flex; gap:8px; align-items:center;"><textarea id="optAddrSingle" class="mono" rows="7">cloudflare.com</textarea><button class="ghost sm" id="btnOptAddr" type="button" style="flex:none;">使用优化地址</button></div><span id="optAddrOut" class="hint" style="margin:0;"></span><p class="hint">点「使用优化地址」自动测速，从优选域名池取延迟最低的 6 个填入，最多 6 个。测速前请先关闭代理（测本地直连延迟）。</p></div>
           </div>
-          <div class="sec-card tunnel">
+          <div>
             <label class="pill"><input type="checkbox" id="argoPanelEnabled"> ARGO 面板</label>
             <span class="hint" style="display:inline;">可选：把面板本身接进 Argo 隧道，才可用 ARGO 订阅。</span>
             <div id="argoPanelFields" class="hidden" style="margin-top:8px;">
@@ -492,7 +493,7 @@
               </div>
             </div>
           </div>
-          <div class="sec-card tunnel">
+          <div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <label class="pill" style="min-width:128px; justify-content:center;"><input type="checkbox" id="subPanelEnabled" checked> 面板订阅</label>
               <span id="panelSubBarWrap" style="display:flex; gap:8px; align-items:center; flex:1 1 220px; min-width:0;">
@@ -501,7 +502,7 @@
               </span>
             </div>
           </div>
-          <div class="sec-card tunnel">
+          <div>
             <label class="pill"><input type="checkbox" id="ipPanelEnabled"> IP/域名面板</label>
             <span class="hint" style="display:inline;">可选：面板的 IP 或域名入口，IP 订阅从这里拉。</span>
             <div id="ipPanelFields" class="hidden" style="margin-top:8px;">
@@ -510,7 +511,7 @@
               <p class="hint" style="margin-top:6px;">IP 订阅的地址从这里取（直连地址只管直连协议）；端口在 IP 订阅栏里改。</p>
             </div>
           </div>
-          <div class="sec-card tunnel">
+          <div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <label class="pill" style="min-width:128px; justify-content:center;"><input type="checkbox" id="subIpEnabled" checked> IP/域名订阅</label>
               <span id="ipSubBarWrap" style="display:flex; gap:8px; align-items:center; flex:1 1 220px; min-width:0;">
@@ -522,18 +523,17 @@
                 <button type="button" class="sm" id="btnCopyIpSub">复制</button>
               </span>
             </div>
-          </div>
-          <div class="sec-card tunnel" style="grid-column:1 / -1;">
-            <p class="hint">两个开关可同时开。面板订阅须先配置 ARGO 面板；IP 订阅须先配置 IP/域名面板。</p>
-            <p id="subPreviewHint" class="hint hidden">未开启任何订阅。</p>
-            <div style="margin-top:10px; border-top:1px solid #c7d2fe; padding-top:10px;">
+            <div style="margin-top:12px;">
               <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <label class="f" style="margin:0; white-space:nowrap;">Argo 前缀 <span class="opt">选填</span></label>
                 <input type="text" id="argoPrefix" value="Argo" style="width:150px;">
               </div>
-              <p class="hint">Argo 前缀是隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。订阅口令由面板自动生成，地址换了请重新导入。</p>
+              <p class="hint" style="white-space:normal;">Argo 前缀是隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。订阅口令由面板自动生成，地址换了请重新导入。</p>
             </div>
           </div>
+          </div>
+          <p class="hint" style="margin-top:12px;">两个开关可同时开。面板订阅须先配置 ARGO 面板；IP 订阅须先配置 IP/域名面板。</p>
+          <p id="subPreviewHint" class="hint hidden">未开启任何订阅。</p>
           </div>
         </div>
         <div id="portConflictOut" class="status"></div>
