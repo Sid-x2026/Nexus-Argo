@@ -28,14 +28,14 @@
 #   POST /api/deploy              后台跑 install.sh (只允许一个在跑)
 #   GET  /api/deploy/status       部署状态 (idle/running/ok/failed)
 #   GET  /api/deploy/log?offset=N 部署日志增量 (按字节偏移)
-#   GET  /api/subscription        订阅地址 + 自定义路径
-#   POST /api/subscription        {sub_path} 改订阅路径, 重启 nexus-sub 生效
-#   GET  /<name>/<sub_path>/raw|merged  面板订阅 (公开, 免登录):
-#        <name> 是订阅地址里的固定名 (默认 nexus, 旧的 UUID 也认),
-#        ?only=argo 隧道节点 / ?only=direct 直连节点 (含 Reality)
-#        面板收到后转发给本机 nexus-sub; ARGO 订阅地址 = ARGO 面板
-#        域名 + 固定名 + 订阅路径 (须先配 ARGO 面板并开面板订阅),
-#        直连订阅地址 = 直连 VPS 域名或 IP + 订阅端口 + 固定名 + 路径。
+#   GET  /api/subscription        订阅地址 (面板 / IP 两种拉取方式)
+#   GET  /<name>/raw|merged        面板订阅 (公开, 免登录):
+#        <name> 是订阅地址里的随机口令 (8 位字母数字, 生成一次存配置里,
+#        旧的 UUID 也认), ?only=argo 隧道节点 / ?only=direct 直连节点
+#        (含 Reality)。面板收到后转发给本机 nexus-sub; ARGO 订阅地址
+#        = ARGO 面板域名 + 随机口令 (须先配 ARGO 面板并开面板订阅),
+#        IP域名订阅地址 = 直连 VPS 域名或 IP + 订阅端口 + 随机口令
+#        (须开 IP域名订阅; 没配直连时拉到的是 Argo 节点)。
 #   GET  /api/cert               证书状态 (是否已部署 / 颁发给谁 / 到期时间 / 续期方式)
 #        ?target=<node_id> 看远程节点的证书, 不带看本机
 #   GET  /api/cert/task?target=  证书生成任务状态 + 日志 (后 8KB)
@@ -89,7 +89,8 @@ PANEL_PORT = int(os.environ.get("PANEL_PORT", "2053") or 2053)
 INSTALL_SH = os.path.join(WORKDIR, "install.sh")
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PANEL_HTML = os.path.join(_HERE, "panel.html")
-# 面板后缀 (默认 /Nexus): 安装时 PANEL_PATH 环境变量传入, 也可以在 panel-info.json 里改
+# 面板后缀 (默认 /Nexus): 安装时 PANEL_PATH 环境变量传入, 也可以在
+# 部署页 ARGO 面板里改 (配置 panel_path, 见 _panel_path)。
 import os as _os
 PANEL_PATH = _os.environ.get("PANEL_PATH", "/Nexus").strip() or ""
 if PANEL_PATH == "/":
@@ -173,9 +174,10 @@ DEFAULT_CONFIG = {
     "sub_domain": "sub.ahstshu.eu.cc",
     "sub_port": 18080,
     "sub_path": "sub",
-    # 订阅地址里的固定名字 (路径名, 默认 nexus): 代替原来放在地址里的 UUID,
-    # 固定不变; 节点 UUID 只留在订阅内容里的节点链接中。
-    "sub_name": "nexus",
+    # 订阅地址里的口令 (路径第一段): 8 位小写字母+数字, 由面板自动生成
+    # 一次存配置里 (见 _ensure_sub_name); 空或旧的固定名 nexus 都会
+    # 被换成随机口令。节点 UUID 只留在订阅内容里的节点链接中, 不进地址。
+    "sub_name": "",
     # 直连订阅地址: 用户填的直连 VPS 域名或 IP (端口统一走订阅端口
     # sub_port, 地址里不再带端口); 直连订阅从这台 VPS 上直接拉,
     # 不走面板; 为空则不显示直连订阅。
@@ -186,6 +188,10 @@ DEFAULT_CONFIG = {
     "argo_panel_enabled": False,
     "argo_panel_domain": "",
     "argo_panel_port": PANEL_PORT,
+    # 面板访问路径 (自定义段, 默认 Nexus): 面板地址 =
+    # https://<ARGO 面板域名>/<panel_path>, 部署页 ARGO 面板里改,
+    # 保存后即按新路径提供面板 (不用重启, 见 _panel_path)。
+    "panel_path": "Nexus",
     # 订阅开关: 面板订阅 / IP域名订阅, 各自独立, 可同时开。
     # 面板订阅须先配 ARGO 面板 (没配时开关不可用)。
     "sub_panel_enabled": True,
@@ -628,9 +634,18 @@ def load_config():
     # 旧字段与新字段保持一致 (新字段为准, 旧配置里只有旧字段时已在上面映射过)
     cfg["direct_xray_tls"] = cfg["direct_vless_tls"]
     cfg["direct_xray_tls_port"] = cfg["direct_vless_tls_port"]
-    # 订阅名称固定为 nexus (路径第一段, 不可改): 旧配置里即使存过别的名字,
-    # 读出来也纠正为 nexus, 保证总览 / 订阅页 / 部署页看到的是同一个地址。
-    cfg["sub_name"] = "nexus"
+    # 订阅口令: 空或旧的固定名 nexus 时生成一个随机口令, 并只把这一项
+    # 写回已保存的配置 (保留文件里其它键, 包括不在 DEFAULT_CONFIG 里
+    # 的旧键)。生成一次, 以后读出来就是它, 地址不再变。
+    _old_name = cfg.get("sub_name")
+    if not _old_name or _old_name == "nexus":
+        cfg["sub_name"] = _gen_sub_token()
+        try:
+            _saved2 = dict(saved)
+            _saved2["sub_name"] = cfg["sub_name"]
+            _save_json(CONFIG_PATH, _saved2)
+        except Exception:
+            pass
     return cfg
 
 
@@ -697,9 +712,7 @@ def _port_ok(v):
 
 def validate_config(raw):
     """返回 (cleaned_config, [error, ...])。cleaned 是补全默认后的配置。
-    报错都点名具体字段, 用正式中文, 不用笼统说法。
-    注意: /api/subscription 也调这里, 但只取含「订阅路径」的报错,
-    所以其它报错里不要出现「订阅路径」四个字。"""
+    报错都点名具体字段, 用正式中文, 不用笼统说法。"""
     cfg = dict(DEFAULT_CONFIG)
     if isinstance(raw, dict):
         raw = _apply_direct_aliases(raw)
@@ -827,9 +840,9 @@ def validate_config(raw):
     cfg["sub_path"] = str(cfg.get("sub_path") or "sub").strip()
     if not SUB_PATH_RE.match(cfg["sub_path"]) or cfg["sub_path"] in RESERVED_SUB_PATH:
         errors.append("订阅路径只能是字母/数字/._- (1-32 个字符), 不能是 api / config.json / help.txt")
-    # 订阅名称固定为 nexus (路径第一段, 不可改): 前端不再提供该字段,
-    # 这里强制写死, 旧配置里即使存过别的名字也会被纠正回来。
-    cfg["sub_name"] = "nexus"
+    # 订阅口令: 前端不再提供该字段, 后端保证它是一个随机口令 (空或旧的
+    # 固定名 nexus 就生成一个; 其它已存的值是用户以前的口令, 留着)。
+    _ensure_sub_name(cfg)
     # 直连订阅地址: 用户填的直连 VPS 域名或 IP; 端口统一走订阅端口
     # (sub_port), 地址里带了端口也只取主机部分。
     _dsh = str(cfg.get("direct_sub_host") or "").strip()
@@ -854,6 +867,12 @@ def validate_config(raw):
     # 订阅开关: 各自独立, 可同时开; 默认全开 (与旧行为一致)。
     cfg["sub_panel_enabled"] = _as_bool(cfg.get("sub_panel_enabled"), True)
     cfg["sub_ip_enabled"] = _as_bool(cfg.get("sub_ip_enabled"), True)
+    # 面板访问路径 (自定义段, 默认 Nexus): 只在开了 ARGO 面板时校验;
+    # 只能是一段字母/数字/._-, 不能是 api (会撞上 /api/* 接口)。
+    cfg["panel_path"] = str(cfg.get("panel_path") or "Nexus").strip().strip("/")
+    if cfg["argo_panel_enabled"]:
+        if not SUB_PATH_RE.match(cfg["panel_path"]) or cfg["panel_path"] in ("api", "config.json", "help.txt", "raw", "merged"):
+            errors.append("面板地址路径只能是字母/数字/._- (1-32 个字符), 不能是 api / raw / merged")
 
     # ---- 直连 ----
     cfg["enable_direct"] = _as_bool(cfg.get("enable_direct"), False)
@@ -1217,7 +1236,10 @@ def config_to_env(cfg):
         "SUB_DOMAIN": cfg["sub_domain"],
         "SUB_PORT": str(cfg["sub_port"]),
         "SUB_PATH": cfg["sub_path"],
-        "SUB_NAME": cfg.get("sub_name") or "nexus",
+        "SUB_NAME": _ensure_sub_name(cfg),
+        # IP域名订阅开关: install.sh 据此决定要不要开订阅端口、要不要起
+        # nexus-sub (只开面板订阅时不开端口, 也不为它起订阅服务)。
+        "SUB_IP_ENABLED": _b(cfg.get("sub_ip_enabled")),
         "ENABLE_DIRECT": _b(cfg["enable_direct"]),
         "DIRECT_DOMAIN": cfg["direct_domain"],
         "DIRECT_ADDRESS": cfg.get("direct_address") or cfg["direct_domain"],
@@ -1387,17 +1409,17 @@ def _argo_sub_on(cfg):
 
 
 def subscription_urls(cfg, host=None, scheme=None):
-    """订阅地址 (按当前配置算, 改订阅路径后实时变)。
-    ARGO 订阅由面板提供: ARGO 面板域名 + 固定名 + 订阅路径, 只含隧道
-    节点 (原生 raw / 动态 merged, 裂变后也在里面); 没配 ARGO 面板
-    或没开面板订阅时不提供。
-    直连订阅由直连 VPS 提供: 用户填的域名或 IP + 订阅端口 + 固定名
-    + 订阅路径, 只含直连节点 (Reality 也在直连里); 没开 IP域名订阅
-    时不提供。
-    订阅地址里不再放节点 UUID (固定名代替), UUID 只留在订阅内容里。
+    """订阅地址 (按当前配置算)。
+    ARGO 订阅由面板提供: ARGO 面板域名 + 随机口令, 只含隧道节点
+    (原生 raw / 动态 merged, 裂变后也在里面); 没配 ARGO 面板或没开
+    面板订阅时不提供。
+    IP域名订阅由直连 VPS 提供: 用户填的域名或 IP + 订阅端口 + 随机口令;
+    没配直连时拉到的是 Argo 节点 (ip_argo_url), 配了直连还有直连节点
+    (direct_url, Reality 也在直连里); 没开 IP域名订阅时不提供。
+    订阅地址里不再放节点 UUID (随机口令代替), UUID 只留在订阅内容里。
     host / scheme 保留兼容 (旧版按访问地址推导面板地址, 现改用配置
     里的 ARGO 面板域名)。"""
-    sub_name = cfg.get("sub_name") or "nexus"
+    sub_name = _ensure_sub_name(cfg)
     sub_path = cfg.get("sub_path") or "sub"
     argo_on = _argo_sub_on(cfg)
     ip_on = _as_bool(cfg.get("sub_ip_enabled"), True)
@@ -1413,13 +1435,16 @@ def subscription_urls(cfg, host=None, scheme=None):
         "argo_panel_enabled": bool(cfg.get("argo_panel_enabled")),
         "argo_panel_domain": (cfg.get("argo_panel_domain") or "").strip(),
         "argo_panel_port": cfg.get("argo_panel_port") or PANEL_PORT,
+        "panel_path": (cfg.get("panel_path") or "Nexus").strip().strip("/") or "Nexus",
         "sub_panel_enabled": _as_bool(cfg.get("sub_panel_enabled"), True),
         "sub_ip_enabled": ip_on,
         "argo_sub_enabled": argo_on,
         "ip_sub_enabled": ip_on,
-        "raw_url": f"{base}/{sub_name}/{sub_path}/raw?only=argo" if base else "",
-        "merged_url": f"{base}/{sub_name}/{sub_path}/merged?only=argo" if base else "",
-        "direct_url": f"{direct_base}/{sub_name}/{sub_path}/raw?only=direct" if direct_base else "",
+        "raw_url": f"{base}/{sub_name}/raw?only=argo" if base else "",
+        "merged_url": f"{base}/{sub_name}/merged?only=argo" if base else "",
+        "direct_url": f"{direct_base}/{sub_name}/raw?only=direct" if direct_base else "",
+        "ip_argo_url": f"{direct_base}/{sub_name}/raw?only=argo" if direct_base else "",
+        "ip_argo_merged_url": f"{direct_base}/{sub_name}/merged?only=argo" if direct_base else "",
         "generator_url": "",
         "raw_count": _count_lines(os.path.join(WORKDIR, "sub", "raw.txt")),
         "merged_count": _count_lines(os.path.join(WORKDIR, "sub", "merged.txt")),
@@ -1428,6 +1453,43 @@ def subscription_urls(cfg, host=None, scheme=None):
 
 
 _PATH_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+
+def _gen_sub_token():
+    """订阅口令: 8 位小写字母+数字, 短, 猜不到。避开保留词与旧固定名。"""
+    for _ in range(20):
+        t = "".join(secrets.choice(_PATH_ALPHABET) for _ in range(8))
+        if t not in RESERVED_SUB_PATH and t not in ("api", "config", "nexus", "sub"):
+            return t
+    return "".join(secrets.choice(_PATH_ALPHABET) for _ in range(8))
+
+
+def _ensure_sub_name(cfg):
+    """保证配置里有一个订阅口令: 空或旧的固定名 nexus 就生成一个随机
+    口令写进 cfg (调用方负责保存); 其它已存的值是以前的口令, 留着。
+    返回口令。"""
+    name = str(cfg.get("sub_name") or "").strip()
+    if not name or name == "nexus":
+        cfg["sub_name"] = _gen_sub_token()
+    return cfg["sub_name"]
+
+
+def _panel_path():
+    """面板访问路径 (带 / 前缀, 无尾斜杠, 空表示根路径):
+    配置里的 panel_path 优先, 否则安装时的 PANEL_PATH 环境变量。"""
+    try:
+        p = str(load_config().get("panel_path") or "").strip().strip("/")
+    except Exception:
+        p = ""
+    if not p:
+        p = PANEL_PATH
+    if not p:
+        return ""
+    if not p.startswith("/"):
+        p = "/" + p
+    if p == "/":
+        return ""
+    return p.rstrip("/") or ""
 
 
 def _gen_direct_paths():
@@ -1946,17 +2008,18 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _proxy_sub(self, url):
-        """面板订阅代理: /<name>/<sub_path>/raw|merged[?only=...&format=...]
+        """面板订阅代理: /<name>/raw|merged[?only=...&format=...]
         转发给本机 nexus-sub (127.0.0.1:订阅内部端口), 面板域名/IP 直接出订阅。
-        第一段是订阅口令: 固定名或节点 UUID 都认 (UUID 是旧地址的兼容);
+        第一段是订阅口令: 随机口令或节点 UUID 都认 (UUID 是旧地址的兼容);
         转发时统一换成本机部署的节点 UUID (nexus-sub 只认它), 口令不对直接 404。
+        旧的两段地址 /<name>/<sub_path>/raw|merged 也还认 (兼容已导入的客户端)。
         直连订阅不走这里 (从直连 VPS 上直接拉)。"""
         cfg = load_config()
         sub_path = cfg.get("sub_path") or "sub"
-        sub_name = cfg.get("sub_name") or "nexus"
+        sub_name = _ensure_sub_name(cfg)
         node_uuid = cfg.get("node_uuid") or ""
         path = url.path
-        m = re.match(r"^/([^/]+)/" + re.escape(sub_path) + r"/(raw|merged)$", path)
+        m = re.match(r"^/([^/]+)/(raw|merged)$", path)
         if m:
             seg = m.group(1)
             if seg != sub_name and seg != node_uuid:
@@ -1965,7 +2028,18 @@ class Handler(BaseHTTPRequestHandler):
             if not node_uuid:
                 self._send_json({"error": "订阅服务未运行, 请先部署"}, 502)
                 return
-            path = f"/{node_uuid}/{sub_path}/{m.group(2)}"
+            path = f"/{node_uuid}/{m.group(2)}"
+        else:
+            m = re.match(r"^/([^/]+)/" + re.escape(sub_path) + r"/(raw|merged)$", path)
+            if m:
+                seg = m.group(1)
+                if seg != sub_name and seg != node_uuid:
+                    self._send_json({"error": "订阅口令不正确"}, 404)
+                    return
+                if not node_uuid:
+                    self._send_json({"error": "订阅服务未运行, 请先部署"}, 502)
+                    return
+                path = f"/{node_uuid}/{sub_path}/{m.group(2)}"
         # 订阅开关门控 (只拦新地址带的 ?only=, 不带 only 的旧组合地址仍放行,
         # 已导入客户端的旧订阅不断): ARGO 订阅须配 ARGO 面板且开面板订阅,
         # IP域名订阅须开 IP域名订阅开关。
@@ -2032,7 +2106,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         path = url.path
 
-        _pp = PANEL_PATH.rstrip("/") if PANEL_PATH else ""
+        _pp = _panel_path()
         if _pp and path == "/":
             self.send_response(302); self.send_header("Location", _pp); self.end_headers(); return
         if path in ("/", "/index.html") or (_pp and path in (_pp, _pp + "/index.html")):
@@ -2043,9 +2117,12 @@ class Handler(BaseHTTPRequestHandler):
             # 面板订阅 (公开, 免登录): 转发给本机 nexus-sub
             self._proxy_sub(url)
             return
-        # 固定名订阅地址 /<name>/<sub_path>/raw|merged (与 UUID 地址同路由;
-        # 订阅轮改成固定名后, 只认 UUID 的旧路由会让新地址 404, 这里补上)。
-        # 口令 (固定名或 UUID) 在 _proxy_sub 里校验, 这里只认订阅路径。
+        # 短订阅地址 /<name>/raw|merged (一段口令, 与 UUID 地址同路由)。
+        # 口令 (随机口令或 UUID) 在 _proxy_sub 里校验, 这里只认订阅路径。
+        if re.match(r"^/[^/]+/(raw|merged)$", path):
+            self._proxy_sub(url)
+            return
+        # 旧的两段订阅地址 /<name>/<sub_path>/raw|merged (兼容已导入的客户端)。
         if re.match(r"^/[^/]+/" + re.escape(load_config().get("sub_path") or "sub") + r"/(raw|merged)$", path):
             self._proxy_sub(url)
             return
@@ -2286,28 +2363,6 @@ class Handler(BaseHTTPRequestHandler):
                 _deploy_thread = threading.Thread(target=_deploy_worker, args=(cfg,), daemon=True)
                 _deploy_thread.start()
             self._send_json({"ok": True, "message": "部署已开始, 看日志跟进"})
-            return
-
-        if path == "/api/subscription":
-            sub_path = str(body.get("sub_path") or "").strip()
-            cfg = load_config()
-            cfg["sub_path"] = sub_path or "sub"
-            cfg["sub_name"] = "nexus"  # 订阅名称固定为 nexus, 不可改
-            _, errors = validate_config(cfg)
-            path_errors = [e for e in errors if "订阅路径" in e]
-            if path_errors:
-                self._send_json({"error": "；".join(path_errors)}, 400)
-                return
-            _save_json(CONFIG_PATH, cfg)
-            # nexus-sub 在跑就重启它生效, 没跑就下次部署时生效
-            if _docker_running("nexus-sub") == "running":
-                ok, msg = _restart_sub(cfg)
-                if not ok:
-                    self._send_json({"error": msg}, 500)
-                    return
-                self._send_json({"ok": True, "message": msg, "subscription": subscription_urls(cfg)})
-            else:
-                self._send_json({"ok": True, "message": "已保存, 下次部署时生效", "subscription": subscription_urls(cfg)})
             return
 
         if path == "/api/cert/generate":
