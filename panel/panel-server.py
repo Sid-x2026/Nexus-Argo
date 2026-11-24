@@ -628,6 +628,9 @@ def load_config():
     # 旧字段与新字段保持一致 (新字段为准, 旧配置里只有旧字段时已在上面映射过)
     cfg["direct_xray_tls"] = cfg["direct_vless_tls"]
     cfg["direct_xray_tls_port"] = cfg["direct_vless_tls_port"]
+    # 订阅名称固定为 nexus (路径第一段, 不可改): 旧配置里即使存过别的名字,
+    # 读出来也纠正为 nexus, 保证总览 / 订阅页 / 部署页看到的是同一个地址。
+    cfg["sub_name"] = "nexus"
     return cfg
 
 
@@ -824,12 +827,9 @@ def validate_config(raw):
     cfg["sub_path"] = str(cfg.get("sub_path") or "sub").strip()
     if not SUB_PATH_RE.match(cfg["sub_path"]) or cfg["sub_path"] in RESERVED_SUB_PATH:
         errors.append("订阅路径只能是字母/数字/._- (1-32 个字符), 不能是 api / config.json / help.txt")
-    # 订阅名称 (路径名里的固定名字): 与订阅路径同一套字符规则, 改后旧订阅地址失效。
-    # 注意: 报错里不要出现「订阅路径」四个字 (/api/subscription 只取含这四字的报错)。
-    cfg["sub_name"] = str(cfg.get("sub_name") or "nexus").strip()
-    if not SUB_PATH_RE.match(cfg["sub_name"]) or cfg["sub_name"] in RESERVED_SUB_PATH:
-        errors.append("订阅名称只能是字母/数字/._- (1-32 个字符), 不能是 api / config.json / help.txt")
-        cfg["sub_name"] = "nexus"
+    # 订阅名称固定为 nexus (路径第一段, 不可改): 前端不再提供该字段,
+    # 这里强制写死, 旧配置里即使存过别的名字也会被纠正回来。
+    cfg["sub_name"] = "nexus"
     # 直连订阅地址: 用户填的直连 VPS 域名或 IP; 端口统一走订阅端口
     # (sub_port), 地址里带了端口也只取主机部分。
     _dsh = str(cfg.get("direct_sub_host") or "").strip()
@@ -2292,6 +2292,7 @@ class Handler(BaseHTTPRequestHandler):
             sub_path = str(body.get("sub_path") or "").strip()
             cfg = load_config()
             cfg["sub_path"] = sub_path or "sub"
+            cfg["sub_name"] = "nexus"  # 订阅名称固定为 nexus, 不可改
             _, errors = validate_config(cfg)
             path_errors = [e for e in errors if "订阅路径" in e]
             if path_errors:

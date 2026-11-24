@@ -77,11 +77,11 @@
   .proto.off { opacity: .45; }
   .tag { display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 20px; background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; font-weight: 600; }
   .tag.direct { background: #ecfdf5; color: #15803d; border-color: #a7f3d0; }
-  .proto-wrap { display: grid; grid-template-columns: minmax(460px, 0.8fr) minmax(0, 1.5fr); gap: 8px; align-items: stretch; margin-top: 10px; }
+  .proto-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; margin-top: 10px; }
   .proto-wrap > details.proto-group { display: block; min-width: 0; margin-top: 0; }
-  .proto-wrap .row2 { grid-template-columns: 0.9fr 1.1fr; gap: 8px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) 120px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
+  .proto-wrap .row2 { grid-template-columns: 1fr 1fr; gap: 12px; } #argoGroup .proto { justify-content: flex-start; grid-template-columns: minmax(0, 1fr) 120px; } .proto-wrap:has(> #directGroup.hidden) #argoGroup .row2 { grid-template-columns: 1fr 1fr; }
   .proto-wrap:has(> .hidden) { grid-template-columns: 1fr; }
-  #directFields .proto-wrap { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); gap: 12px; }
+  #directFields .proto-wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
   @media (max-width: 900px) { #directFields .proto-wrap { grid-template-columns: 1fr; } .reality-cols { grid-template-columns: 1fr; } }
 
   .direct-cols { grid-template-columns: minmax(200px, 1.2fr) minmax(170px, 1fr) minmax(170px, 1fr) !important; gap: 8px !important; }
@@ -93,7 +93,7 @@
   .sec-card.direct h4 { color: #4f46e5; }
   .sec-card.tunnel { background: #eef2ff; border-color: #c7d2fe; border-left: 5px solid #6366f1; }
   .sec-card.tunnel h4 { color: #4f46e5; }
-  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: stretch; margin-top: 4px; } .cfg-grid > .mode-box { margin-top: 0; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; margin: 5px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 13.7px; padding: 5px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 12.7px; margin: 4px 0 3px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 13.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; text-align: center; } #tunnelFields #argoToken { max-width: none; width: 100%; resize: vertical; min-height: 36px; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols .ghead { min-height: 36px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px; } .pill.static { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; cursor: default; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 300px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 300px; text-align: center; }  #tunnelFields .row2 { margin-top: 12px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 1fr; gap: 12px; }  .row-prefix { grid-template-columns: 230px 230px !important; gap: 30px !important; justify-content: start !important; } .row-prefix > div { display: flex; align-items: center; gap: 8px; } .row-prefix label.f { margin: 0; white-space: nowrap; } #argoPrefix, #directPrefix { width: 150px; max-width: 150px; }  #nodeUuid { flex: none; width: 320px; text-align: center; }  .proto .port input { font-size: 14.5px; width: 60px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 8px; } #realityCard label.f { margin: 5px 0 2px; } #realityCard input, #realityCard select { padding: 5px 9px; } #realityCard .hint { margin: 4px 0 3px; } #realityCard input[type=text], #realityCard select { max-width: 250px; } #reality_short_ids { flex: 1 1 0; min-width: 0; } #tunnelFields .optaddr-row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-top: 0; flex: 1; } #tunnelFields .sec-card { display: flex; flex-direction: column; }
+  .cfg-col { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; } .cfg-col > * { margin-top: 0 !important; } #realitySection { grid-column: 1; min-width: 0; } .cfg-grid { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: stretch; margin-top: 4px; } .cfg-grid > .mode-box { margin-top: 0; } @media (max-width: 900px) { .cfg-grid { grid-template-columns: 1fr; } } .sec-card.disabled { opacity: .88; } .sec-card.disabled .hint { color: #6b7280; } .sec-card.disabled label.f { color: #475569; } #realityCard label.f, #directFields label.f, #tunnelFields label.f { font-size: 13.5px; margin: 5px 0 2px; } #realityCard input, #realityCard select, #directFields input, #directFields select, #directFields textarea, #tunnelFields input { font-size: 13.7px; padding: 5px 9px; } #realityCard .hint, #directFields .hint, #tunnelFields .hint { font-size: 12.7px; margin: 4px 0 3px; } #realityCard h4, #directFields h4, #tunnelFields h4 { font-size: 13.5px; } .uuid-row button { white-space: nowrap; flex-shrink: 0; padding: 0 14px; } .card input[type=text], .card input[type=password] { max-width: 420px; text-align: center; } #tunnelFields #argoToken { text-align: left; } .card input[type=number] { max-width: 100px; text-align: center; } .card textarea { max-width: 420px; } .direct-cols .ghead { min-height: 36px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px; } .pill.static { background: #eef2ff; border-color: #6366f1; color: #4f46e5; font-weight: 600; cursor: default; } .domain-port { display: flex; gap: 4px; align-items: flex-start; } .domain-port .dp-field { flex: none; width: 300px; max-width: 100%; min-width: 0; } .domain-port .dp-field input { width: 100%; } .domain-port .dp-port { flex: none; width: 140px; } .domain-port .dp-port label.f { white-space: nowrap; } .domain-port .dp-port input { width: 100px; margin-left: auto; display: block; } .domain-port label.f { display: block; }   input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } input[type=number] { -moz-appearance: textfield; appearance: textfield; }  #xrayDomain, #sbDomain, #directAddress, #directSni, #optAddrSingle { max-width: 300px; text-align: center; }  #tunnelFields .row2 { margin-top: 12px; } #tunnelFields .row2:not(.uuid-row) { grid-template-columns: 1fr; gap: 12px; }  .row-prefix { grid-template-columns: 230px 230px !important; gap: 30px !important; justify-content: start !important; } .row-prefix > div { display: flex; align-items: center; gap: 8px; } .row-prefix label.f { margin: 0; white-space: nowrap; } #argoPrefix, #directPrefix { width: 150px; max-width: 150px; }  #nodeUuid { flex: none; width: 320px; text-align: center; }  .proto .port input { font-size: 14.5px; width: 60px; } .proto input[type=checkbox] { width: 18px; height: 18px; } .sec-card.wide { flex: none; width: 100%; margin-top: 8px; } #realityCard label.f { margin: 5px 0 2px; } #realityCard input, #realityCard select { padding: 5px 9px; } #realityCard .hint { margin: 4px 0 3px; } #realityCard input[type=text], #realityCard select { max-width: 250px; } #reality_short_ids { flex: 1 1 0; min-width: 0; } #tunnelFields .optaddr-row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-top: 0; flex: 1; } #tunnelFields .sec-card { display: flex; flex-direction: column; }
 #tunnelFields #optAddrSingle { max-width: 250px; width: 100%; text-align: center; resize: vertical; min-height: 150px; } #tunnelFields .optaddr-row label.f { margin: 0; white-space: nowrap; } .warn-inline { display: inline-block; background: #fef9c3; border: 1px solid #fde68a; color: #854d0e; border-radius: 8px; padding: 2px 8px; font-size: 12.7px; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; } .reality-note { font-size: 11.7px; color: #64748b; font-weight: 400; margin-left: 8px; white-space: nowrap; vertical-align: middle; }
   .scan-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; } .scan-table th { font-size: 12.5px; }
   .scan-table th, .scan-table td { border-bottom: 1px solid #eef0fb; padding: 7px 8px; text-align: left; white-space: nowrap; }
@@ -362,15 +362,6 @@
         <div id="directFields" class="mode-box direct hidden">
           <h4>直连安全配置 <span class="warn-inline">直连将暴露 VPS 真实 IP，仅作备用；须与隧道节点使用不同子域名。</span></h4>
           <div class="proto-wrap">
-            <div class="sec-card direct">
-              <h4>直连域名与前缀</h4>
-              <label class="f">直连地址 address <span class="opt">选填</span></label>
-              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP">
-              <p class="hint">留空用 VPS 公网 IP；ACME 须填域名并解析至 VPS IP（DNS only）。</p>
-              <label class="f">直连 SNI <span class="opt">选填</span></label>
-              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同">
-              <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
-            </div>
             <div style="display:flex; flex-direction:column; gap:12px; min-width:0;">
             <div class="sec-card direct">
               <h4>直连订阅</h4>
@@ -391,6 +382,16 @@
                   <p class="hint">直连节点在订阅里的名字前缀，例如：直连丨Xray-TLS。</p>
                 </div>
               </div>
+            </div>
+            <div class="sec-card direct">
+              <h4>直连域名与前缀</h4>
+              <label class="f">直连地址 address <span class="opt">选填</span></label>
+              <input type="text" id="directAddress" class="mono" placeholder="默认 VPS 公网 IP">
+              <p class="hint">留空用 VPS 公网 IP；ACME 须填域名并解析至 VPS IP（DNS only）。</p>
+              <label class="f">直连 SNI <span class="opt">选填</span></label>
+              <input type="text" id="directSni" class="mono" placeholder="默认与直连地址相同">
+              <p class="hint">默认与直连地址相同。Reality 的 SNI 请使用目标扫描结果。</p>
+            </div>
             </div>
             <div class="sec-card direct">
               <h4>ACME 证书 <span id="certStatusLine" class="status info" style="font-size:12px; font-weight:400; margin-left:8px;">证书状态：加载中…</span></h4>
@@ -418,13 +419,12 @@
               </div>
               <p id="certNotNeeded" class="hint">当前选中的协议不需要证书，无需配置。</p>
             </div>
-            </div>
           </div>
           </div>
         <div id="realitySection">
 <div id="realityCard" class="sec-card direct" style="width:100%;">
             <h4>Reality 配置 <span class="reality-note">Reality 无需证书</span></h4>
-            <div class="reality-cols" style="display:grid; grid-template-columns:minmax(0,0.75fr) minmax(0,1.25fr); gap:12px; align-items:stretch;">
+            <div class="reality-cols" style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:stretch;">
               <div class="sec-card direct">
                 <h4>目标与密钥</h4>
                 <div id="realityScanOut" class="status info"></div>
@@ -464,7 +464,7 @@
           <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:stretch;">
           <div class="sec-card tunnel">
           <label class="f">cloudflare Argo Tunnel Token <span class="req">* 必填</span></label>
-          <textarea id="argoToken" class="mono" rows="2" placeholder="粘贴 cloudflare Argo Tunnel Token" autocomplete="off"></textarea>
+          <input type="text" id="argoToken" class="mono" placeholder="粘贴 cloudflare Argo Tunnel Token" autocomplete="off">
           <div class="row2">
             <div>
               <div class="domain-port"><div class="dp-field"><label class="f">Xray 子域名 <span class="req">* 必填</span></label><input type="text" id="xrayDomain" value="xr.ahstshu.eu.cc" class="mono"></div><div class="dp-port"><label class="f">回源端口 <span class="req">* 必填</span></label><input type="number" id="xrayPort" value="8001" min="1" max="65535"></div></div>
@@ -489,31 +489,32 @@
           <div style="margin-top:10px; border-top:1px solid #c7d2fe; padding-top:10px;">
             <div>
               <label class="pill"><input type="checkbox" id="subPanelEnabled" checked> 面板订阅</label>
-              <div style="display:flex; gap:12px; margin-top:6px; flex-wrap:wrap;">
-                <div style="flex:1 1 110px; min-width:0;">
-                  <label class="f">订阅名称 <span class="opt">选填</span></label>
-                  <input type="text" id="subName" value="nexus" class="mono" style="width:100%;">
-                </div>
-                <div style="flex:1 1 110px; min-width:0;">
-                  <label class="f">订阅路径 <span class="opt">选填</span></label>
-                  <input type="text" id="subPath" value="sub" class="mono" style="width:100%;">
-                </div>
-                <div style="flex:none; width:120px;">
-                  <label class="f">Argo 前缀 <span class="opt">选填</span></label>
-                  <input type="text" id="argoPrefix" value="Argo" style="width:100px;">
-                </div>
-              </div>
-              <p class="hint">订阅地址 = 面板地址 + 订阅名称 + 订阅路径；订阅名称默认 nexus，改成只有你知道的字符串更安全，改后旧订阅地址失效。Argo 前缀是隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。</p>
-              <div id="argoSubPreview" class="hidden" style="margin-top:6px;">
+              <div id="panelSubArea" style="margin-top:6px;">
                 <div class="addr-row"><div class="addr" id="argoSubPreviewAddr"></div><button class="sm" id="btnCopyArgoPreview" type="button">复制</button></div>
-                <p class="hint">前面是 Argo 面板地址，后缀是上面的订阅名称与订阅路径，改了实时更新。</p>
+                <div style="display:flex; gap:12px; margin-top:6px; flex-wrap:wrap;">
+                  <div style="flex:1 1 110px; min-width:0;">
+                    <label class="f">订阅路径 <span class="opt">选填</span></label>
+                    <input type="text" id="subPath" value="sub" class="mono" style="width:100%;">
+                  </div>
+                  <div style="flex:none; width:120px;">
+                    <label class="f">Argo 前缀 <span class="opt">选填</span></label>
+                    <input type="text" id="argoPrefix" value="Argo" style="width:100px;">
+                  </div>
+                </div>
+                <p class="hint">订阅地址 = 面板地址 + nexus + 订阅路径；路径中只有订阅路径一段可改，改后旧订阅地址失效。Argo 前缀是隧道节点在订阅里的名字前缀，例如：Argo丨Xray丨xhttp_h2。</p>
               </div>
             </div>
             <div style="margin-top:8px;">
               <label class="pill"><input type="checkbox" id="subIpEnabled" checked> IP域名订阅</label>
-              <div id="ipSubPreview" class="hidden" style="margin-top:6px;">
+              <div id="ipSubArea" style="margin-top:6px;">
                 <div class="addr-row"><div class="addr" id="ipSubPreviewAddr"></div><button class="sm" id="btnCopyIpPreview" type="button">复制</button></div>
-                <p class="hint">从直连 VPS 的域名或 IP 上拉，端口见直连订阅卡的订阅端口；订阅名称与路径共用上面那一组。</p>
+                <div style="display:flex; gap:12px; margin-top:6px; flex-wrap:wrap;">
+                  <div style="flex:1 1 110px; min-width:0;">
+                    <label class="f">订阅路径 <span class="opt">选填</span></label>
+                    <input type="text" id="subPathIp" value="sub" class="mono" style="width:100%;">
+                  </div>
+                </div>
+                <p class="hint">从直连 VPS 的域名或 IP 上拉，端口见直连订阅卡的订阅端口；订阅路径与面板订阅共用同一段，改一处两处同步更新。</p>
               </div>
             </div>
             <p class="hint">两个开关可同时开。面板订阅须先配置 ARGO 面板。</p>
@@ -1059,8 +1060,16 @@ function updateArgoPanelBox() {
   $("subPanelEnabled").disabled = !on;
   updateSubPreview();
 }
+// 订阅路径第一段固定为 nexus, 只有订阅路径一段可改;
+// 面板订阅与 IP域名订阅共用同一段订阅路径 (节点只认一个 SUB_PATH),
+// 两处输入框改的是同一个值, 输入时双向同步。
+function syncSubPath(fromId) {
+  const otherId = fromId === "subPath" ? "subPathIp" : "subPath";
+  const v = $(fromId).value;
+  if ($(otherId).value !== v) $(otherId).value = v;
+  updateSubPreview();
+}
 function updateSubPreview() {
-  const name = $("subName").value.trim() || "nexus";
   const path = $("subPath").value.trim() || "sub";
   const panelOn = $("argoPanelEnabled").checked;
   const panelSub = $("subPanelEnabled").checked;
@@ -1068,20 +1077,22 @@ function updateSubPreview() {
   const domain = $("argoPanelDomain").value.trim();
   const dhost = $("directSubHost").value.trim().split(":")[0];
   const dport = parseInt($("subPort").value, 10) || 18080;
-  const argoUrl = (panelOn && panelSub && domain) ? ("https://" + domain + "/" + name + "/" + path + "/raw?only=argo") : "";
-  const ipUrl = (ipSub && dhost) ? ("http://" + dhost + ":" + dport + "/" + name + "/" + path + "/raw?only=direct") : "";
-  $("argoSubPreview").classList.toggle("hidden", !argoUrl);
-  $("ipSubPreview").classList.toggle("hidden", !ipUrl);
+  const argoUrl = (panelOn && panelSub && domain) ? ("https://" + domain + "/nexus/" + path + "/raw?only=argo") : "";
+  const ipUrl = (ipSub && dhost) ? ("http://" + dhost + ":" + dport + "/nexus/" + path + "/raw?only=direct") : "";
+  $("panelSubArea").classList.toggle("hidden", !panelSub);
+  $("ipSubArea").classList.toggle("hidden", !ipSub);
   $("subPreviewHint").classList.toggle("hidden", !!(argoUrl || ipUrl));
-  setAddr("argoSubPreviewAddr", argoUrl, "");
-  setAddr("ipSubPreviewAddr", ipUrl, "");
+  setAddr("argoSubPreviewAddr", argoUrl, panelSub ? "请先配置 ARGO 面板域名" : "");
+  setAddr("ipSubPreviewAddr", ipUrl, ipSub ? "请先填写直连订阅地址" : "");
   $("btnCopyArgoPreview").disabled = !argoUrl;
   $("btnCopyIpPreview").disabled = !ipUrl;
 }
 $("argoPanelEnabled").addEventListener("change", updateArgoPanelBox);
 $("subPanelEnabled").addEventListener("change", updateSubPreview);
 $("subIpEnabled").addEventListener("change", updateSubPreview);
-["subName", "subPath", "directSubHost", "subPort", "argoPanelDomain"].forEach(id => { const el = $(id); if (el) el.addEventListener("input", updateSubPreview); });
+$("subPath").addEventListener("input", () => syncSubPath("subPath"));
+$("subPathIp").addEventListener("input", () => syncSubPath("subPathIp"));
+["directSubHost", "subPort", "argoPanelDomain"].forEach(id => { const el = $(id); if (el) el.addEventListener("input", updateSubPreview); });
 $("btnCopyArgoPreview").onclick = () => copyAddr("argoSubPreviewAddr", "subPreviewOut");
 $("btnCopyIpPreview").onclick = () => copyAddr("ipSubPreviewAddr", "subPreviewOut");
 
@@ -1131,11 +1142,11 @@ function collectConfig() {
     singbox_domain: $("sbDomain").value.trim(),
     singbox_protocols: protos("sp"),
     opt_addrs: ($("optAddrSingle").value || "cloudflare.com").split(/[,\n]+/).map(s => cleanOptAddr(s)).filter(Boolean).slice(0, 6),
-    // 订阅路径与订阅名称在 Argo 配置里, 直连订阅地址在直连配置里;
-    // ARGO 订阅地址 = ARGO 面板域名 + 订阅名称 + 订阅路径, 直连订阅地址 = 直连 VPS 域名或 IP + 订阅端口 + 订阅名称 + 订阅路径。
+    // 订阅路径在 Argo 配置里, 直连订阅地址在直连配置里;
+    // 订阅地址 = 面板地址 / 直连地址 + nexus(固定) + 订阅路径, 路径中只有订阅路径一段可改。
     sub_host: "",
     sub_path: $("subPath").value.trim() || "sub",
-    sub_name: $("subName").value.trim() || "nexus",
+    sub_name: "nexus",
     sub_port: parseInt($("subPort").value, 10) || 18080,
     direct_sub_host: $("directSubHost").value.trim().split(":")[0],
     argo_panel_enabled: $("argoPanelEnabled").checked,
@@ -1188,7 +1199,7 @@ function fillConfig(c) {
   document.querySelectorAll(".sp").forEach(el => { el.checked = !!(c.singbox_protocols && c.singbox_protocols[el.value] != null); const p = $("port_" + el.value); if (p && c.singbox_protocols && c.singbox_protocols[el.value] != null) p.value = c.singbox_protocols[el.value]; });
   $("optAddrSingle").value = ((c.opt_addrs || []).map(cleanOptAddr).filter(Boolean).join("\n") || "cloudflare.com");
   $("subPath").value = c.sub_path || "sub";
-  $("subName").value = c.sub_name || "nexus";
+  $("subPathIp").value = c.sub_path || "sub";
   $("directSubHost").value = c.direct_sub_host || "";
   $("subPort").value = c.sub_port || 18080;
   $("argoPanelEnabled").checked = !!c.argo_panel_enabled;
@@ -1455,7 +1466,7 @@ function validateDeploy() {
     }
   }
   const sp = $("subPath").value.trim();
-  if (!SUB_PATH_RE.test(sp) || RESERVED_SUB_PATH.indexOf(sp) >= 0) mark($("subPath"), "订阅路径");
+  if (!SUB_PATH_RE.test(sp) || RESERVED_SUB_PATH.indexOf(sp) >= 0) { mark($("subPath"), "订阅路径"); mark($("subPathIp"), "订阅路径"); }
   if (!portOk($("subPort"))) mark($("subPort"), "订阅端口");
   if ($("argoPanelEnabled").checked) {
     const pd = $("argoPanelDomain").value.trim();
@@ -1948,6 +1959,7 @@ $("btnSaveSubPath").onclick = async () => {
   try {
     const r = await api("/api/subscription", {method: "POST", body: JSON.stringify({sub_path: sp})});
     setOut($("subOut"), r.message, "ok");
+    $("subPath").value = sp; $("subPathIp").value = sp; updateSubPreview();
     loadSubscription();
   } catch (e) { setOut($("subOut"), e.message, "err"); }
 };
