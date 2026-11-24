@@ -1026,13 +1026,14 @@ async function pollCertTask(t) {
   try {
     const r = await api("/api/cert/task?target=" + encodeURIComponent(t.id));
     const logEl = $("certTaskLog");
+    const verb = r.kind === "clear" ? "清除" : "生成";
     if (r.log) { logEl.textContent = r.log; logEl.classList.remove("hidden"); logEl.scrollTop = logEl.scrollHeight; }
     if (!r.running) {
-      setOut($("certTaskOut"), "「" + t.name + "」" + (r.message || (r.ok ? "证书已生成" : "证书生成失败")), r.ok ? "ok" : "err");
+      setOut($("certTaskOut"), "「" + t.name + "」" + (r.message || (r.ok ? "证书已" + verb : "证书" + verb + "失败")), r.ok ? "ok" : "err");
       loadCert(t.id === "local" ? null : t.id, t.name);
       return true;
     }
-    setOut($("certTaskOut"), "「" + t.name + "」证书生成中…", "info");
+    setOut($("certTaskOut"), "「" + t.name + "」证书" + verb + "中…", "info");
     return false;
   } catch (e) { return false; }
 }
@@ -1056,13 +1057,19 @@ $("btnGenCert").onclick = async () => {
 $("btnClearCert").onclick = async () => {
   const targets = await certTargets();
   if (!targets) return;
-  if (!(await showConfirm("确认清除以下目标上已部署的证书吗？" + targets.map(t => t.name).join("、") + "。清除后下次部署时重新生成/签发。"))) return;
-  const rs = await Promise.allSettled(targets.map(t => api("/api/cert/clear", {method: "POST", body: JSON.stringify({target: t.id})})));
-  const okN = rs.filter(r => r.status === "fulfilled").length;
-  const fails = rs.map((r, i) => (r.status === "rejected" ? targets[i].name + "：" + (r.reason && r.reason.message ? r.reason.message : r.reason) : null)).filter(Boolean);
-  setOut($("certTaskOut"), "清除完成：成功 " + okN + " 个" + (fails.length ? "，失败 " + fails.length + " 个：" + fails.join("；") : ""), fails.length ? "err" : "ok");
-  if (targets.length === 1) loadCert(targets[0].id === "local" ? null : targets[0].id, targets[0].name);
-  else loadCert();
+  if (!(await showConfirm("确认清除以下目标上已部署的证书吗？" + targets.map(t => t.name).join("、") + "。清除会删掉部署文件与 acme.sh 仓库里的同域名证书；正在运行的核心仍在使用旧证书（内存中），新证书将在下次部署或生成证书时生效。"))) return;
+  $("btnClearCert").disabled = true;
+  for (const t of targets) {
+    try {
+      await api("/api/cert/clear", {method: "POST", body: JSON.stringify({target: t.id})});
+    } catch (e) {
+      setOut($("certTaskOut"), "「" + t.name + "」启动失败：" + e.message, "err");
+      continue;
+    }
+    while (!(await pollCertTask(t))) await new Promise(r => setTimeout(r, 2000));
+  }
+  $("btnClearCert").disabled = false;
+  updateCertModeBox();
 };
 // ---- ARGO 面板开关 + 订阅开关 ----
 function updateArgoPanelBox() {

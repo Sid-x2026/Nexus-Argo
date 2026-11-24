@@ -39,7 +39,7 @@
 #        (须开 IP域名订阅; 没配直连时拉到的是 Argo 节点)。
 #   GET  /api/cert               证书状态 (是否已部署 / 颁发给谁 / 到期时间 / 续期方式)
 #        ?target=<node_id> 看远程节点的证书, 不带看本机
-#   GET  /api/cert/task?target=  证书生成任务状态 + 日志 (后 8KB)
+#   GET  /api/cert/task?target=  证书生成/清除任务状态 + 完整日志
 #   POST /api/cert/generate      {target: local|<node_id>} 提前生成证书
 #   POST /api/cert/clear         {target: local|<node_id>} 清除已部署的证书
 #   POST /api/reality-scan       3X-UI 式 Reality 目标扫描 (域名/IP/CIDR, 返回
@@ -2080,12 +2080,15 @@ def _cert_renew_note(mode):
     return "到期前请重新上传"
 
 
-def _parse_cert_openssl(mode, out):
+def _parse_cert_openssl(mode, out, source="deployed"):
     """openssl x509 -subject -enddate 的输出 -> cert_info 同形状的 dict。
     证书文件已确认存在 (installed=True); 到期时间解析失败也返回
-    installed=True + message, 由调用方展示。"""
+    installed=True + message, 由调用方展示。
+    source: "deployed" (部署文件) 或 "store" (acme.sh 仓库里的证书,
+    尚未安装到部署目录)。"""
     base = {"installed": True, "mode": mode,
-            "auto_renew": mode == "acme", "renew_note": _cert_renew_note(mode)}
+            "auto_renew": mode == "acme", "renew_note": _cert_renew_note(mode),
+            "source": source}
     subject = ""
     expiry_raw = ""
     for line in (out or "").splitlines():
@@ -2103,40 +2106,75 @@ def _parse_cert_openssl(mode, out):
         return base
     base.update({"subject": subject, "expiry": exp_date.isoformat(),
                  "days_left": (exp_date - datetime.date.today()).days})
+    if source == "store":
+        base["renew_note"] = "证书在 acme.sh 仓库中，尚未安装到部署目录；" + base["renew_note"]
     return base
 
 
+def _local_store_cert_path(domain):
+    """本机 acme.sh 仓库里某域名的证书文件 (fullchain.cer), 没有返回 ""。
+    域名先校验, 拼路径才安全。"""
+    if not domain or not _is_domain(domain):
+        return ""
+    home = os.path.expanduser("~")
+    for cand in (os.path.join(home, ".acme.sh", domain, "fullchain.cer"),
+                 os.path.join(home, ".acme.sh", domain + "_ecc", "fullchain.cer")):
+        if os.path.isfile(cand):
+            return cand
+    return ""
+
+
 def cert_info(cfg):
-    """证书状态 (本机)。证书内容本身绝不返回, 只返回主题、到期日和续期方式。"""
+    """证书状态 (本机)。证书内容本身绝不返回, 只返回主题、到期日和续期方式。
+    先看部署文件, 没有再看 acme.sh 仓库里同域名的证书; 两处都没有才报未部署。"""
     mode = cfg.get("cert_mode") or "selfsigned"
     cert_path = os.path.join(WORKDIR, "direct", "cert.pem")
-    if not os.path.isfile(cert_path):
-        return {"installed": False, "mode": mode, "message": "未部署"}
-    out, code = _run(["openssl", "x509", "-in", cert_path, "-noout",
-                      "-subject", "-enddate"], timeout=5)
-    if code != 0 or not out:
-        return {"installed": True, "mode": mode,
-                "auto_renew": mode == "acme", "renew_note": _cert_renew_note(mode),
-                "subject": "", "expiry": "", "days_left": None,
-                "message": "证书信息读取失败, 请检查证书文件"}
-    return _parse_cert_openssl(mode, out)
+    if os.path.isfile(cert_path):
+        out, code = _run(["openssl", "x509", "-in", cert_path, "-noout",
+                          "-subject", "-enddate"], timeout=5)
+        if code != 0 or not out:
+            return {"installed": True, "mode": mode, "source": "deployed",
+                    "auto_renew": mode == "acme", "renew_note": _cert_renew_note(mode),
+                    "subject": "", "expiry": "", "days_left": None,
+                    "message": "证书信息读取失败, 请检查证书文件"}
+        return _parse_cert_openssl(mode, out, "deployed")
+    store_cert = _local_store_cert_path((cfg.get("direct_domain") or "").strip())
+    if store_cert:
+        out, code = _run(["openssl", "x509", "-in", store_cert, "-noout",
+                          "-subject", "-enddate"], timeout=5)
+        if code == 0 and out:
+            return _parse_cert_openssl(mode, out, "store")
+    return {"installed": False, "mode": mode, "message": "未部署"}
 
 
 def _node_cert_info(node, cfg):
-    """远程节点的证书状态 (SSH 读节点上的 $WORKDIR/direct/cert.pem)。
-    节点连不上 / 没装证书时返回 installed=False + message。"""
+    """远程节点的证书状态 (SSH 读节点上的真实证书)。
+    先看部署文件 ($WORKDIR/direct/cert.pem), 没有再看 acme.sh 仓库里
+    同域名的证书; 两处都没有才报未部署。节点连不上时返回 installed=False。"""
     mode = cfg.get("cert_mode") or "selfsigned"
+    domain = (cfg.get("direct_domain") or "").strip()
+    store_part = ""
+    if _is_domain(domain):
+        # 域名已校验 (仅字母数字 . _ -), 可直接拼进远端命令。
+        store_part = (
+            f"elif [ -f \"$HOME/.acme.sh/{domain}/fullchain.cer\" ]; then echo STORE; "
+            f"openssl x509 -in \"$HOME/.acme.sh/{domain}/fullchain.cer\" -noout -subject -enddate; "
+            f"elif [ -f \"$HOME/.acme.sh/{domain}_ecc/fullchain.cer\" ]; then echo STORE; "
+            f"openssl x509 -in \"$HOME/.acme.sh/{domain}_ecc/fullchain.cer\" -noout -subject -enddate; "
+        )
     cmd = ("if [ -f /opt/nexus-argo/direct/cert.pem ] && "
            "[ -f /opt/nexus-argo/direct/key.pem ]; then "
            "openssl x509 -in /opt/nexus-argo/direct/cert.pem -noout "
-           "-subject -enddate; else echo NO_CERT; fi")
+           "-subject -enddate; "
+           + store_part +
+           "else echo NO_CERT; fi")
     rc, out, _ = _ssh_cmd(node, cmd, timeout=15)
     if rc in (-1, 255):
         return {"installed": False, "mode": mode, "message": "节点无法连接"}
     text = (out or b"").decode("utf-8", "replace")
     if rc != 0 or "NO_CERT" in text:
         return {"installed": False, "mode": mode, "message": "未部署"}
-    return _parse_cert_openssl(mode, text)
+    return _parse_cert_openssl(mode, text, "store" if "STORE" in text else "deployed")
 
 
 # ---- 证书预生成任务 (面板「生成证书」按钮) ----
@@ -2174,7 +2212,7 @@ def _cert_gen_worker(target, node, cfg):
     target_name = "本机" if target == "local" else (node.get("name") or target)
     with _CERT_TASKS_LOCK:
         CERT_TASKS[target] = {"running": True, "ok": None, "log": log_path,
-                              "message": "生成中…"}
+                              "kind": "generate", "message": "生成中…"}
     def _append(text):
         try:
             with open(log_path, "ab") as f:
@@ -2216,8 +2254,67 @@ def _cert_gen_worker(target, node, cfg):
         _append(f"\n[nexus-panel] 证书生成异常: {e}\n")
     with _CERT_TASKS_LOCK:
         CERT_TASKS[target] = {"running": False, "ok": code == 0, "log": log_path,
+                              "kind": "generate",
                               "message": "证书已生成" if code == 0 else
                               f"证书生成失败 (退出码 {code}), 看日志找原因"}
+
+
+def _cert_clear_worker(target, node, cfg):
+    """后台跑 `install.sh clear-cert` (本机直接跑, 远程 scp 后 SSH 跑),
+    日志写 cert.log / cert-<node_id>.log (先清空, 再刷过程, 与生成证书
+    同一套日志); 120 秒超时。
+    清除只删部署文件 + acme.sh 仓库里的同域名证书, 不重载核心 —
+    正在跑的核心内存里还是旧证书, 下次部署/生成证书时才换。"""
+    log_path = _cert_log_path(target)
+    target_name = "本机" if target == "local" else (node.get("name") or target)
+    with _CERT_TASKS_LOCK:
+        CERT_TASKS[target] = {"running": True, "ok": None, "log": log_path,
+                              "kind": "clear", "message": "清除中…"}
+    def _append(text):
+        try:
+            with open(log_path, "ab") as f:
+                f.write(text.encode("utf-8", "replace"))
+        except OSError:
+            pass
+    try:
+        with open(log_path, "wb") as f:
+            f.write(f"[nexus-panel] 开始清除证书 (目标: {target_name})\n".encode())
+    except OSError:
+        pass
+    code = -1
+    try:
+        env = dict(os.environ)
+        env.update(config_to_env(cfg))
+        with open(log_path, "ab") as lf:
+            if target == "local":
+                proc = subprocess.Popen(["bash", INSTALL_SH, "clear-cert"], env=env,
+                                        cwd=WORKDIR, stdout=lf, stderr=subprocess.STDOUT)
+            else:
+                rc, _, err = _scp_put(node, INSTALL_SH, _NODE_INSTALL_SH, timeout=120)
+                if rc != 0:
+                    raise RuntimeError(f"传 install.sh 失败: {err.decode('utf-8', 'replace').strip() or 'scp 退出码 ' + str(rc)}")
+                env_str = " ".join(f"{k}={shlex.quote(str(v))}" for k, v in env.items())
+                argv = ["ssh"] + _ssh_base_args(node) + [_ssh_target(node),
+                        f"{env_str} bash {_NODE_INSTALL_SH} clear-cert"]
+                proc = subprocess.Popen(argv, stdout=lf, stderr=subprocess.STDOUT)
+            try:
+                code = proc.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                code = -1
+                _append("\n[nexus-panel] 清除超时 (120 秒)\n")
+    except RuntimeError as e:
+        code = -1
+        _append(f"\n[nexus-panel] {e}\n")
+    except Exception as e:
+        code = -1
+        _append(f"\n[nexus-panel] 证书清除异常: {e}\n")
+    _append("\n[nexus-panel] 注意：正在运行的核心仍在使用旧证书（内存中），新证书将在下次部署或生成证书时生效\n")
+    with _CERT_TASKS_LOCK:
+        CERT_TASKS[target] = {"running": False, "ok": code == 0, "log": log_path,
+                              "kind": "clear",
+                              "message": "证书已清除" if code == 0 else
+                              f"证书清除失败 (退出码 {code}), 看日志找原因"}
 
 
 # ---- Reality 目标扫描 (3X-UI 式) ----
@@ -2575,10 +2672,9 @@ class Handler(BaseHTTPRequestHandler):
                 task = dict(CERT_TASKS.get(target) or {"running": False, "ok": None, "message": ""})
             log_text = ""
             try:
+                # 日志文件只存当前一次任务 (开始时先清空), 直接返回全文,
+                # 不再只取后 8KB, 否则长日志的报错部分会被截掉看不到。
                 with open(_cert_log_path(target), "rb") as f:
-                    f.seek(0, os.SEEK_END)
-                    size = f.tell()
-                    f.seek(max(0, size - 8192))
                     log_text = f.read().decode("utf-8", "replace")
             except OSError:
                 pass
@@ -2791,7 +2887,8 @@ class Handler(BaseHTTPRequestHandler):
             with _CERT_TASKS_LOCK:
                 cur = CERT_TASKS.get(target)
                 if cur and cur.get("running"):
-                    self._send_json({"error": "该目标正在生成证书, 请等它完成"}, 409)
+                    _kind = "清除" if cur.get("kind") == "clear" else "生成"
+                    self._send_json({"error": f"该目标正在{_kind}证书, 请等它完成"}, 409)
                     return
             th = threading.Thread(target=_cert_gen_worker, args=(target, node, cfg), daemon=True)
             th.start()
@@ -2801,30 +2898,34 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/cert/clear":
             target = str(body.get("target") or "local").strip() or "local"
             cfg = load_config()
+            if not _install_supports_cert():
+                self._send_json({"error": "install.sh 还是旧版, 请先更新 install.sh 再清除证书"}, 400)
+                return
             if cfg.get("cert_mode") == "upload":
                 self._send_json({"error": "上传模式的证书由配置里的证书内容决定, 清除部署文件后下次部署会重新写回, 请直接改证书内容"}, 400)
                 return
-            if target == "local":
-                for _f in ("cert.pem", "key.pem"):
-                    try:
-                        os.remove(os.path.join(WORKDIR, "direct", _f))
-                    except OSError:
-                        pass
-                self._send_json({"ok": True, "message": "本机已部署的证书已清除, 下次部署时重新生成/签发"})
-                return
-            node = _find_node(target)
-            if not node:
-                self._send_json({"error": "节点不存在"}, 404)
-                return
-            if node.get("auth") != "key":
-                self._send_json({"error": "该节点尚未完成密码接入, 请先用密码接入 (bootstrap)"}, 400)
-                return
-            rc, out, err = _ssh_cmd(node, "rm -f /opt/nexus-argo/direct/cert.pem /opt/nexus-argo/direct/key.pem", timeout=30)
-            if rc != 0:
-                detail = ((out or b"") + (err or b"")).decode("utf-8", "replace").strip()
-                self._send_json({"error": "清除失败: " + (detail[-200:] if detail else "ssh 失败")}, 500)
-                return
-            self._send_json({"ok": True, "message": "节点「" + (node.get("name") or "") + "」已部署的证书已清除, 下次部署时重新生成/签发"})
+            node = None
+            if target != "local":
+                node = _find_node(target)
+                if not node:
+                    self._send_json({"error": "节点不存在"}, 404)
+                    return
+                if node.get("auth") != "key":
+                    self._send_json({"error": "该节点尚未完成密码接入, 请先用密码接入 (bootstrap)"}, 400)
+                    return
+                th = _node_deploy_threads.get(target)
+                if th is not None and th.is_alive():
+                    self._send_json({"error": "该节点正在部署, 请等它完成再清除证书"}, 409)
+                    return
+            with _CERT_TASKS_LOCK:
+                cur = CERT_TASKS.get(target)
+                if cur and cur.get("running"):
+                    _kind = "清除" if cur.get("kind") == "clear" else "生成"
+                    self._send_json({"error": f"该目标正在{_kind}证书, 请等它完成"}, 409)
+                    return
+            th = threading.Thread(target=_cert_clear_worker, args=(target, node, cfg), daemon=True)
+            th.start()
+            self._send_json({"ok": True, "message": "证书清除已开始, 请查看日志"})
             return
 
         if path == "/api/reality-scan":
