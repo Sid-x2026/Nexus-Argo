@@ -290,20 +290,30 @@ is_true() { case "${1,,}" in true|1|yes|y) return 0;; *) return 1;; esac; }
 _ensure_pkg() {
   local _cmd="$1"; shift
   command -v "$_cmd" >/dev/null 2>&1 && return 0
-  local _pkgs="${*:-$_cmd}"
+  local _pkgs="${*:-$_cmd}" _p
   log "未检测到 $_cmd，正在自动安装 ($_pkgs)…"
+  # 包名按个试 (不同发行版包名不同, 如 cron 与 cronie); 装上一个、
+  # 命令出现即停, 避免整个事务因某个不存在的包名失败。
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update -qq >/dev/null 2>&1 || true
-    apt-get install -y $_pkgs >/dev/null 2>&1 || true
+    for _p in $_pkgs; do
+      apt-get install -y "$_p" >/dev/null 2>&1 || true
+      command -v "$_cmd" >/dev/null 2>&1 && { log "$_cmd 已安装"; return 0; }
+    done
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y $_pkgs >/dev/null 2>&1 || true
+    for _p in $_pkgs; do
+      dnf install -y "$_p" >/dev/null 2>&1 || true
+      command -v "$_cmd" >/dev/null 2>&1 && { log "$_cmd 已安装"; return 0; }
+    done
   elif command -v yum >/dev/null 2>&1; then
-    yum install -y $_pkgs >/dev/null 2>&1 || true
+    for _p in $_pkgs; do
+      yum install -y "$_p" >/dev/null 2>&1 || true
+      command -v "$_cmd" >/dev/null 2>&1 && { log "$_cmd 已安装"; return 0; }
+    done
   else
     warn "未找到 apt/dnf/yum，无法自动安装 $_cmd，请手动安装后重试"
     return 1
   fi
-  if command -v "$_cmd" >/dev/null 2>&1; then log "$_cmd 已安装"; return 0; fi
   warn "$_cmd 自动安装失败 — 请手动安装 ($_pkgs) 后重试"
   return 1
 }
@@ -588,7 +598,7 @@ _issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
         elif [ -n "$_strict" ]; then
           # 严格模式 (面板「生成证书」): 装不上就直接失败, 不会回退自签名;
           # 之前这里写「回退到自签名证书」是误导, 改成实话并贴出失败原因。
-          warn "acme.sh 安装失败 — 请检查 curl 是否已安装、能否访问 https://get.acme.sh (详情见 $_acme_install_log)"
+          warn "acme.sh 安装失败 — 请检查 curl、crontab 是否已安装，能否访问 https://get.acme.sh (详情见 $_acme_install_log)"
           tail -n 10 "$_acme_install_log" 2>/dev/null || true
         else
           warn "acme.sh 安装失败 — 回退到自签名证书 (详情见 $_acme_install_log)"
@@ -597,7 +607,10 @@ _issue_cert() { # $1: strict=1 时 ACME 失败不回退, 直接返回 1
       fi
       if [ -n "$_acme" ]; then
         _issue_log="/tmp/nexus-acme-issue.log"
-        if "$_acme" --issue -d "$DIRECT_DOMAIN" --standalone > "$_issue_log" 2>&1 \
+        # acme.sh v3 起默认 CA 是 ZeroSSL, 注册账号要邮箱, 不填就签不下来;
+        # 改用 Let's Encrypt, 不用邮箱, 续期也走同一家。
+        "$_acme" --set-default-ca --server letsencrypt >/dev/null 2>&1 || true
+        if "$_acme" --issue -d "$DIRECT_DOMAIN" --standalone --server letsencrypt > "$_issue_log" 2>&1 \
            && "$_acme" --install-cert -d "$DIRECT_DOMAIN" \
                 --key-file "$WORKDIR/direct/key.pem" \
                 --fullchain-file "$WORKDIR/direct/cert.pem" >/dev/null 2>&1 \
@@ -636,6 +649,7 @@ _cert_standalone() { # install.sh cert: 只签证书, 不部署 (面板「生成
   _ensure_pkg curl || true
   if [ "$CERT_MODE" = "acme" ]; then
     _ensure_pkg socat || true
+    _ensure_pkg crontab cron cronie || true
     # 单独生成证书不走部署步骤 1, 防火墙同步不会跑; 这里先同步一次, 把
     # ACME 要用的 80/tcp 放行, 否则外网验证连不进来签发必失败。
     _fw_sync
@@ -670,7 +684,7 @@ step "步骤 1/5  检查配置"
 # 部署多处依赖 curl (拉 web 文件、探测公网 IP、订阅冒烟检查); socat 是
 # ACME standalone 模式监听 80 端口要用的。全新系统常缺, 先装好。
 _ensure_pkg curl || true
-if [ "$CERT_MODE" = "acme" ]; then _ensure_pkg socat || true; fi
+if [ "$CERT_MODE" = "acme" ]; then _ensure_pkg socat || true; _ensure_pkg crontab cron cronie || true; fi
 if ! command -v docker >/dev/null 2>&1; then
   log "未检测到 Docker，正在自动安装…"
   if command -v apt-get >/dev/null 2>&1; then
